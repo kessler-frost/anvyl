@@ -1,7 +1,9 @@
-from fastapi import APIRouter, HTTPException
+# api/routes/hosts.py
+from fastapi import APIRouter, HTTPException, Body
 from sqlmodel import select
 from models import Host
 from db import get_session
+from sdk.install_agents import install_beszel, install_dozzle
 
 router = APIRouter()
 
@@ -34,9 +36,27 @@ def update_host(host_id: int, updated: Host):
         host = session.get(Host, host_id)
         if not host:
             raise HTTPException(status_code=404, detail="Host not found")
-        for field, value in updated.dict(exclude_unset=True).items():
+        for field, value in updated.model_dump(exclude_unset=True).items():
             setattr(host, field, value)
         session.add(host)
         session.commit()
         session.refresh(host)
         return host
+
+@router.post("/hosts/{host_id}/install-agents")
+def install_agents(host_id: int, 
+                   beszel_public_key: str = Body(...)):
+    with get_session() as session:
+        host = session.get(Host, host_id)
+        if not host:
+            raise HTTPException(status_code=404, detail="Host not found")
+
+    install_result_beszel = install_beszel(host.ip, public_key=beszel_public_key)
+    install_result_dozzle = install_dozzle(host.ip)
+
+    return {
+        "host": host.name,
+        "ip": host.ip,
+        "beszel": str(install_result_beszel),
+        "dozzle": str(install_result_dozzle)
+    }

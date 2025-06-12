@@ -20,8 +20,6 @@
 <summary>🚀 Quickstart</summary>
 
 ```bash
-python -m venv venv
-source venv/bin/activate
 pip install -r requirements.txt
 uvicorn main:app --reload
 ```
@@ -30,17 +28,6 @@ uvicorn main:app --reload
 
 ---
 
-<details>
-<summary>📦 Roadmap</summary>
-
-- [ ] Install Dozzle + Beszel agents
-- [ ] Nomad job deployment via API
-- [ ] Cluster-wide logging & metrics
-- [ ] Web dashboard UI ("Realm")
-- [ ] Secrets management
-- [ ] Traefik integration
-
-</details>
 
 ---
 
@@ -64,3 +51,17 @@ uvicorn main:app --reload
 
 Released under the [Apache 2.0](LICENSE) license.
 
+
+---
+
+<details>
+<summary>📦 Roadmap</summary>
+
+- [ ] Install Dozzle + Beszel agents
+- [ ] Nomad job deployment via API
+- [ ] Cluster-wide logging & metrics
+- [ ] Web dashboard UI ("Realm")
+- [ ] Secrets management
+- [ ] Traefik integration
+
+</details>

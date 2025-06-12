@@ -1,7 +1,7 @@
 from fastapi import FastAPI
-from db import init_db
-from api.routes import hosts
 from contextlib import asynccontextmanager
+from sindri.db.session import init_db
+from sindri.api.routes import hosts
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -9,4 +9,4 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(lifespan=lifespan)
-app.include_router(hosts.router, prefix="/api")
+app.include_router(hosts, prefix="/api") 

@@ -1,9 +1,10 @@
-# api/routes/hosts.py
 from fastapi import APIRouter, HTTPException, Body
 from sqlmodel import select
 from models import Host
 from db import get_session
 from sdk.install_agents import install_beszel, install_dozzle
+import httpx
+from datetime import datetime
 
 router = APIRouter()
 
@@ -36,7 +37,7 @@ def update_host(host_id: int, updated: Host):
         host = session.get(Host, host_id)
         if not host:
             raise HTTPException(status_code=404, detail="Host not found")
-        for field, value in updated.model_dump(exclude_unset=True).items():
+        for field, value in updated.dict(exclude_unset=True).items():
             setattr(host, field, value)
         session.add(host)
         session.commit()
@@ -51,8 +52,13 @@ def install_agents(host_id: int,
         if not host:
             raise HTTPException(status_code=404, detail="Host not found")
 
-    install_result_beszel = install_beszel(host.ip, public_key=beszel_public_key)
-    install_result_dozzle = install_dozzle(host.ip)
+        install_result_beszel = install_beszel(host.ip, public_key=beszel_public_key)
+        install_result_dozzle = install_dozzle(host.ip)
+
+        host.agents_installed = True
+        session.add(host)
+        session.commit()
+        session.refresh(host)
 
     return {
         "host": host.name,
@@ -60,3 +66,29 @@ def install_agents(host_id: int,
         "beszel": str(install_result_beszel),
         "dozzle": str(install_result_dozzle)
     }
+
+@router.get("/hosts/{host_id}/status")
+def check_host_status(host_id: int):
+    with get_session() as session:
+        host = session.get(Host, host_id)
+        if not host:
+            raise HTTPException(status_code=404, detail="Host not found")
+
+    beszel_url = f"http://{host.ip}:45876/health"
+    try:
+        response = httpx.get(beszel_url, timeout=3)
+        if response.status_code == 200:
+            status = "healthy"
+        else:
+            status = f"unhealthy ({response.status_code})"
+    except httpx.RequestError:
+        status = "unreachable"
+
+    with get_session() as session:
+        host = session.get(Host, host_id)
+        host.last_health_status = status
+        host.last_checked_at = datetime.utcnow()
+        session.add(host)
+        session.commit()
+
+    return {"beszel": status}

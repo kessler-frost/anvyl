@@ -73,3 +73,41 @@ def install_beszel(ip: str, beszel_port: int = 45876, public_key: str = "<YOUR_P
             ssh_user="root",
         ),
     ]
+
+
+def install_nomad(ip: str):
+    return server.shell(
+        name=f"Install Nomad on {ip}",
+        commands=[
+            # Download and install Nomad (replace version as needed)
+            "curl -fsSL https://releases.hashicorp.com/nomad/1.7.4/nomad_1.7.4_linux_amd64.zip -o nomad.zip",
+            "unzip -o nomad.zip -d /usr/local/bin",
+            "chmod +x /usr/local/bin/nomad",
+            "rm nomad.zip",
+
+            # Create Nomad config dir
+            "mkdir -p /etc/nomad.d",
+            "chmod 700 /etc/nomad.d",
+
+            # Create basic Nomad config
+            "echo '{\"server\": {\"enabled\": true, \"bootstrap_expect\": 1}, \"datacenter\": \"sindri\"}' > /etc/nomad.d/nomad.hcl",
+
+            # Create systemd service
+            'cat > /etc/systemd/system/nomad.service <<EOF\n'
+            '[Unit]\n'
+            'Description=Nomad\n'
+            'After=network.target\n\n'
+            '[Service]\n'
+            'ExecStart=/usr/local/bin/nomad agent -config=/etc/nomad.d\n'
+            'Restart=on-failure\n\n'
+            '[Install]\n'
+            'WantedBy=multi-user.target\n'
+            'EOF',
+
+            "systemctl daemon-reload",
+            "systemctl enable nomad",
+            "systemctl start nomad"
+        ],
+        hosts=[ip],
+        ssh_user="root",
+    )

@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Body
 from sqlmodel import select
 from models import Host
 from db import get_session
-from sdk.install_agents import install_beszel, install_dozzle
+from sdk.install_agents import install_beszel, install_dozzle, install_nomad
 import httpx
 from datetime import datetime
 
@@ -54,6 +54,7 @@ def install_agents(host_id: int,
 
         install_result_beszel = install_beszel(host.ip, public_key=beszel_public_key)
         install_result_dozzle = install_dozzle(host.ip)
+        install_result_nomad = install_nomad(host.ip)
 
         host.agents_installed = True
         session.add(host)
@@ -64,8 +65,10 @@ def install_agents(host_id: int,
         "host": host.name,
         "ip": host.ip,
         "beszel": str(install_result_beszel),
-        "dozzle": str(install_result_dozzle)
+        "dozzle": str(install_result_dozzle),
+        "nomad": str(install_result_nomad),
     }
+
 
 @router.get("/hosts/{host_id}/status")
 def check_host_status(host_id: int):

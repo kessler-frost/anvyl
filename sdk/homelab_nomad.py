@@ -1,40 +1,25 @@
-from pyinfra.api import deploy
-from pyinfra.operations import apt, files, server
+import httpx
 
-@deploy("Install core packages")
-def install_base_packages():
-    apt.packages(
-        name="Install Docker, unzip, and curl",
-        packages=["docker.io", "unzip", "curl"],
-        update=True
-    )
+class NomadClient:
+    def __init__(self, host: str):
+        self.base_url = f"http://{host}:4646"
 
-@deploy("Install Nomad binary")
-def install_nomad():
-    files.download(
-        name="Download Nomad binary",
-        src="https://releases.hashicorp.com/nomad/1.7.5/nomad_1.7.5_linux_amd64.zip",
-        dest="/tmp/nomad.zip"
-    )
-    server.shell(
-        name="Install Nomad",
-        commands=[
-            "unzip -o /tmp/nomad.zip -d /usr/local/bin",
-            "chmod +x /usr/local/bin/nomad"
-        ]
-    )
+    def register_job(self, job_def: dict):
+        response = httpx.post(f"{self.base_url}/v1/jobs", json=job_def)
+        response.raise_for_status()
+        return response.json()
 
-@deploy("Configure Nomad")
-def configure_nomad():
-    files.template(
-        name="Write Nomad config",
-        src="templates/nomad.hcl.j2",
-        dest="/etc/nomad.d/nomad.hcl"
-    )
-    server.shell(
-        name="Enable and start Nomad",
-        commands=[
-            "mkdir -p /etc/nomad.d",
-            "nomad agent -config /etc/nomad.d/nomad.hcl &"
-        ]
-    )
+    def list_jobs(self):
+        response = httpx.get(f"{self.base_url}/v1/jobs")
+        response.raise_for_status()
+        return response.json()
+
+    def get_job(self, job_id: str):
+        response = httpx.get(f"{self.base_url}/v1/job/{job_id}")
+        response.raise_for_status()
+        return response.json()
+
+    def stop_job(self, job_id: str):
+        response = httpx.delete(f"{self.base_url}/v1/job/{job_id}")
+        response.raise_for_status()
+        return response.json()

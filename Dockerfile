@@ -1,19 +1,23 @@
+# syntax=docker/dockerfile:1
 FROM python:3.12-slim
 
-# Install system packages
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        curl unzip gcc libffi-dev libssl-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-# Set work directory
+# Set working directory
 WORKDIR /app
 
-# Copy project
-COPY . /app
+# Copy the whole project
+COPY . .
+
+# Install system dependencies if needed
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
-RUN pip install --no-cache-dir fastapi uvicorn[standard] pyinfra sqlmodel
+RUN pip install --upgrade pip && \
+    pip install fastapi[all] pyinfra sqlmodel httpx
 
-# Default command
+# Expose the FastAPI dev port
+EXPOSE 8000
+
+# Run the FastAPI dev server
 CMD ["fastapi", "dev", "main:app"]

@@ -2,7 +2,7 @@
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Build](https://img.shields.io/github/actions/workflow/status/example/sindri/ci.yml?label=build)](https://github.com/example/sindri/actions)
-[![Python](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org)
+[![Python](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org)
 
 ![Sindri Banner](https://via.placeholder.com/600x150?text=Sindri)
 
@@ -12,7 +12,7 @@
 
 ![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
 ![SQLModel](https://img.shields.io/badge/SQLModel-4B8BBE?logo=python&logoColor=white)
-![Python](https://img.shields.io/badge/Python-3.11-blue?logo=python&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python&logoColor=white)
 
 ---
 
@@ -21,9 +21,12 @@
 
 ```bash
 pip install -r requirements.txt
-fastapi dev main:app
+**or with Docker**
+```bash
+docker build -t sindri .
+docker run -p 8000:8000 sindri
 ```
-
+</details>
 </details>
 
 ---

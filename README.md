@@ -4,7 +4,6 @@
   <b>Code-first control of self-hosted, containerized infrastructure — across your realm.</b><br>
   <img alt="License" src="https://img.shields.io/badge/license-Apache%202.0-blue">
   <img alt="Python" src="https://img.shields.io/badge/python-3.12-blue">
-  <img alt="Build" src="https://img.shields.io/badge/build-passing-brightgreen">
 </p>
 
 Sindri is a programmable infrastructure orchestrator built for small-scale, self-hosted clusters. It leverages a secure mesh (via Netbird), declarative provisioning (via pyinfra), and powerful job scheduling (via Nomad), all wrapped in a Python-first developer experience.

@@ -1,10 +1,25 @@
-import subprocess
-from typing import Optional
+import httpx
 
-def deploy_nomad_job(host_ip: str, job_file: str) -> str:
-    cmd = ["ssh", f"root@{host_ip}", f"nomad job run {job_file}"]
-    return subprocess.check_output(cmd).decode().strip()
+class NomadClient:
+    def __init__(self, host: str):
+        self.base_url = f"http://{host}:4646"
 
-def get_nomad_status(host_ip: str) -> str:
-    cmd = ["ssh", f"root@{host_ip}", "nomad server members"]
-    return subprocess.check_output(cmd).decode().strip() 
+    def register_job(self, job_def: dict):
+        response = httpx.post(f"{self.base_url}/v1/jobs", json=job_def)
+        response.raise_for_status()
+        return response.json()
+
+    def list_jobs(self):
+        response = httpx.get(f"{self.base_url}/v1/jobs")
+        response.raise_for_status()
+        return response.json()
+
+    def get_job(self, job_id: str):
+        response = httpx.get(f"{self.base_url}/v1/job/{job_id}")
+        response.raise_for_status()
+        return response.json()
+
+    def stop_job(self, job_id: str):
+        response = httpx.delete(f"{self.base_url}/v1/job/{job_id}")
+        response.raise_for_status()
+        return response.json()

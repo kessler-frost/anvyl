@@ -1,12 +1,29 @@
-from sqlmodel import Session, create_engine
+from sqlmodel import SQLModel, Session, create_engine
 from sqlalchemy.engine import Engine
+from contextlib import contextmanager
+from typing import Generator
 
-def get_engine() -> Engine:
-    return create_engine("sqlite:///sindri.db")
+DATABASE_URL = "sqlite:///./sindri.db"
+engine = create_engine(DATABASE_URL, echo=False)
 
-def get_session() -> Session:
-    return Session(get_engine())
+def init_db() -> None:
+    """Initialize the database by creating all tables."""
+    SQLModel.metadata.create_all(engine)
 
-def init_db():
-    from sqlmodel import SQLModel
-    SQLModel.metadata.create_all(get_engine()) 
+@contextmanager
+def get_session() -> Generator[Session, None, None]:
+    """Get a database session with automatic cleanup.
+
+    Usage:
+        with get_session() as session:
+            # do something with session
+    """
+    session = Session(engine)
+    try:
+        yield session
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()

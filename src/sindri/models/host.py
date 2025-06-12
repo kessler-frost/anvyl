@@ -8,4 +8,4 @@ class Host(SQLModel, table=True):
     ip: str
     agents_installed: bool = Field(default=False)
     last_health_status: Optional[str] = None
-    last_checked_at: Optional[datetime] = None 
+    last_checked_at: Optional[datetime] = None

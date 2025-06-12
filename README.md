@@ -21,7 +21,7 @@
 
 ```bash
 pip install -r requirements.txt
-uvicorn main:app --reload
+fastapi dev main:app
 ```
 
 </details>
@@ -49,11 +49,6 @@ uvicorn main:app --reload
 
 ---
 
-Released under the [Apache 2.0](LICENSE) license.
-
-
----
-
 <details>
 <summary>📦 Roadmap</summary>
 
@@ -65,3 +60,8 @@ Released under the [Apache 2.0](LICENSE) license.
 - [ ] Traefik integration
 
 </details>
+
+
+---
+
+Released under the [Apache 2.0](LICENSE) license.

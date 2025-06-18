@@ -25,9 +25,37 @@ class AnvylService(anvyl_pb2_grpc.AnvylServiceServicer):
 
     def __init__(self):
         """Initialize the service with Docker client."""
+        self.docker_client = None
         try:
-            self.docker_client = docker.from_env()
-            logger.info("Docker client initialized successfully")
+            # Try multiple approaches to connect to Docker
+            import os
+
+            # First try the default approach
+            try:
+                self.docker_client = docker.from_env()
+                self.docker_client.ping()
+                logger.info("Docker client initialized successfully with default settings")
+            except Exception as e1:
+                logger.warning(f"Default Docker connection failed: {e1}")
+
+                # Try with explicit Unix socket
+                try:
+                    self.docker_client = docker.DockerClient(base_url='unix:///var/run/docker.sock')
+                    self.docker_client.ping()
+                    logger.info("Docker client initialized successfully with Unix socket")
+                except Exception as e2:
+                    logger.warning(f"Unix socket connection failed: {e2}")
+
+                    # Try with Docker Desktop socket
+                    try:
+                        self.docker_client = docker.DockerClient(base_url='unix:///Users/fimbulwinter/.docker/run/docker.sock')
+                        self.docker_client.ping()
+                        logger.info("Docker client initialized successfully with Docker Desktop socket")
+                    except Exception as e3:
+                        logger.error(f"All Docker connection attempts failed. Docker operations will be disabled.")
+                        logger.error(f"Errors: Default={e1}, Unix={e2}, Desktop={e3}")
+                        self.docker_client = None
+
         except Exception as e:
             logger.error(f"Failed to initialize Docker client: {e}")
             self.docker_client = None

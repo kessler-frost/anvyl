@@ -1,0 +1,114 @@
+syntax = "proto3";
+
+package anvyl;
+
+// Service definition for Anvyl infrastructure orchestrator
+service AnvylService {
+  // Host management
+  rpc ListHosts(ListHostsRequest) returns (ListHostsResponse);
+  rpc AddHost(AddHostRequest) returns (AddHostResponse);
+
+  // Container management
+  rpc ListContainers(ListContainersRequest) returns (ListContainersResponse);
+  rpc AddContainer(AddContainerRequest) returns (AddContainerResponse);
+  rpc StopContainer(StopContainerRequest) returns (StopContainerResponse);
+  rpc GetLogs(GetLogsRequest) returns (GetLogsResponse);
+  rpc ExecCommand(ExecCommandRequest) returns (ExecCommandResponse);
+}
+
+// Host message definition
+message Host {
+  string id = 1;
+  string name = 2;
+  string ip = 3;
+  bool agents_installed = 4;
+}
+
+// Container message definition
+message Container {
+  string id = 1;
+  string name = 2;
+  string image = 3;
+  string host_id = 4;
+  string status = 5;
+  string created_at = 6;
+  map<string, string> labels = 7;
+}
+
+// Host management requests/responses
+message ListHostsRequest {}
+
+message ListHostsResponse {
+  repeated Host hosts = 1;
+}
+
+message AddHostRequest {
+  string name = 1;
+  string ip = 2;
+}
+
+message AddHostResponse {
+  Host host = 1;
+  bool success = 2;
+  string error_message = 3;
+}
+
+// Container management requests/responses
+message ListContainersRequest {
+  string host_id = 1;  // Optional: filter by host
+}
+
+message ListContainersResponse {
+  repeated Container containers = 1;
+}
+
+message AddContainerRequest {
+  string name = 1;
+  string image = 2;
+  string host_id = 3;
+  map<string, string> labels = 4;
+  repeated string ports = 5;
+  repeated string volumes = 6;
+  repeated string environment = 7;
+}
+
+message AddContainerResponse {
+  Container container = 1;
+  bool success = 2;
+  string error_message = 3;
+}
+
+message StopContainerRequest {
+  string container_id = 1;
+  int32 timeout = 2;  // Timeout in seconds
+}
+
+message StopContainerResponse {
+  bool success = 1;
+  string error_message = 2;
+}
+
+message GetLogsRequest {
+  string container_id = 1;
+  bool follow = 2;
+  int32 tail = 3;  // Number of lines to return
+}
+
+message GetLogsResponse {
+  string logs = 1;
+  bool success = 2;
+  string error_message = 3;
+}
+
+message ExecCommandRequest {
+  string container_id = 1;
+  repeated string command = 2;
+  bool tty = 3;
+}
+
+message ExecCommandResponse {
+  string output = 1;
+  int32 exit_code = 2;
+  bool success = 3;
+  string error_message = 4;
+}

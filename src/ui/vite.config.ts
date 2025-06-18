@@ -9,9 +9,9 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      "/api": "http://sindri-api:8000",
-      "/docs": "http://sindri-api:8000",
-      "/openapi.json": "http://sindri-api:8000",
+      "/api": "http://anvyl-api:8000",
+      "/docs": "http://anvyl-api:8000",
+      "/openapi.json": "http://anvyl-api:8000",
     },
   },
 })

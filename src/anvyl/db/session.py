@@ -2,8 +2,10 @@ from sqlmodel import SQLModel, Session, create_engine
 from sqlalchemy.engine import Engine
 from contextlib import contextmanager
 from typing import Generator
+from sqlmodel.ext.asyncio.session import AsyncSession
+from sqlalchemy.ext.asyncio import create_async_engine
 
-DATABASE_URL = "sqlite:///./sindri.db"
+DATABASE_URL = "sqlite:///./anvyl.db"
 engine = create_engine(DATABASE_URL, echo=False)
 
 def init_db() -> None:

@@ -4,8 +4,8 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --upgrade pip && pip install -r requirements.txt
 
-COPY ./src/sindri ./sindri
+COPY ./src/anvyl ./anvyl
 
 ENV PYTHONPATH=/app
 
-CMD ["fastapi", "dev", "./sindri/main.py", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["fastapi", "dev", "./anvyl/main.py", "--host", "0.0.0.0", "--port", "8000"]

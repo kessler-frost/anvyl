@@ -1,6 +1,6 @@
 {
   "type": "module",
-  "name": "sindri-ui",
+  "name": "anvyl-ui",
   "version": "0.1.0",
   "private": true,
   "scripts": {

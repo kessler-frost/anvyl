@@ -1,8 +1,8 @@
 from fastapi import APIRouter, HTTPException, Body
 from sqlmodel import select
-from sindri.models.host import Host
-from sindri.db.session import get_session
-from sindri.sdk.install_agents import install_beszel, install_dozzle, install_nomad
+from anvyl.models.host import Host
+from anvyl.db.session import get_session
+from anvyl.sdk.install_agents import install_beszel, install_dozzle, install_nomad
 import httpx
 from datetime import datetime, UTC
 

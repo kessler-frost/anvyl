@@ -1,8 +1,8 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 
-from sindri.db.session import init_db
-from sindri.api.routes import hosts
+from anvyl.db.session import init_db
+from anvyl.api.routes import hosts
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

@@ -76,7 +76,7 @@ def install_nomad(ip: str):
             "rm nomad.zip",
             "mkdir -p /etc/nomad.d",
             "chmod 700 /etc/nomad.d",
-            "echo '{\"server\": {\"enabled\": true, \"bootstrap_expect\": 1}, \"datacenter\": \"sindri\"}' > /etc/nomad.d/nomad.hcl",
+            "echo '{\"server\": {\"enabled\": true, \"bootstrap_expect\": 1}, \"datacenter\": \"anvyl\"}' > /etc/nomad.d/nomad.hcl",
             'cat > /etc/systemd/system/nomad.service <<EOF\n'
             '[Unit]\n'
             'Description=Nomad\n'

@@ -1,23 +1,23 @@
 services:
-  sindri-api:
+  anvyl-api:
     build:
       context: .
       dockerfile: Dockerfile.api
     ports:
       - "8000:8000"
     networks:
-      - sindri
+      - anvyl
 
-  sindri-ui:
+  anvyl-ui:
     build:
       context: ./src/ui
       dockerfile: Dockerfile.ui
     ports:
       - "4173:4173"
     depends_on:
-      - sindri-api
+      - anvyl-api
     networks:
-      - sindri
+      - anvyl
 
 networks:
-  sindri:
+  anvyl:

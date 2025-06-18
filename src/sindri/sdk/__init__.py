@@ -1,3 +1,0 @@
-"""
-SDK package for Sindri
-"""

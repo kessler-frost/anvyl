@@ -75,6 +75,287 @@ Anvyl is a Python-based backend system with a gRPC server and client SDK, design
    )
    ```
 
+## 📖 Usage Examples
+
+### Basic Host Management
+
+```python
+from anvyl_sdk import create_client
+
+# Connect to Anvyl server
+client = create_client("localhost", 50051)
+
+# List all registered hosts
+hosts = client.list_hosts()
+for host in hosts:
+    print(f"Host: {host.name} ({host.ip}) - Agents: {host.agents_installed}")
+
+# Add a new host to the network
+new_host = client.add_host("macbook-pro-2", "192.168.1.102")
+print(f"Added host: {new_host.name}")
+
+# Disconnect when done
+client.disconnect()
+```
+
+### Container Management
+
+```python
+from anvyl_sdk import create_client
+
+client = create_client()
+
+# List all containers
+containers = client.list_containers()
+print(f"Found {len(containers)} containers")
+
+# Create a web application container
+web_container = client.add_container(
+    name="my-web-app",
+    image="nginx:alpine",
+    ports=["8080:80"],
+    labels={"app": "web", "env": "production"},
+    environment=["NGINX_HOST=localhost"]
+)
+
+if web_container:
+    print(f"Created container: {web_container.name} ({web_container.status})")
+
+# Create a database container
+db_container = client.add_container(
+    name="postgres-db",
+    image="postgres:15",
+    ports=["5432:5432"],
+    environment=[
+        "POSTGRES_DB=myapp",
+        "POSTGRES_USER=admin",
+        "POSTGRES_PASSWORD=secret"
+    ],
+    volumes=["/tmp/postgres-data:/var/lib/postgresql/data"]
+)
+
+client.disconnect()
+```
+
+### Multi-Host Orchestration
+
+```python
+from anvyl_sdk import AnvylClient
+
+# Connect to multiple hosts via Netbird
+hosts = [
+    ("192.168.1.100", 50051),  # Mac Mini
+    ("192.168.1.101", 50051),  # MacBook Pro
+    ("192.168.1.102", 50051),  # Mac Studio
+]
+
+clients = {}
+
+# Connect to all hosts
+for ip, port in hosts:
+    try:
+        client = AnvylClient(ip, port)
+        if client.connect():
+            clients[ip] = client
+            print(f"Connected to {ip}")
+        else:
+            print(f"Failed to connect to {ip}")
+    except Exception as e:
+        print(f"Error connecting to {ip}: {e}")
+
+# Deploy containers across hosts
+for ip, client in clients.items():
+    # Deploy web app on first host
+    if ip == "192.168.1.100":
+        container = client.add_container(
+            name="web-app",
+            image="nginx:alpine",
+            ports=["8080:80"]
+        )
+        print(f"Deployed web app on {ip}")
+
+    # Deploy database on second host
+    elif ip == "192.168.1.101":
+        container = client.add_container(
+            name="database",
+            image="postgres:15",
+            ports=["5432:5432"]
+        )
+        print(f"Deployed database on {ip}")
+
+    # Deploy monitoring on third host
+    elif ip == "192.168.1.102":
+        container = client.add_container(
+            name="monitoring",
+            image="grafana/grafana:latest",
+            ports=["3000:3000"]
+        )
+        print(f"Deployed monitoring on {ip}")
+
+# Cleanup
+for client in clients.values():
+    client.disconnect()
+```
+
+### Advanced Container Configuration
+
+```python
+from anvyl_sdk import create_client
+
+client = create_client()
+
+# Create a complex application stack
+app_container = client.add_container(
+    name="my-app",
+    image="myapp:latest",
+    ports=[
+        "8080:80",      # HTTP
+        "8443:443",     # HTTPS
+        "9000:9000"     # Admin interface
+    ],
+    volumes=[
+        "/Users/me/app-data:/app/data",           # Application data
+        "/Users/me/app-logs:/app/logs",           # Log files
+        "/Users/me/app-config:/app/config:ro"     # Read-only config
+    ],
+    environment=[
+        "NODE_ENV=production",
+        "DATABASE_URL=postgresql://user:pass@db:5432/myapp",
+        "REDIS_URL=redis://cache:6379",
+        "API_KEY=your-secret-key"
+    ],
+    labels={
+        "app": "myapp",
+        "version": "1.0.0",
+        "environment": "production",
+        "team": "backend"
+    }
+)
+
+# Create a development environment
+dev_container = client.add_container(
+    name="dev-environment",
+    image="node:18-alpine",
+    ports=["3000:3000"],
+    volumes=["/Users/me/project:/app"],
+    environment=["NODE_ENV=development"],
+    labels={"environment": "development"}
+)
+
+client.disconnect()
+```
+
+### Error Handling and Monitoring
+
+```python
+from anvyl_sdk import create_client
+import logging
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+try:
+    client = create_client()
+
+    # Check system health
+    hosts = client.list_hosts()
+    containers = client.list_containers()
+
+    logger.info(f"System Status: {len(hosts)} hosts, {len(containers)} containers")
+
+    # Monitor container status
+    for container in containers:
+        logger.info(f"Container {container.name}: {container.status}")
+
+        # Check for stopped containers
+        if container.status == "exited":
+            logger.warning(f"Container {container.name} has exited")
+
+            # Attempt to restart
+            # (This would be implemented in future versions)
+            logger.info(f"Would restart container {container.name}")
+
+    # Health check - try to create a test container
+    test_container = client.add_container(
+        name="health-check",
+        image="alpine:latest",
+        environment=["echo 'Health check passed'"]
+    )
+
+    if test_container:
+        logger.info("Health check passed - container creation working")
+    else:
+        logger.error("Health check failed - container creation not working")
+
+except Exception as e:
+    logger.error(f"Anvyl client error: {e}")
+
+finally:
+    if 'client' in locals():
+        client.disconnect()
+```
+
+### Integration with Other Tools
+
+```python
+from anvyl_sdk import create_client
+import subprocess
+import json
+
+def deploy_with_ansible():
+    """Deploy infrastructure using Ansible + Anvyl"""
+    client = create_client()
+
+    # Get current hosts
+    hosts = client.list_hosts()
+
+    # Generate Ansible inventory
+    inventory = {
+        "all": {
+            "hosts": [host.ip for host in hosts],
+            "vars": {
+                "ansible_user": "admin",
+                "ansible_ssh_private_key_file": "~/.ssh/id_rsa"
+            }
+        }
+    }
+
+    # Write inventory file
+    with open("inventory.json", "w") as f:
+        json.dump(inventory, f, indent=2)
+
+    # Run Ansible playbook
+    subprocess.run([
+        "ansible-playbook",
+        "-i", "inventory.json",
+        "deploy.yml"
+    ])
+
+    client.disconnect()
+
+def monitor_with_prometheus():
+    """Export Anvyl metrics for Prometheus"""
+    client = create_client()
+
+    # Collect metrics
+    hosts = client.list_hosts()
+    containers = client.list_containers()
+
+    metrics = {
+        "anvyl_hosts_total": len(hosts),
+        "anvyl_containers_total": len(containers),
+        "anvyl_containers_running": len([c for c in containers if c.status == "running"]),
+        "anvyl_containers_stopped": len([c for c in containers if c.status == "stopped"])
+    }
+
+    # Export in Prometheus format
+    for metric, value in metrics.items():
+        print(f"{metric} {value}")
+
+    client.disconnect()
+```
+
 ## 📁 Project Structure
 
 ```

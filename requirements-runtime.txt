@@ -1,0 +1,23 @@
+# Core gRPC dependencies
+grpcio>=1.59.0
+grpcio-tools>=1.59.0
+
+# Container management
+docker>=6.1.0
+
+# Database and API
+sqlmodel>=0.0.14
+fastapi>=0.104.0
+uvicorn>=0.24.0
+
+# CLI framework
+typer[all]>=0.9.0
+rich>=13.0.0
+
+# Utilities
+httpx>=0.25.2
+pyinfra>=3.3.1
+pydantic>=2.5.0
+psutil>=5.9.0
+python-dotenv>=1.0.0
+requests>=2.31.0

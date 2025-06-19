@@ -17,11 +17,11 @@ from concurrent import futures
 from typing import Dict, List, Optional
 
 # Import generated gRPC code
-import generated.anvyl_pb2 as anvyl_pb2
-import generated.anvyl_pb2_grpc as anvyl_pb2_grpc
+from .generated import anvyl_pb2
+from .generated import anvyl_pb2_grpc
 
 # Import database models
-from database.models import DatabaseManager, Host, Container, Agent
+from .database.models import DatabaseManager, Host, Container, Agent
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

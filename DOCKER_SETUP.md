@@ -1,6 +1,6 @@
 # Anvyl Docker Containerization
 
-Complete containerization setup for Anvyl infrastructure orchestrator with Komodo-inspired UI.
+Complete containerization setup for Anvyl infrastructure orchestrator with modern web UI.
 
 ## 🚀 Quick Start
 
@@ -69,7 +69,7 @@ open http://localhost:8000  # API Server
 #### 3. `anvyl-ui-frontend`
 - **Image**: `anvyl/ui-frontend:latest`
 - **Port**: `3000:80`
-- **Purpose**: React frontend with Komodo-inspired design
+- **Purpose**: React frontend with modern design
 - **Health Check**: HTTP GET `/health`
 - **Dependencies**: `anvyl-ui-backend`
 
@@ -312,4 +312,4 @@ anvyl status  # Verify all services are healthy
 
 ---
 
-🎉 **Your Anvyl infrastructure is now fully containerized with beautiful Komodo-inspired UI!**
+🎉 **Your Anvyl infrastructure is now fully containerized with modern web UI!**

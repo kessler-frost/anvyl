@@ -21,7 +21,7 @@ anvyl up
 ```
 
 This starts:
-- **Web UI**: http://localhost:3000 (Komodo-inspired design)
+- **Web UI**: http://localhost:3000 (Modern design with glassmorphism effects)
 - **API Server**: http://localhost:8000 
 - **gRPC Server**: localhost:50051
 
@@ -43,7 +43,7 @@ anvyl status
 
 - **gRPC Server** (`anvyl_grpc_server.py`): Runs on each macOS node, interacts with Docker to manage containers
 - **Python SDK** (`anvyl_sdk/`): gRPC client that abstracts server APIs for easy integration
-- **Web UI** (`ui/`): React + FastAPI beautiful interface inspired by Komodo Digital's design
+- **Web UI** (`ui/`): React + FastAPI beautiful interface with modern design principles
 - **CLI** (`anvyl_cli.py`): Typer-based command-line interface with infrastructure management
 - **Communication**: gRPC over TCP using Netbird-assigned private IPs (future: Unix Domain Sockets for local)
 - **Storage**: SQLite database for persistent state (per-host or centralized)
@@ -65,7 +65,7 @@ anvyl status
 
 ## 🎨 Beautiful UI (NEW!)
 
-Experience Anvyl through a stunning web interface inspired by **Komodo Digital's** design principles:
+Experience Anvyl through a stunning web interface with modern design principles:
 
 - **Glassmorphism Effects**: Semi-transparent cards with backdrop blur
 - **Dark Theme**: Beautiful gradient backgrounds
@@ -461,12 +461,19 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🙏 Acknowledgments
 
-- **Komodo Digital** for design inspiration
 - **gRPC** for robust communication
 - **Docker** for containerization
 - **React** ecosystem for beautiful UI
 - **FastAPI** for modern Python web development
+- **Modern web design community** for inspiration and best practices
 
 ---
 
 **Ready to manage your Apple infrastructure with style!** 🍎✨
+
+#### 3. `anvyl-ui-frontend`
+- **Image**: `anvyl/ui-frontend:latest`
+- **Port**: `3000:80`
+- **Purpose**: React frontend with modern design
+- **Health Check**: HTTP GET `/health`
+- **Dependencies**: `anvyl-ui-backend`

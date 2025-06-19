@@ -7,7 +7,7 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Modern color palette inspired by Komodo's design
+        // Modern color palette with sophisticated tones
         primary: {
           50: '#f0f9ff',
           100: '#e0f2fe',

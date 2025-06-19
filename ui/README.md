@@ -1,18 +1,16 @@
-# Anvyl UI - Komodo Inspired Interface
+# Anvyl UI - Modern Interface
 
-A modern, beautiful web interface for Anvyl infrastructure orchestrator, inspired by [Komodo Digital's](https://www.komododigital.co.uk/) design principles.
+A modern, beautiful web interface for Anvyl infrastructure orchestrator with contemporary design principles.
 
 ## 🎨 Design Philosophy
 
-This UI is inspired by Komodo's approach to modern web design:
+This UI embodies modern web design principles:
 
-- **Glassmorphism Effects**: Semi-transparent elements with backdrop blur for a modern, layered look
-- **Dark Theme First**: Beautiful dark gradient backgrounds with subtle lighting
-- **Minimalist & Clean**: Focus on essential elements, ample white space, clear hierarchy
-- **Mobile-First Responsive**: Works beautifully on all devices
-- **Smooth Animations**: Framer Motion powered transitions and micro-interactions
-- **Accessibility Focused**: Proper contrast ratios, keyboard navigation, screen reader support
-- **User-Centered Design**: Intuitive navigation and clear information architecture
+- **User-Centered Design**: Intuitive interfaces that prioritize user experience
+- **Modern Aesthetics**: Clean lines, thoughtful spacing, and contemporary visual effects
+- **Accessibility First**: Designed to be usable by everyone
+- **Mobile-First**: Responsive design that works beautifully on all devices
+- **Performance Focus**: Fast, efficient, and smooth interactions
 
 ## 🏗 Architecture
 
@@ -145,11 +143,11 @@ API available at `http://localhost:8000` with docs at `/docs`.
 
 This interface draws inspiration from:
 
-- **Komodo Digital's** modern, user-centered design approach
+- **Modern web design principles** and user-centered design approaches
 - **Glassmorphism** trend for depth and visual interest
 - **Apple's Human Interface Guidelines** for clarity and usability
 - **Material Design 3** for accessibility and responsive behavior
-- **Figma** and **Linear** for clean, professional interfaces
+- **Contemporary UI frameworks** like Figma and Linear for clean, professional interfaces
 
 ## 🔮 Future Enhancements
 
@@ -185,6 +183,15 @@ All design values are centralized in `tailwind.config.js`:
 - High contrast mode support
 - Focus visible indicators
 
+## 🙏 Acknowledgments
+
+- **React Team** for the amazing framework
+- **Tailwind CSS** for utility-first styling
+- **Framer Motion** for beautiful animations
+- **Lucide** for clean, consistent icons
+- **Recharts** for elegant data visualization
+- **Modern web design community** for inspiration and best practices
+
 ---
 
-Built with ❤️ inspired by Komodo Digital's design excellence.
+Built with ❤️ using modern design principles.

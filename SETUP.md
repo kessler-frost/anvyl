@@ -13,7 +13,7 @@ pip install -e .
 ```
 
 This will:
-- ✅ Install all dependencies
+- ✅ Install all dependencies **without warnings**
 - ✅ Set up the `anvyl` CLI command
 - ✅ Configure for development (editable mode)
 - ✅ Work with the generated protobuf files
@@ -81,4 +81,4 @@ The `generated/` directory is automatically created and is git-ignored.
 - pip
 - grpcio-tools (installed automatically)
 
-That's it! Clean, simple, and reliable.
+That's it! Clean, simple, reliable, and **warning-free**. ✨

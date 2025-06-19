@@ -98,7 +98,6 @@ Changelog = "https://github.com/kessler-frost/anvyl/releases"
 
 [tool.setuptools]
 # Package discovery - include both packages and standalone modules
-packages = ["anvyl_sdk", "database"]
 py-modules = ["anvyl_cli", "anvyl_grpc_server"]
 include-package-data = true
 zip-safe = false
@@ -110,10 +109,6 @@ exclude = ["tests*"]
 
 [tool.setuptools.package-data]
 "*" = ["*.proto"]
-
-[tool.setuptools.cmdclass]
-build_py = "_build_hooks:BuildPyWithProtos"
-develop = "_build_hooks:DevelopWithProtos"
 
 [tool.black]
 line-length = 88

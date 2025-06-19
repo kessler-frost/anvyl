@@ -2,17 +2,21 @@
 
 ## Quick Start
 
-**That's it! Just run:**
+**Two simple steps:**
 
 ```bash
+# 1. Generate protobuf files (one-time setup)
+python generate_protos.py
+
+# 2. Install in editable mode
 pip install -e .
 ```
 
-This will automatically:
+This will:
 - ✅ Install all dependencies
-- ✅ Generate protobuf files from `.proto` definitions  
 - ✅ Set up the `anvyl` CLI command
 - ✅ Configure for development (editable mode)
+- ✅ Work with the generated protobuf files
 
 ## Verify Installation
 
@@ -22,6 +26,9 @@ anvyl --help
 
 # Test the Python SDK
 python -c "import anvyl_sdk; print('✅ anvyl_sdk imported successfully')"
+
+# Test protobuf imports
+python -c "import generated.anvyl_pb2; print('✅ Protobuf imports working')"
 ```
 
 ## Development
@@ -39,25 +46,20 @@ anvyl up
 python -c "from anvyl_sdk import AnvylClient"
 ```
 
-## What happens automatically?
+## What happens during setup?
 
-When you run `pip install -e .`, the build system:
+1. **Generate protobuf files** - `python generate_protos.py` creates Python files from `protos/anvyl.proto`
+2. **Install dependencies** - `pip install -e .` installs from `pyproject.toml` 
+3. **CLI setup** - `anvyl` command becomes available globally
+4. **Editable mode** - Code changes reflected immediately
 
-1. **Installs dependencies** from `pyproject.toml` 
-2. **Generates protobuf files** from `protos/anvyl.proto` into `generated/`
-3. **Fixes import statements** in generated gRPC files
-4. **Sets up CLI commands** (`anvyl` command available globally)
-5. **Configures editable mode** (code changes reflected immediately)
+## Regenerating Protobuf Files
 
-## Manual Protobuf Generation (Optional)
-
-If you need to regenerate protobuf files manually during development:
+If you modify the `.proto` file, regenerate the Python files:
 
 ```bash
 python generate_protos.py
 ```
-
-This is usually not needed since protobuf files are auto-generated during installation.
 
 ## Troubleshooting
 
@@ -67,12 +69,6 @@ If you see import errors:
 # Clean reinstall
 pip uninstall anvyl
 rm -rf generated/
-pip install -e .
-```
-
-If the automatic generation fails, use the manual fallback:
-
-```bash
 python generate_protos.py
 pip install -e .
 ```
@@ -83,5 +79,6 @@ The `generated/` directory is automatically created and is git-ignored.
 
 - Python 3.12+
 - pip
+- grpcio-tools (installed automatically)
 
-That's it! No separate scripts, no manual protobuf generation, no complex setup.
+That's it! Clean, simple, and reliable.

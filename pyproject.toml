@@ -143,6 +143,4 @@ exclude = ["tests*", "build_proto_hook*"]
 [tool.setuptools.package-data]
 "*" = ["*.proto"]
 
-[tool.setuptools.cmdclass]
-build_py = "build_proto_hook:BuildPyCommand"
-develop = "build_proto_hook:DevelopCommand"
+# Note: Custom build commands are handled via setup.py for better compatibility

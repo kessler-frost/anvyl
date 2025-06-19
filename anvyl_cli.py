@@ -254,12 +254,10 @@ def show_logs(
         raise typer.Exit(1)
 
 # Host management commands
-@app.group(name="host")
-def host_commands():
-    """Host management commands."""
-    pass
+host_app = typer.Typer(help="Host management commands.")
+app.add_typer(host_app, name="host")
 
-@host_commands.command("list")
+@host_app.command("list")
 def list_hosts(
     host: str = typer.Option("localhost", "--host", "-h", help="Anvyl server host"),
     port: int = typer.Option(50051, "--port", "-p", help="Anvyl server port"),
@@ -312,7 +310,7 @@ def list_hosts(
         
         console.print(table)
 
-@host_commands.command("add")
+@host_app.command("add")
 def add_host(
     name: str = typer.Argument(..., help="Host name"),
     ip: str = typer.Argument(..., help="Host IP address"),
@@ -334,7 +332,7 @@ def add_host(
         console.print(f"[red]✗[/red] Failed to add host: {name}")
         raise typer.Exit(1)
 
-@host_commands.command("metrics")
+@host_app.command("metrics")
 def get_host_metrics(
     host_id: str = typer.Argument(..., help="Host ID"),
     host: str = typer.Option("localhost", "--host", "-h", help="Anvyl server host"),
@@ -374,12 +372,10 @@ def get_host_metrics(
         console.print(panel)
 
 # Container management commands
-@app.group(name="container")
-def container_commands():
-    """Container management commands."""
-    pass
+container_app = typer.Typer(help="Container management commands.")
+app.add_typer(container_app, name="container")
 
-@container_commands.command("list")
+@container_app.command("list")
 def list_containers(
     host_id: Optional[str] = typer.Option(None, "--host-id", help="Filter by host ID"),
     host: str = typer.Option("localhost", "--host", "-h", help="Anvyl server host"),
@@ -433,7 +429,7 @@ def list_containers(
         
         console.print(table)
 
-@container_commands.command("create")
+@container_app.command("create")
 def create_container(
     name: str = typer.Argument(..., help="Container name"),
     image: str = typer.Argument(..., help="Container image"),
@@ -474,7 +470,7 @@ def create_container(
         console.print(f"[red]✗[/red] Failed to create container: {name}")
         raise typer.Exit(1)
 
-@container_commands.command("stop")
+@container_app.command("stop")
 def stop_container(
     container_id: str = typer.Argument(..., help="Container ID"),
     timeout: int = typer.Option(10, "--timeout", "-t", help="Stop timeout in seconds"),
@@ -494,40 +490,28 @@ def stop_container(
         console.print(f"[red]✗[/red] Failed to stop container: {container_id}")
         raise typer.Exit(1)
 
-@container_commands.command("logs")
+@container_app.command("logs")
 def get_container_logs(
     container_id: str = typer.Argument(..., help="Container ID"),
     follow: bool = typer.Option(False, "--follow", "-f", help="Follow log output"),
-    tail: int = typer.Option(100, "--tail", "-n", help="Number of lines to show from end of logs"),
+    tail: int = typer.Option(100, "--tail", "-n", help="Number of lines to show"),
     host: str = typer.Option("localhost", "--host", "-h", help="Anvyl server host"),
     port: int = typer.Option(50051, "--port", "-p", help="Anvyl server port")
 ):
     """Get container logs."""
     client = get_client(host, port)
     
-    if follow:
-        console.print(f"[dim]Following logs for {container_id}... (Press Ctrl+C to stop)[/dim]")
-        try:
-            for log_response in client.stream_logs(container_id, follow=True):
-                if hasattr(log_response, 'success') and not log_response.success:
-                    console.print(f"[red]Error: {getattr(log_response, 'error_message', 'Unknown error')}[/red]")
-                    break
-                log_line = getattr(log_response, 'log_line', '')
-                timestamp = getattr(log_response, 'timestamp', '')
-                console.print(f"[dim]{timestamp}[/dim] {log_line}")
-        except KeyboardInterrupt:
-            console.print("\n[dim]Stopped following logs[/dim]")
+    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
+        task = progress.add_task(f"Fetching logs for {container_id}...", total=None)
+        logs = client.get_container_logs(container_id, follow, tail)
+    
+    if logs:
+        console.print(f"[bold]Logs for container {container_id}:[/bold]")
+        console.print(logs)
     else:
-        with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
-            task = progress.add_task(f"Fetching logs for {container_id}...", total=None)
-            logs = client.get_logs(container_id, follow=False, tail=tail)
-        
-        if logs:
-            console.print(logs)
-        else:
-            console.print(f"[yellow]No logs found for container: {container_id}[/yellow]")
+        console.print(f"[yellow]No logs found for container: {container_id}[/yellow]")
 
-@container_commands.command("exec")
+@container_app.command("exec")
 def exec_command(
     container_id: str = typer.Argument(..., help="Container ID"),
     command: List[str] = typer.Argument(..., help="Command to execute"),
@@ -535,29 +519,25 @@ def exec_command(
     host: str = typer.Option("localhost", "--host", "-h", help="Anvyl server host"),
     port: int = typer.Option(50051, "--port", "-p", help="Anvyl server port")
 ):
-    """Execute command in container."""
+    """Execute a command in a container."""
     client = get_client(host, port)
     
-    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
-        task = progress.add_task(f"Executing command in {container_id}...", total=None)
-        result = client.exec_command(container_id, command, tty)
+    cmd_str = " ".join(command)
+    console.print(f"[bold]Executing command in {container_id}:[/bold] {cmd_str}")
     
-    if result and hasattr(result, 'success') and result.success:
-        if hasattr(result, 'output'):
-            console.print(result.output)
-        console.print(f"[green]Command executed successfully (exit code: {getattr(result, 'exit_code', 0)})[/green]")
+    result = client.exec_container_command(container_id, command, tty)
+    
+    if result:
+        console.print(result)
     else:
-        error_msg = getattr(result, 'error_message', 'Unknown error') if result else 'No response'
-        console.print(f"[red]Command execution failed: {error_msg}[/red]")
+        console.print(f"[red]Failed to execute command in container: {container_id}[/red]")
         raise typer.Exit(1)
 
 # Agent management commands
-@app.group(name="agent")
-def agent_commands():
-    """Agent management commands."""
-    pass
+agent_app = typer.Typer(help="Agent management commands.")
+app.add_typer(agent_app, name="agent")
 
-@agent_commands.command("list")
+@agent_app.command("list")
 def list_agents(
     host_id: Optional[str] = typer.Option(None, "--host-id", help="Filter by host ID"),
     host: str = typer.Option("localhost", "--host", "-h", help="Anvyl server host"),
@@ -581,8 +561,8 @@ def list_agents(
             agent_dict = {
                 "id": getattr(agent, 'id', ''),
                 "name": getattr(agent, 'name', ''),
-                "host_id": getattr(agent, 'host_id', ''),
                 "status": getattr(agent, 'status', ''),
+                "host_id": getattr(agent, 'host_id', ''),
                 "entrypoint": getattr(agent, 'entrypoint', ''),
                 "persistent": getattr(agent, 'persistent', False)
             }
@@ -592,24 +572,24 @@ def list_agents(
         table = Table(title="Anvyl Agents")
         table.add_column("ID", style="cyan")
         table.add_column("Name", style="green")
-        table.add_column("Host", style="yellow")
         table.add_column("Status", style="magenta")
+        table.add_column("Host", style="yellow")
         table.add_column("Entrypoint", style="blue")
         table.add_column("Persistent", style="dim")
         
         for agent in agents:
             table.add_row(
-                getattr(agent, 'id', '')[:12],
+                getattr(agent, 'id', '')[:12],  # Short ID
                 getattr(agent, 'name', ''),
-                getattr(agent, 'host_id', ''),
                 getattr(agent, 'status', ''),
+                getattr(agent, 'host_id', ''),
                 getattr(agent, 'entrypoint', ''),
                 "Yes" if getattr(agent, 'persistent', False) else "No"
             )
         
         console.print(table)
 
-@agent_commands.command("launch")
+@agent_app.command("launch")
 def launch_agent(
     name: str = typer.Argument(..., help="Agent name"),
     host_id: str = typer.Argument(..., help="Target host ID"),
@@ -631,9 +611,9 @@ def launch_agent(
             name=name,
             host_id=host_id,
             entrypoint=entrypoint,
-            env=env,
+            environment=env,
             use_container=use_container,
-            working_directory=working_dir,
+            working_dir=working_dir,
             arguments=arguments,
             persistent=persistent
         )
@@ -645,7 +625,7 @@ def launch_agent(
         console.print(f"[red]✗[/red] Failed to launch agent: {name}")
         raise typer.Exit(1)
 
-@agent_commands.command("stop")
+@agent_app.command("stop")
 def stop_agent(
     agent_id: str = typer.Argument(..., help="Agent ID"),
     host: str = typer.Option("localhost", "--host", "-h", help="Anvyl server host"),

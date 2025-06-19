@@ -16,10 +16,10 @@ import json
 import sys
 import logging
 
-from anvyl_sdk import AnvylClient
+from .sdk import AnvylClient
 
 # Ensure protobuf files are generated automatically
-from proto_utils import ensure_protos_generated
+from .proto_utils import ensure_protos_generated
 ensure_protos_generated()
 
 # Initialize rich console
@@ -48,7 +48,7 @@ def get_project_root() -> str:
     # Look for key files that indicate this is the project root
     current_dir = os.getcwd()
     while current_dir != "/":
-        if all(os.path.exists(os.path.join(current_dir, f)) for f in ["anvyl_grpc_server.py", "anvyl_sdk", "ui"]):
+        if all(os.path.exists(os.path.join(current_dir, f)) for f in ["anvyl", "ui", "pyproject.toml"]):
             return current_dir
         current_dir = os.path.dirname(current_dir)
     
@@ -689,7 +689,7 @@ def status(
 @app.command("version")
 def version():
     """Show Anvyl CLI version."""
-    from anvyl_sdk import __version__
+    from anvyl import __version__
     console.print(f"Anvyl CLI v{__version__}")
 
 if __name__ == "__main__":

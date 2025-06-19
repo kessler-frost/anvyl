@@ -11,8 +11,8 @@ import subprocess
 from typing import List, Dict, Optional, Iterator, Any
 
 # Import generated gRPC code
-import generated.anvyl_pb2 as anvyl_pb2
-import generated.anvyl_pb2_grpc as anvyl_pb2_grpc
+from ..generated import anvyl_pb2
+from ..generated import anvyl_pb2_grpc
 
 logger = logging.getLogger(__name__)
 
@@ -540,6 +540,14 @@ class AnvylClient:
         except Exception as e:
             logger.error(f"Error executing command on host: {e}")
             return None
+
+    def get_container_logs(self, container_id: str, follow: bool = False, tail: int = 100) -> Optional[str]:
+        """Get container logs - alias for get_logs method."""
+        return self.get_logs(container_id, follow, tail)
+
+    def exec_container_command(self, container_id: str, command: List[str], tty: bool = False) -> Optional[Any]:
+        """Execute command in container - alias for exec_command method."""
+        return self.exec_command(container_id, command, tty)
 
 # Convenience function for quick usage
 def create_client(host: str = "localhost", port: int = 50051) -> AnvylClient:

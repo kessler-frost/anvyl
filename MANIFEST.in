@@ -4,23 +4,15 @@ include LICENSE
 include requirements.txt
 include pytest.ini
 
-# Include main modules
-include anvyl_cli.py
-include anvyl_grpc_server.py
+# Include the main anvyl package
+recursive-include anvyl *.py
+recursive-include anvyl *.proto
 
-# Include protobuf files
-include protos/*.proto
-recursive-include generated *.py
-
-# Include package data
-recursive-include anvyl_sdk *.py
-recursive-include database *.py
+# Include tests (but they won't be installed)
+recursive-include tests *.py
 
 # Include documentation
 recursive-include docs *.md *.rst
-
-# Include scripts
-recursive-include scripts *.sh *.py
 
 # Exclude development and build artifacts
 exclude .gitignore
@@ -28,10 +20,12 @@ exclude Dockerfile*
 exclude docker-compose*.yml
 exclude test_*.py
 exclude **/test_*.py
-recursive-exclude tests *
+exclude *.log
 recursive-exclude * __pycache__
 recursive-exclude * *.py[co]
 recursive-exclude * .DS_Store
+
+# Exclude UI, scripts, and other non-package files from installation
 recursive-exclude ui *
+recursive-exclude scripts *
 recursive-exclude package_env *
-exclude *.log

@@ -1,22 +1,17 @@
-#!/usr/bin/env python3
 """
-Custom setup.py to generate protobuf files during build.
+Modern setuptools build hook for generating protobuf files.
+This is configured via pyproject.toml and runs automatically during pip install.
 """
 
 import subprocess
 import sys
 from pathlib import Path
-from setuptools import setup
 from setuptools.command.build_py import build_py
+from setuptools.command.develop import develop
 
 
-class BuildPyCommand(build_py):
-    """Custom build command that generates protobuf files."""
-    
-    def run(self):
-        """Run the build process with proto generation."""
-        self.generate_protos()
-        super().run()
+class ProtocolBufferMixin:
+    """Mixin class that provides protobuf generation functionality."""
     
     def generate_protos(self):
         """Generate protobuf files."""
@@ -67,9 +62,19 @@ class BuildPyCommand(build_py):
             sys.exit(1)
 
 
-if __name__ == "__main__":
-    setup(
-        cmdclass={
-            'build_py': BuildPyCommand,
-        }
-    )
+class BuildPyCommand(ProtocolBufferMixin, build_py):
+    """Custom build_py command that generates protobuf files."""
+    
+    def run(self):
+        """Run the build process with proto generation."""
+        self.generate_protos()
+        super().run()
+
+
+class DevelopCommand(ProtocolBufferMixin, develop):
+    """Custom develop command that generates protobuf files for editable installs."""
+    
+    def run(self):
+        """Run the develop process with proto generation."""
+        self.generate_protos()
+        super().run()

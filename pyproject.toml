@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel", "grpcio-tools>=1.59.0", "protobuf>=4.21.0"]
+requires = ["setuptools>=64", "wheel", "grpcio-tools>=1.59.0", "protobuf>=4.21.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -96,20 +96,6 @@ Repository = "https://github.com/kessler-frost/anvyl"
 "Bug Tracker" = "https://github.com/kessler-frost/anvyl/issues"
 Changelog = "https://github.com/kessler-frost/anvyl/releases"
 
-[tool.setuptools]
-# Package discovery - include both packages and standalone modules
-py-modules = ["anvyl_cli", "anvyl_grpc_server"]
-include-package-data = true
-zip-safe = false
-
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["anvyl_sdk*", "database*", "generated*"]
-exclude = ["tests*"]
-
-[tool.setuptools.package-data]
-"*" = ["*.proto"]
-
 [tool.black]
 line-length = 88
 target-version = ['py312']
@@ -144,3 +130,17 @@ module = [
     "generated.*",
 ]
 ignore_missing_imports = true
+
+[tool.setuptools]
+py-modules = ["anvyl_cli", "anvyl_grpc_server", "proto_utils"]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["anvyl_sdk*", "database*", "generated*"]
+exclude = ["tests*"]
+
+[tool.setuptools.package-data]
+"*" = ["*.proto"]
+
+# Note: Protobuf files are auto-generated when the package is first imported

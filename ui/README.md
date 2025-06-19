@@ -14,23 +14,10 @@ This UI embodies modern web design principles:
 
 ## 🏗 Architecture
 
-```
-ui/
-├── frontend/          # React + TypeScript + Vite
-│   ├── src/
-│   │   ├── components/    # UI Components
-│   │   │   ├── Dashboard.tsx      # System overview with charts
-│   │   │   ├── HostsView.tsx      # macOS hosts management
-│   │   │   ├── ContainersView.tsx # Docker container management
-│   │   │   ├── AgentsView.tsx     # Background agents management
-│   │   │   └── SettingsView.tsx   # System configuration
-│   │   ├── hooks/         # Custom React hooks
-│   │   ├── store/         # State management (Zustand)
-│   │   └── types/         # TypeScript definitions
-└── backend/           # FastAPI + gRPC bridge
-    ├── main.py        # REST API server
-    └── requirements.txt
-```
+The UI consists of two main components:
+
+- **Frontend**: React + TypeScript application with Tailwind CSS
+- **Backend**: FastAPI server that bridges the React app with the Anvyl gRPC server
 
 ## 🚀 Features
 
@@ -113,31 +100,68 @@ ui/
 ## 📦 Setup & Installation
 
 ### Prerequisites
-- Node.js 18+ and npm
-- Python 3.9+ (for backend)
-- Running Anvyl gRPC server
+- Node.js 18+
+- Python 3.12+
+- Docker Desktop
 
-### Frontend Development
+### Local Development
 
 ```bash
-cd ui/frontend
+# Install frontend dependencies
+cd frontend
 npm install
+
+# Install backend dependencies
+cd ../backend
+pip install -r requirements.txt
+
+# Start backend development server
+uvicorn main:app --reload --port 8000
+
+# In another terminal, start frontend development server
+cd ../frontend
 npm run dev
 ```
 
-Visit `http://localhost:5173` to see the interface.
+The frontend will be available at http://localhost:5173 and the backend API at http://localhost:8000.
 
-### Backend API (Optional)
+### Docker Development
 
 ```bash
-cd ui/backend
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r requirements.txt
-python main.py
+# Build and start all services
+docker-compose up --build
+
+# Start in detached mode
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop services
+docker-compose down
 ```
 
-API available at `http://localhost:8000` with docs at `/docs`.
+## 📁 Project Structure
+
+```
+ui/
+├── frontend/                   # React application
+│   ├── src/
+│   │   ├── components/         # Reusable UI components
+│   │   ├── pages/             # Page components
+│   │   ├── services/          # API client services
+│   │   ├── stores/            # Zustand state management
+│   │   └── types/             # TypeScript type definitions
+│   ├── public/                # Static assets
+│   ├── package.json           # Node.js dependencies
+│   └── Dockerfile            # Frontend container
+├── backend/                   # FastAPI server
+│   ├── main.py               # FastAPI application
+│   ├── requirements.txt      # Python dependencies
+│   └── Dockerfile           # Backend container
+├── docker-compose.yml        # Multi-service orchestration
+└── README.md                # This file
+```
 
 ## 🎨 Design Inspiration
 

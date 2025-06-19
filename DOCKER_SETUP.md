@@ -117,17 +117,19 @@ anvyl container stop <container-id>
 ```
 anvyl/
 ├── Dockerfile.grpc-server          # Main gRPC server container
+├── pyproject.toml                  # Project configuration and dependencies
 ├── ui/
 │   ├── docker-compose.yml          # Complete stack orchestration
 │   ├── frontend/
 │   │   ├── Dockerfile              # React app container
+│   │   ├── package.json           # Node.js dependencies
 │   │   └── nginx.conf             # Nginx configuration
 │   └── backend/
 │       ├── Dockerfile              # FastAPI container
-│       └── requirements.txt       # Python dependencies
+│       └── requirements.txt       # Backend-specific dependencies
 ├── scripts/
 │   └── start_ui.sh                # Quick start script
-└── anvyl_cli.py                   # Enhanced CLI with container commands
+└── anvyl/cli.py                   # Enhanced CLI with container commands
 ```
 
 ## 🔧 Configuration

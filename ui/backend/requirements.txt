@@ -1,8 +1,4 @@
-fastapi>=0.104.1
-uvicorn[standard]>=0.24.0
-pydantic>=2.5.0
-grpcio>=1.59.0
-grpcio-tools>=1.59.0
+# Backend-specific dependencies (anvyl package provides core dependencies)
 python-multipart>=0.0.6
 python-jose[cryptography]>=3.3.0
 passlib[bcrypt]>=1.7.4

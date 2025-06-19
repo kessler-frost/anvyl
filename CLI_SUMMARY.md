@@ -6,20 +6,21 @@ Successfully added a comprehensive Command Line Interface (CLI) to the Anvyl inf
 
 ## 📦 What Was Added
 
-### 1. Core CLI Module (`anvyl_cli.py`)
+### 1. Core CLI Module (`anvyl/cli.py`)
 - **Full-featured CLI** built with Typer framework
 - **Rich terminal output** with colors, tables, and progress indicators
 - **Comprehensive command coverage** for all SDK functionality
 - **JSON output support** for scripting and automation
 - **Error handling** with user-friendly messages
 
-### 2. Dependencies Added
-- `typer[all]>=0.9.0` - Modern CLI framework
-- `rich>=13.7.0` - Beautiful terminal output
-- Updated `requirements.txt` with new dependencies
+### 2. Dependencies Management
+- Dependencies managed via `pyproject.toml`
+- `typer>=0.9.0` - Modern CLI framework
+- `rich>=13.0.0` - Beautiful terminal output
+- Development dependencies in optional `[dev]` section
 
 ### 3. Installation & Setup
-- **`setup.py`** - Makes CLI installable as `anvyl` command
+- **`pyproject.toml`** - Modern Python packaging with dependencies
 - **`scripts/install_cli.sh`** - Automated installation script
 - **Console script entry point** for system-wide availability
 
@@ -89,18 +90,17 @@ anvyl version                            # Show version
 
 ### New Files
 ```
-anvyl_cli.py                    # Main CLI module
-setup.py                       # Package installation
-scripts/install_cli.sh          # Installation script
-scripts/demo_cli.sh             # Demo/test script
-docs/cli_usage.md              # CLI documentation
-CLI_SUMMARY.md                 # This summary
+anvyl/cli.py                   # Main CLI module
+scripts/install_cli.sh         # Installation script
+scripts/demo_cli.sh            # Demo/test script
+docs/cli_usage.md             # CLI documentation
+CLI_SUMMARY.md                # This summary
 ```
 
 ### Modified Files
 ```
-requirements.txt               # Added Typer and Rich
-README.md                      # Added CLI section
+pyproject.toml                # Added CLI dependencies and entry point
+README.md                     # Added CLI section
 ```
 
 ## 🚀 Installation & Usage
@@ -112,8 +112,12 @@ README.md                      # Added CLI section
 
 ### Manual Install
 ```bash
-pip install -r requirements.txt
 pip install -e .
+```
+
+### With Development Dependencies
+```bash
+pip install -e ".[dev]"
 ```
 
 ### Test Installation
@@ -124,7 +128,7 @@ pip install -e .
 ### Example Usage
 ```bash
 # Start the server first
-python anvyl_grpc_server.py
+python -m anvyl.grpc_server
 
 # Use the CLI
 anvyl status

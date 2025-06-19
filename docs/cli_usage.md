@@ -2,24 +2,21 @@
 
 The Anvyl CLI provides a command-line interface for managing your Anvyl infrastructure orchestrator. It uses the same gRPC API as the Python SDK but provides a user-friendly CLI experience.
 
-## Installation
+## 🚀 Installation
 
-### Quick Install
+### Quick Installation
 ```bash
-# Run the installation script
-./scripts/install_cli.sh
-```
-
-### Manual Install
-```bash
-# Install dependencies
-pip install -r requirements.txt
-
-# Install CLI in development mode
+# Install the package with all dependencies
 pip install -e .
 
 # Verify installation
 anvyl --help
+```
+
+### Development Installation
+```bash
+# Install with development dependencies
+pip install -e ".[dev]"
 ```
 
 ## Basic Usage

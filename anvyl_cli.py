@@ -19,7 +19,8 @@ import logging
 from anvyl_sdk import AnvylClient
 
 # Ensure protobuf files are generated automatically
-import proto_utils
+from proto_utils import ensure_protos_generated
+ensure_protos_generated()
 
 # Initialize rich console
 console = Console()

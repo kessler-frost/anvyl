@@ -64,7 +64,3 @@ def ensure_protos_generated():
         print("   pip install grpcio-tools")
     except Exception as e:
         print(f"❌ Unexpected error during proto generation: {e}")
-
-
-# Auto-generate protos when this module is imported
-ensure_protos_generated()

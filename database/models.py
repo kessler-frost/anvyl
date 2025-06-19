@@ -2,10 +2,13 @@
 Database models for Anvyl infrastructure orchestrator
 """
 
-from datetime import datetime
-from typing import Optional, Dict, List
+from datetime import datetime, UTC
+from typing import Optional, Dict, List, Any
 from sqlmodel import SQLModel, Field, create_engine, Session, select
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 class Host(SQLModel, table=True):
     """Host model representing a macOS node in the Anvyl network."""
@@ -14,8 +17,8 @@ class Host(SQLModel, table=True):
     name: str = Field(index=True)
     ip: str = Field(index=True)
     agents_installed: bool = Field(default=False)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     # Additional fields for future use
     netbird_ip: Optional[str] = Field(default=None)
@@ -25,19 +28,22 @@ class Host(SQLModel, table=True):
     status: str = Field(default="online")  # online, offline, maintenance
 
     # Metadata as JSON - renamed to avoid SQLAlchemy conflict
-    host_metadata: str = Field(default="{}")  # JSON string for flexible metadata
+    host_metadata: Optional[str] = Field(default=None)
 
-    def get_metadata(self) -> Dict:
-        """Get metadata as dictionary."""
+    def get_metadata(self) -> Dict[str, Any]:
+        """Get metadata as a dictionary."""
+        if not self.host_metadata:
+            return {}
         try:
             return json.loads(self.host_metadata)
-        except:
+        except json.JSONDecodeError:
+            logger.warning(f"Invalid JSON in host metadata for host {self.id}")
             return {}
 
-    def set_metadata(self, metadata: Dict):
-        """Set metadata from dictionary."""
+    def set_metadata(self, metadata: Dict[str, Any]) -> None:
+        """Set metadata from a dictionary."""
         self.host_metadata = json.dumps(metadata)
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(UTC)
 
 class Container(SQLModel, table=True):
     """Container model representing Docker containers managed by Anvyl."""
@@ -47,8 +53,8 @@ class Container(SQLModel, table=True):
     image: str = Field(index=True)
     host_id: str = Field(foreign_key="host.id", index=True)
     status: str = Field(index=True)  # running, stopped, exited, etc.
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     # Container configuration
     ports: str = Field(default="[]")  # JSON string of port mappings
@@ -65,49 +71,53 @@ class Container(SQLModel, table=True):
         """Get ports as list."""
         try:
             return json.loads(self.ports)
-        except:
+        except json.JSONDecodeError:
+            logger.warning(f"Invalid JSON in ports for container {self.id}")
             return []
 
     def set_ports(self, ports: List[str]):
         """Set ports from list."""
         self.ports = json.dumps(ports)
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(UTC)
 
     def get_volumes(self) -> List[str]:
         """Get volumes as list."""
         try:
             return json.loads(self.volumes)
-        except:
+        except json.JSONDecodeError:
+            logger.warning(f"Invalid JSON in volumes for container {self.id}")
             return []
 
     def set_volumes(self, volumes: List[str]):
         """Set volumes from list."""
         self.volumes = json.dumps(volumes)
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(UTC)
 
     def get_environment(self) -> List[str]:
         """Get environment variables as list."""
         try:
             return json.loads(self.environment)
-        except:
+        except json.JSONDecodeError:
+            logger.warning(f"Invalid JSON in environment for container {self.id}")
             return []
 
     def set_environment(self, environment: List[str]):
         """Set environment variables from list."""
         self.environment = json.dumps(environment)
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(UTC)
 
     def get_labels(self) -> Dict[str, str]:
         """Get labels as dictionary."""
         try:
             return json.loads(self.labels)
-        except:
+        except json.JSONDecodeError:
+            logger.warning(f"Invalid JSON in labels for container {self.id}")
             return {}
 
     def set_labels(self, labels: Dict[str, str]):
         """Set labels from dictionary."""
         self.labels = json.dumps(labels)
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(UTC)
 
 class DatabaseManager:
     """Database manager for Anvyl."""

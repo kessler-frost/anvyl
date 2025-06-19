@@ -113,10 +113,14 @@ class TestAnvylClient(unittest.TestCase):
         # Should not raise an exception
         client.disconnect()
 
-    def test_list_hosts_success(self):
+    @patch('anvyl_sdk.client.anvyl_pb2.ListHostsRequest')
+    def test_list_hosts_success(self, mock_request_class):
         """Test successful list_hosts call."""
         client = AnvylClient()
         client.stub = self.mock_stub
+        
+        mock_request = Mock()
+        mock_request_class.return_value = mock_request
         
         mock_response = Mock()
         mock_response.hosts = [self.mock_host]
@@ -125,8 +129,8 @@ class TestAnvylClient(unittest.TestCase):
         result = client.list_hosts()
         
         self.assertEqual(len(result), 1)
-        self.mock_stub.ListHosts.assert_called_once()
-        anvyl_pb2.ListHostsRequest.assert_called_once()
+        self.mock_stub.ListHosts.assert_called_once_with(mock_request)
+        mock_request_class.assert_called_once()
 
     def test_list_hosts_error(self):
         """Test list_hosts with error."""
@@ -139,10 +143,14 @@ class TestAnvylClient(unittest.TestCase):
         
         self.assertEqual(result, [])
 
-    def test_add_host_success(self):
+    @patch('anvyl_sdk.client.anvyl_pb2.AddHostRequest')
+    def test_add_host_success(self, mock_request_class):
         """Test successful add_host call."""
         client = AnvylClient()
         client.stub = self.mock_stub
+        
+        mock_request = Mock()
+        mock_request_class.return_value = mock_request
         
         mock_response = Mock()
         mock_response.success = True
@@ -152,8 +160,8 @@ class TestAnvylClient(unittest.TestCase):
         result = client.add_host("test-host", "192.168.1.100")
         
         self.assertEqual(result, self.mock_host)
-        self.mock_stub.AddHost.assert_called_once()
-        anvyl_pb2.AddHostRequest.assert_called_once_with(name="test-host", ip="192.168.1.100")
+        self.mock_stub.AddHost.assert_called_once_with(mock_request)
+        mock_request_class.assert_called_once_with(name="test-host", ip="192.168.1.100")
 
     def test_add_host_failure(self):
         """Test add_host with failure response."""
@@ -236,10 +244,17 @@ class TestAnvylClient(unittest.TestCase):
         self.assertEqual(result, self.mock_container)
         self.mock_stub.AddContainer.assert_called_once()
 
-    def test_add_container_full_params(self):
+    @patch('anvyl_sdk.client.anvyl_pb2.AddContainerRequest')
+    def test_add_container_full_params(self, mock_request_class):
         """Test add_container with all parameters."""
         client = AnvylClient()
         client.stub = self.mock_stub
+        
+        mock_request = Mock()
+        mock_request.name = "test-container"
+        mock_request.image = "test:latest"
+        mock_request.host_id = "test-host-id"
+        mock_request_class.return_value = mock_request
         
         mock_response = Mock()
         mock_response.success = True
@@ -259,10 +274,10 @@ class TestAnvylClient(unittest.TestCase):
         self.assertEqual(result, self.mock_container)
         
         # Verify request parameters
-        call_args = self.mock_stub.AddContainer.call_args[0][0]
-        self.assertEqual(call_args.name, "test-container")
-        self.assertEqual(call_args.image, "test:latest")
-        self.assertEqual(call_args.host_id, "test-host-id")
+        self.mock_stub.AddContainer.assert_called_once_with(mock_request)
+        self.assertEqual(mock_request.name, "test-container")
+        self.assertEqual(mock_request.image, "test:latest")
+        self.assertEqual(mock_request.host_id, "test-host-id")
 
     def test_add_container_failure(self):
         """Test add_container with failure response."""
@@ -303,10 +318,15 @@ class TestAnvylClient(unittest.TestCase):
         self.assertTrue(result)
         self.mock_stub.StopContainer.assert_called_once()
 
-    def test_stop_container_with_timeout(self):
+    @patch('anvyl_sdk.client.anvyl_pb2.StopContainerRequest')
+    def test_stop_container_with_timeout(self, mock_request_class):
         """Test stop_container with custom timeout."""
         client = AnvylClient()
         client.stub = self.mock_stub
+        
+        mock_request = Mock()
+        mock_request.timeout = 30
+        mock_request_class.return_value = mock_request
         
         mock_response = Mock()
         mock_response.success = True
@@ -317,8 +337,8 @@ class TestAnvylClient(unittest.TestCase):
         self.assertTrue(result)
         
         # Verify timeout parameter
-        call_args = self.mock_stub.StopContainer.call_args[0][0]
-        self.assertEqual(call_args.timeout, 30)
+        self.mock_stub.StopContainer.assert_called_once_with(mock_request)
+        self.assertEqual(mock_request.timeout, 30)
 
     def test_stop_container_error(self):
         """Test stop_container with error."""
@@ -346,10 +366,17 @@ class TestAnvylClient(unittest.TestCase):
         self.assertEqual(result, "Container logs here")
         self.mock_stub.GetLogs.assert_called_once()
 
-    def test_get_logs_with_params(self):
+    @patch('anvyl_sdk.client.anvyl_pb2.GetLogsRequest')
+    def test_get_logs_with_params(self, mock_request_class):
         """Test get_logs with follow and tail parameters."""
         client = AnvylClient()
         client.stub = self.mock_stub
+        
+        mock_request = Mock()
+        mock_request.container_id = "container-id"
+        mock_request.follow = True
+        mock_request.tail = 50
+        mock_request_class.return_value = mock_request
         
         mock_response = Mock()
         mock_response.success = True
@@ -361,10 +388,10 @@ class TestAnvylClient(unittest.TestCase):
         self.assertEqual(result, "Container logs here")
         
         # Verify parameters
-        call_args = self.mock_stub.GetLogs.call_args[0][0]
-        self.assertEqual(call_args.container_id, "container-id")
-        self.assertTrue(call_args.follow)
-        self.assertEqual(call_args.tail, 50)
+        self.mock_stub.GetLogs.assert_called_once_with(mock_request)
+        self.assertEqual(mock_request.container_id, "container-id")
+        self.assertTrue(mock_request.follow)
+        self.assertEqual(mock_request.tail, 50)
 
     def test_get_logs_failure(self):
         """Test get_logs with failure response."""
@@ -406,10 +433,17 @@ class TestAnvylClient(unittest.TestCase):
         self.assertEqual(result, mock_response)
         self.mock_stub.ExecCommand.assert_called_once()
 
-    def test_exec_command_with_tty(self):
+    @patch('anvyl_sdk.client.anvyl_pb2.ExecCommandRequest')
+    def test_exec_command_with_tty(self, mock_request_class):
         """Test exec_command with TTY parameter."""
         client = AnvylClient()
         client.stub = self.mock_stub
+        
+        mock_request = Mock()
+        mock_request.container_id = "container-id"
+        mock_request.command = ["bash"]
+        mock_request.tty = True
+        mock_request_class.return_value = mock_request
         
         mock_response = Mock()
         self.mock_stub.ExecCommand.return_value = mock_response
@@ -419,10 +453,10 @@ class TestAnvylClient(unittest.TestCase):
         self.assertEqual(result, mock_response)
         
         # Verify parameters
-        call_args = self.mock_stub.ExecCommand.call_args[0][0]
-        self.assertEqual(call_args.container_id, "container-id")
-        self.assertEqual(call_args.command, ["bash"])
-        self.assertTrue(call_args.tty)
+        self.mock_stub.ExecCommand.assert_called_once_with(mock_request)
+        self.assertEqual(mock_request.container_id, "container-id")
+        self.assertEqual(mock_request.command, ["bash"])
+        self.assertTrue(mock_request.tty)
 
     def test_exec_command_error(self):
         """Test exec_command with exception."""

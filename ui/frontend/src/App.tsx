@@ -163,8 +163,8 @@ function Sidebar({ activeView, setActiveView, onClose }: {
   return (
     <div className="flex flex-col h-full apple-glass-dark">
       {/* Header */}
-      <div className="flex flex-col items-center border-b border-gray-700/50 p-6">
-        <div className="w-48 relative mb-4">
+      <div className="flex flex-col items-center border-b border-gray-700/50 p-0">
+        <div className="w-64 relative">
           <img
             src="/anvyl-logo.svg"
             alt="Anvyl Logo"

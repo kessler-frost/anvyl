@@ -1,3 +1,7 @@
+# Core web framework dependencies
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+
 # Backend-specific dependencies (anvyl package provides core dependencies)
 python-multipart>=0.0.6
 python-jose[cryptography]>=3.3.0

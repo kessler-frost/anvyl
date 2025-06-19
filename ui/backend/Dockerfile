@@ -22,8 +22,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the entire project (backend + anvyl module)
 COPY ui/backend/ .
 COPY anvyl ./anvyl
-COPY generated ./generated
-COPY protos ./protos
+COPY anvyl/generated ./generated
+COPY anvyl/protos ./protos
 
 # Create a non-root user
 RUN useradd --create-home --shell /bin/bash app && \

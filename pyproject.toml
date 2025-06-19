@@ -132,15 +132,15 @@ module = [
 ignore_missing_imports = true
 
 [tool.setuptools]
-py-modules = ["anvyl_cli", "anvyl_grpc_server", "build_proto_hook"]
+py-modules = ["anvyl_cli", "anvyl_grpc_server", "proto_utils"]
 include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["anvyl_sdk*", "database*", "generated*"]
-exclude = ["tests*", "build_proto_hook*"]
+exclude = ["tests*"]
 
 [tool.setuptools.package-data]
 "*" = ["*.proto"]
 
-# Note: Custom build commands are handled via setup.py for better compatibility
+# Note: Protobuf files are auto-generated when the package is first imported

@@ -18,6 +18,9 @@ import logging
 
 from anvyl_sdk import AnvylClient
 
+# Ensure protobuf files are generated automatically
+import proto_utils
+
 # Initialize rich console
 console = Console()
 app = typer.Typer(help="Anvyl Infrastructure Orchestrator CLI")

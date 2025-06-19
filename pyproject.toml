@@ -88,7 +88,6 @@ all = [
 
 [project.scripts]
 anvyl = "anvyl_cli:app"
-generate-protos = "scripts.generate_protos:main"
 
 [project.urls]
 Homepage = "https://github.com/kessler-frost/anvyl"
@@ -99,16 +98,22 @@ Changelog = "https://github.com/kessler-frost/anvyl/releases"
 
 [tool.setuptools]
 # Package discovery - include both packages and standalone modules
-packages = ["anvyl_sdk", "database", "generated", "scripts"]
+packages = ["anvyl_sdk", "database"]
 py-modules = ["anvyl_cli", "anvyl_grpc_server"]
 include-package-data = true
 zip-safe = false
 
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["anvyl_sdk*", "database*", "generated*"]
+exclude = ["tests*"]
+
 [tool.setuptools.package-data]
-generated = ["*.py"]
-"anvyl_sdk" = ["*.py"]
-database = ["*.py"]
-protos = ["*.proto"]
+"*" = ["*.proto"]
+
+[tool.setuptools.cmdclass]
+build_py = "_build_hooks:BuildPyWithProtos"
+develop = "_build_hooks:DevelopWithProtos"
 
 [tool.black]
 line-length = 88

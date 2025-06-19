@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel", "grpcio-tools>=1.59.0"]
+requires = ["setuptools>=61.0", "wheel", "grpcio-tools>=1.59.0", "protobuf>=4.21.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -30,6 +30,7 @@ classifiers = [
 dependencies = [
     "grpcio>=1.59.0",
     "grpcio-tools>=1.59.0",
+    "protobuf>=4.21.0",
     "docker>=6.1.0",
     "sqlmodel>=0.0.14",
     "fastapi>=0.104.0",
@@ -60,6 +61,7 @@ all = [
     # Runtime dependencies (already included by default, but explicit for completeness)
     "grpcio>=1.59.0",
     "grpcio-tools>=1.59.0",
+    "protobuf>=4.21.0",
     "docker>=6.1.0",
     "sqlmodel>=0.0.14",
     "fastapi>=0.104.0",
@@ -86,6 +88,7 @@ all = [
 
 [project.scripts]
 anvyl = "anvyl_cli:app"
+generate-protos = "scripts.generate_protos:main"
 
 [project.urls]
 Homepage = "https://github.com/kessler-frost/anvyl"
@@ -96,7 +99,7 @@ Changelog = "https://github.com/kessler-frost/anvyl/releases"
 
 [tool.setuptools]
 # Package discovery - include both packages and standalone modules
-packages = ["anvyl_sdk", "database", "generated"]
+packages = ["anvyl_sdk", "database", "generated", "scripts"]
 py-modules = ["anvyl_cli", "anvyl_grpc_server"]
 include-package-data = true
 zip-safe = false

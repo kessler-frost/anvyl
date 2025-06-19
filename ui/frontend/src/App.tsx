@@ -13,9 +13,7 @@ import {
   Network,
   BarChart3,
   Plus,
-  Search,
-  Moon,
-  Sun
+  Search
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -78,29 +76,11 @@ const recentActivity = [
 function App() {
   const [activeView, setActiveView] = useState('dashboard')
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [theme, setTheme] = useState<'light' | 'dark'>('dark')
 
-  // Initialize theme on component mount
+  // Force dark mode
   useEffect(() => {
-    const savedTheme = localStorage.getItem('theme') as 'light' | 'dark'
-    if (savedTheme) {
-      setTheme(savedTheme)
-    } else {
-      setTheme('dark') // Default to dark mode
-    }
+    document.documentElement.classList.add('dark')
   }, [])
-
-  // Apply theme to document
-  useEffect(() => {
-    const root = window.document.documentElement
-    root.classList.remove('light', 'dark')
-    root.classList.add(theme)
-    localStorage.setItem('theme', theme)
-  }, [theme])
-
-  const toggleTheme = () => {
-    setTheme(theme === 'light' ? 'dark' : 'light')
-  }
 
   const renderView = () => {
     switch (activeView) {
@@ -157,11 +137,6 @@ function App() {
                   <Input placeholder="Search..." className="pl-8 w-64" />
                 </div>
 
-                {/* Theme toggle */}
-                <Button variant="ghost" size="icon" onClick={toggleTheme}>
-                  {theme === 'light' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
-                </Button>
-
                 <Avatar>
                   <AvatarImage src="/avatars/01.png" />
                   <AvatarFallback>AN</AvatarFallback>
@@ -188,13 +163,16 @@ function Sidebar({ activeView, setActiveView, onClose }: {
   return (
     <div className="flex flex-col h-full bg-card border-r">
       {/* Header */}
-      <div className="flex items-center gap-2 p-6 border-b">
-        <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-          <Activity className="w-4 h-4 text-primary-foreground" />
+      <div className="flex flex-col items-center border-b">
+        <div className="w-[280px] relative">
+          <img
+            src="/anvyl-logo.svg"
+            alt="Anvyl Logo"
+            className="w-full h-auto"
+          />
         </div>
-        <h1 className="text-xl font-bold">Anvyl</h1>
         {onClose && (
-          <Button variant="ghost" size="icon" onClick={onClose} className="ml-auto">
+          <Button variant="ghost" size="icon" onClick={onClose} className="absolute top-2 right-2">
             <X className="w-4 h-4" />
           </Button>
         )}
@@ -229,7 +207,6 @@ function Sidebar({ activeView, setActiveView, onClose }: {
               <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
               <span className="text-sm font-medium">Connected</span>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">localhost:50051</p>
           </CardContent>
         </Card>
       </div>

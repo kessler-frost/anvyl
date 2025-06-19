@@ -7,6 +7,7 @@ A self-hosted infrastructure orchestrator for Apple Silicon systems.
 import grpc
 import docker
 import uuid
+import socket
 import logging
 from datetime import datetime
 from concurrent import futures
@@ -69,7 +70,6 @@ class AnvylService(anvyl_pb2_grpc.AnvylServiceServicer):
 
     def _register_local_host(self):
         """Register the local host in the system."""
-        import socket
         try:
             hostname = socket.gethostname()
             local_ip = socket.gethostbyname(hostname)

@@ -24,19 +24,19 @@ class Host(SQLModel, table=True):
     architecture: Optional[str] = Field(default="arm64")  # Apple Silicon
     status: str = Field(default="online")  # online, offline, maintenance
 
-    # Metadata as JSON
-    metadata: str = Field(default="{}")  # JSON string for flexible metadata
+    # Metadata as JSON - renamed to avoid SQLAlchemy conflict
+    host_metadata: str = Field(default="{}")  # JSON string for flexible metadata
 
     def get_metadata(self) -> Dict:
         """Get metadata as dictionary."""
         try:
-            return json.loads(self.metadata)
+            return json.loads(self.host_metadata)
         except:
             return {}
 
     def set_metadata(self, metadata: Dict):
         """Set metadata from dictionary."""
-        self.metadata = json.dumps(metadata)
+        self.host_metadata = json.dumps(metadata)
         self.updated_at = datetime.utcnow()
 
 class Container(SQLModel, table=True):

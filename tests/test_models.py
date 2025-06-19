@@ -48,10 +48,11 @@ class TestHost(unittest.TestCase):
     def test_host_metadata_invalid_json(self):
         """Test Host metadata with invalid JSON."""
         host = Host(id="test-id", name="test-host", ip="192.168.1.100")
-        host.metadata = "invalid json"
+        host.host_metadata = "invalid json"
         
-        metadata = host.get_metadata()
-        self.assertEqual(metadata, {})
+        # Should return empty dict on invalid JSON
+        result = host.get_metadata()
+        self.assertEqual(result, {})
 
 
 class TestContainer(unittest.TestCase):

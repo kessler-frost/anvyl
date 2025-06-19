@@ -1,20 +1,29 @@
-import { useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { 
-  LayoutDashboard, 
-  Server, 
-  Container, 
-  Bot, 
-  Settings, 
+import { useState, useEffect } from 'react'
+import {
+  LayoutDashboard,
+  Server,
+  Container,
+  Bot,
+  Settings,
   Menu,
   X,
-  Activity
+  Activity,
+  Users,
+  Database,
+  Network,
+  BarChart3,
+  Plus,
+  Search,
+  Moon,
+  Sun
 } from 'lucide-react'
-import Dashboard from './components/Dashboard'
-import HostsView from './components/HostsView'
-import ContainersView from './components/ContainersView'
-import AgentsView from './components/AgentsView'
-import SettingsView from './components/SettingsView'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
+import { NavigationMenu, NavigationMenuContent, NavigationMenuItem, NavigationMenuLink, NavigationMenuList, NavigationMenuTrigger } from '@/components/ui/navigation-menu'
 
 const navigation = [
   { name: 'Dashboard', icon: LayoutDashboard, id: 'dashboard' },
@@ -24,9 +33,74 @@ const navigation = [
   { name: 'Settings', icon: Settings, id: 'settings' },
 ]
 
+const stats = [
+  {
+    name: 'Total Hosts',
+    value: '3',
+    change: '+1',
+    trend: 'up',
+    icon: Server,
+    color: 'text-blue-600'
+  },
+  {
+    name: 'Containers',
+    value: '12',
+    change: '+3',
+    trend: 'up',
+    icon: Container,
+    color: 'text-green-600'
+  },
+  {
+    name: 'Agents',
+    value: '5',
+    change: '+2',
+    trend: 'up',
+    icon: Bot,
+    color: 'text-purple-600'
+  },
+  {
+    name: 'System Load',
+    value: '23%',
+    change: '-5%',
+    trend: 'down',
+    icon: Activity,
+    color: 'text-orange-600'
+  }
+]
+
+const recentActivity = [
+  { type: 'container', action: 'Created container nginx-web', time: '2 minutes ago', status: 'success' },
+  { type: 'host', action: 'Mac Studio came online', time: '5 minutes ago', status: 'success' },
+  { type: 'agent', action: 'Backup agent started on Mac Mini', time: '10 minutes ago', status: 'success' },
+  { type: 'container', action: 'Container postgres-db stopped', time: '15 minutes ago', status: 'warning' }
+]
+
 function App() {
   const [activeView, setActiveView] = useState('dashboard')
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [theme, setTheme] = useState<'light' | 'dark'>('dark')
+
+  // Initialize theme on component mount
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('theme') as 'light' | 'dark'
+    if (savedTheme) {
+      setTheme(savedTheme)
+    } else {
+      setTheme('dark') // Default to dark mode
+    }
+  }, [])
+
+  // Apply theme to document
+  useEffect(() => {
+    const root = window.document.documentElement
+    root.classList.remove('light', 'dark')
+    root.classList.add(theme)
+    localStorage.setItem('theme', theme)
+  }, [theme])
+
+  const toggleTheme = () => {
+    setTheme(theme === 'light' ? 'dark' : 'light')
+  }
 
   const renderView = () => {
     switch (activeView) {
@@ -46,118 +120,256 @@ function App() {
   }
 
   return (
-    <div className="flex h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-      {/* Mobile sidebar overlay */}
-      <AnimatePresence>
-        {sidebarOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 lg:hidden"
-            onClick={() => setSidebarOpen(false)}
-          >
-            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-          </motion.div>
-        )}
-      </AnimatePresence>
+    <div className="min-h-screen bg-background">
+      {/* Mobile sidebar */}
+      <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
+        <SheetContent side="left" className="w-64 p-0">
+          <Sidebar activeView={activeView} setActiveView={setActiveView} onClose={() => setSidebarOpen(false)} />
+        </SheetContent>
+      </Sheet>
 
-      {/* Sidebar */}
-      <motion.aside
-        initial={{ x: -280 }}
-        animate={{ x: sidebarOpen ? 0 : -280 }}
-        className="fixed lg:static inset-y-0 left-0 z-50 w-64 lg:translate-x-0 transition-transform duration-300 ease-in-out lg:duration-0"
-      >
-        <div className="flex flex-col h-full glass border-r border-white/10">
+      <div className="flex">
+        {/* Desktop sidebar */}
+        <aside className="hidden lg:flex w-64 flex-col fixed inset-y-0 z-50">
+          <Sidebar activeView={activeView} setActiveView={setActiveView} />
+        </aside>
+
+        {/* Main content */}
+        <div className="lg:pl-64 flex-1">
           {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-white/10">
-            <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-gradient-to-br from-primary-400 to-primary-600 rounded-lg flex items-center justify-center">
-                <Activity className="w-4 h-4 text-white" />
+          <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+            <div className="flex h-16 items-center gap-4 px-4 sm:px-6">
+              <Sheet>
+                <SheetTrigger asChild>
+                  <Button variant="ghost" size="icon" className="lg:hidden">
+                    <Menu className="h-5 w-5" />
+                  </Button>
+                </SheetTrigger>
+              </Sheet>
+
+              <div className="flex-1">
+                <h1 className="text-lg font-semibold capitalize">{activeView}</h1>
               </div>
-              <h1 className="text-xl font-bold text-white">Anvyl</h1>
-            </div>
-            <button
-              onClick={() => setSidebarOpen(false)}
-              className="lg:hidden p-1 rounded-md hover:bg-white/10 transition-colors"
-            >
-              <X className="w-5 h-5 text-white" />
-            </button>
-          </div>
 
-          {/* Navigation */}
-          <nav className="flex-1 p-4 space-y-2">
-            {navigation.map((item) => {
-              const Icon = item.icon
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => {
-                    setActiveView(item.id)
-                    setSidebarOpen(false)
-                  }}
-                  className={`nav-item w-full ${
-                    activeView === item.id ? 'active' : ''
-                  }`}
-                >
-                  <Icon className="w-5 h-5" />
-                  <span>{item.name}</span>
-                </button>
-              )
-            })}
-          </nav>
+              <div className="flex items-center gap-4">
+                <div className="relative">
+                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input placeholder="Search..." className="pl-8 w-64" />
+                </div>
 
-          {/* Footer */}
-          <div className="p-4 border-t border-white/10">
-            <div className="glass-hover rounded-lg p-3">
-              <div className="flex items-center space-x-2">
-                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                <span className="text-sm text-white/80">Connected</span>
-              </div>
-              <p className="text-xs text-white/60 mt-1">localhost:50051</p>
-            </div>
-          </div>
-        </div>
-      </motion.aside>
+                {/* Theme toggle */}
+                <Button variant="ghost" size="icon" onClick={toggleTheme}>
+                  {theme === 'light' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+                </Button>
 
-      {/* Main content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Header */}
-        <header className="glass border-b border-white/10 px-6 py-4">
-          <div className="flex items-center justify-between">
-            <button
-              onClick={() => setSidebarOpen(true)}
-              className="lg:hidden p-2 rounded-md hover:bg-white/10 transition-colors"
-            >
-              <Menu className="w-5 h-5 text-white" />
-            </button>
-            
-            <h2 className="text-2xl font-semibold text-white capitalize">
-              {activeView}
-            </h2>
-            
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2 text-sm text-white/80">
-                <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                <span>System Healthy</span>
+                <Avatar>
+                  <AvatarImage src="/avatars/01.png" />
+                  <AvatarFallback>AN</AvatarFallback>
+                </Avatar>
               </div>
             </div>
-          </div>
-        </header>
+          </header>
 
-        {/* Main content area */}
-        <main className="flex-1 overflow-auto p-6">
-          <motion.div
-            key={activeView}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-            className="h-full"
-          >
+          {/* Main content area */}
+          <main className="flex-1 p-4 sm:p-6">
             {renderView()}
-          </motion.div>
-        </main>
+          </main>
+        </div>
       </div>
+    </div>
+  )
+}
+
+function Sidebar({ activeView, setActiveView, onClose }: {
+  activeView: string,
+  setActiveView: (view: string) => void,
+  onClose?: () => void
+}) {
+  return (
+    <div className="flex flex-col h-full bg-card border-r">
+      {/* Header */}
+      <div className="flex items-center gap-2 p-6 border-b">
+        <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+          <Activity className="w-4 h-4 text-primary-foreground" />
+        </div>
+        <h1 className="text-xl font-bold">Anvyl</h1>
+        {onClose && (
+          <Button variant="ghost" size="icon" onClick={onClose} className="ml-auto">
+            <X className="w-4 h-4" />
+          </Button>
+        )}
+      </div>
+
+      {/* Navigation */}
+      <nav className="flex-1 p-4 space-y-2">
+        {navigation.map((item) => {
+          const Icon = item.icon
+          return (
+            <Button
+              key={item.id}
+              variant={activeView === item.id ? "secondary" : "ghost"}
+              className="w-full justify-start"
+              onClick={() => {
+                setActiveView(item.id)
+                onClose?.()
+              }}
+            >
+              <Icon className="w-4 h-4 mr-2" />
+              {item.name}
+            </Button>
+          )
+        })}
+      </nav>
+
+      {/* Footer */}
+      <div className="p-4 border-t">
+        <Card>
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+              <span className="text-sm font-medium">Connected</span>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">localhost:50051</p>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  )
+}
+
+function Dashboard() {
+  return (
+    <div className="space-y-6">
+      {/* Stats Overview */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {stats.map((stat, index) => {
+          const Icon = stat.icon
+          return (
+            <Card key={stat.name}>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">{stat.name}</CardTitle>
+                <Icon className={`w-4 h-4 ${stat.color}`} />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stat.value}</div>
+                <p className={`text-xs ${stat.trend === 'up' ? 'text-green-600' : 'text-red-600'}`}>
+                  {stat.change} from last month
+                </p>
+              </CardContent>
+            </Card>
+          )
+        })}
+      </div>
+
+      {/* Recent Activity */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Recent Activity</CardTitle>
+          <CardDescription>Latest system events and actions</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {recentActivity.map((activity, index) => (
+              <div key={index} className="flex items-center gap-4">
+                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                <div className="flex-1">
+                  <p className="text-sm font-medium">{activity.action}</p>
+                  <p className="text-xs text-muted-foreground">{activity.time}</p>
+                </div>
+                <Badge variant={activity.status === 'success' ? 'default' : 'secondary'}>
+                  {activity.status}
+                </Badge>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+function HostsView() {
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-3xl font-bold tracking-tight">Hosts</h2>
+        <Button>
+          <Plus className="w-4 h-4 mr-2" />
+          Add Host
+        </Button>
+      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>System Hosts</CardTitle>
+          <CardDescription>Manage your infrastructure hosts</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="text-muted-foreground">Host management interface coming soon...</p>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+function ContainersView() {
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-3xl font-bold tracking-tight">Containers</h2>
+        <Button>
+          <Plus className="w-4 h-4 mr-2" />
+          Create Container
+        </Button>
+      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Docker Containers</CardTitle>
+          <CardDescription>Manage your containerized applications</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="text-muted-foreground">Container management interface coming soon...</p>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+function AgentsView() {
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-3xl font-bold tracking-tight">Agents</h2>
+        <Button>
+          <Plus className="w-4 h-4 mr-2" />
+          Launch Agent
+        </Button>
+      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>System Agents</CardTitle>
+          <CardDescription>Manage automated agents and tasks</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="text-muted-foreground">Agent management interface coming soon...</p>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+function SettingsView() {
+  return (
+    <div className="space-y-6">
+      <h2 className="text-3xl font-bold tracking-tight">Settings</h2>
+      <Card>
+        <CardHeader>
+          <CardTitle>System Configuration</CardTitle>
+          <CardDescription>Configure your Anvyl instance</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="text-muted-foreground">Settings interface coming soon...</p>
+        </CardContent>
+      </Card>
     </div>
   )
 }

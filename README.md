@@ -40,7 +40,7 @@ Anvyl is a Python-based backend system with a gRPC server and client SDK, design
 
 1. **Clone the repository:**
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/kessler-frost/anvyl
    cd anvyl
    ```
 
@@ -513,7 +513,7 @@ Anvyl is designed to work with Netbird for secure mesh networking:
 
 ## 🤝 Contributing
 
-1. Fork the repository
+1. Fork the repository at https://github.com/kessler-frost/anvyl
 2. Create a feature branch
 3. Make your changes
 4. Add tests if applicable

@@ -1,0 +1,85 @@
+version: '3.8'
+
+services:
+  anvyl-ui-backend:
+    build:
+      context: ../
+      dockerfile: ui/backend/Dockerfile
+    container_name: anvyl-ui-backend
+    restart: unless-stopped
+    environment:
+      - ANVYL_GRPC_HOST=host.docker.internal
+      - ANVYL_GRPC_PORT=50051
+      - PYTHONPATH=/app
+    ports:
+      - "8000:8000"
+    networks:
+      - anvyl-network
+    depends_on:
+      - anvyl-grpc-server
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    labels:
+      - "anvyl.service=ui-backend"
+      - "anvyl.component=ui"
+
+  anvyl-ui-frontend:
+    build:
+      context: frontend
+      dockerfile: Dockerfile
+    container_name: anvyl-ui-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    networks:
+      - anvyl-network
+    depends_on:
+      - anvyl-ui-backend
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    labels:
+      - "anvyl.service=ui-frontend"
+      - "anvyl.component=ui"
+
+  anvyl-grpc-server:
+    build:
+      context: ../
+      dockerfile: Dockerfile.grpc-server
+    container_name: anvyl-grpc-server
+    restart: unless-stopped
+    environment:
+      - ANVYL_DB_PATH=/data/anvyl.db
+      - ANVYL_LOG_LEVEL=INFO
+    ports:
+      - "50051:50051"
+    volumes:
+      - anvyl-data:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - anvyl-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import grpc; grpc.insecure_channel('localhost:50051').get_state()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    labels:
+      - "anvyl.service=grpc-server"
+      - "anvyl.component=core"
+
+volumes:
+  anvyl-data:
+    driver: local
+
+networks:
+  anvyl-network:
+    driver: bridge
+    name: anvyl-network

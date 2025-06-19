@@ -9,13 +9,46 @@ A self-hosted infrastructure orchestrator designed specifically for **Apple Sili
 
 Anvyl is a Python-based backend system with a gRPC server and client SDK, designed to control containers (Docker for now, Apple containers later) across multiple Macs connected via **Netbird** (WireGuard-based mesh network). It's not a dev tool or package — it's a full **product** with a UI planned.
 
+## 🚀 Quick Start
+
+### One-Command Setup (NEW!)
+```bash
+# Start the complete infrastructure with beautiful UI
+anvyl up
+
+# Or use the quick start script
+./scripts/start_ui.sh
+```
+
+This starts:
+- **Web UI**: http://localhost:3000 (Modern design with glassmorphism effects)
+- **API Server**: http://localhost:8000 
+- **gRPC Server**: localhost:50051
+
+### Traditional Setup
+```bash
+# 1. Clone and setup
+git clone https://github.com/kessler-frost/anvyl
+cd anvyl
+./scripts/dev_setup.sh
+
+# 2. Start gRPC server
+python anvyl_grpc_server.py
+
+# 3. Use CLI or SDK
+anvyl status
+```
+
 ## 🏗 System Architecture
 
 - **gRPC Server** (`anvyl_grpc_server.py`): Runs on each macOS node, interacts with Docker to manage containers
 - **Python SDK** (`anvyl_sdk/`): gRPC client that abstracts server APIs for easy integration
+- **Web UI** (`ui/`): React + FastAPI beautiful interface with modern design principles
+- **CLI** (`anvyl_cli.py`): Typer-based command-line interface with infrastructure management
 - **Communication**: gRPC over TCP using Netbird-assigned private IPs (future: Unix Domain Sockets for local)
 - **Storage**: SQLite database for persistent state (per-host or centralized)
 - **Networking**: Netbird mesh network for secure inter-Mac communication
+- **Containerization**: Docker with planned Apple Containerization support
 
 ## 🛠 Tech Stack
 
@@ -23,60 +56,48 @@ Anvyl is a Python-based backend system with a gRPC server and client SDK, design
 - **gRPC** + `grpcio-tools`
 - **Docker SDK** for Python
 - **SQLite** (via SQLModel)
-- **FastAPI** (planned for UI/dashboard)
+- **React + TypeScript** (UI Frontend)
+- **FastAPI** (UI Backend/API Bridge)
+- **Tailwind CSS** (Styling with glassmorphism effects)
+- **Framer Motion** (Smooth animations)
 - **Netbird** (manual setup for secure networking)
 - **Future**: Swift-based sidecar for Apple Containerization APIs
 
-## 🚀 Quick Start
+## 🎨 Beautiful UI (NEW!)
 
-### Prerequisites
+Experience Anvyl through a stunning web interface with modern design principles:
 
-- macOS 15+ on Apple Silicon
-- Python 3.12+
-- Docker Desktop for Mac
-- Homebrew (for protobuf compiler)
+- **Glassmorphism Effects**: Semi-transparent cards with backdrop blur
+- **Dark Theme**: Beautiful gradient backgrounds
+- **Responsive Design**: Works on all devices
+- **Real-time Monitoring**: Live charts and status updates
+- **Intuitive Navigation**: Clean, modern interface
 
-### Installation
+![Anvyl UI Preview](ui/README.md) <!-- Link to UI documentation -->
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/kessler-frost/anvyl
-   cd anvyl
-   ```
+## 🐳 Container Management (NEW!)
 
-2. **Run the setup script:**
-   ```bash
-   ./scripts/dev_setup.sh
-   ```
+### Infrastructure Commands
+```bash
+# Start complete stack
+anvyl up                    # Build and start all services
+anvyl up --no-build        # Start without building
 
-3. **Activate the virtual environment:**
-   ```bash
-   source venv/bin/activate
-   ```
+# Manage infrastructure
+anvyl down                  # Stop all services
+anvyl ps                    # Show container status
+anvyl logs                  # View logs
+anvyl logs frontend -f      # Follow frontend logs
+```
 
-4. **Start the gRPC server:**
-   ```bash
-   python anvyl_grpc_server.py
-   ```
-
-5. **Test the client:**
-   ```python
-   from anvyl_sdk import create_client
-
-   # Connect to local server
-   client = create_client()
-
-   # List containers
-   containers = client.list_containers()
-   print(f"Found {len(containers)} containers")
-
-   # Add a container
-   container = client.add_container(
-       name="test-nginx",
-       image="nginx:alpine",
-       ports=["8080:80"]
-   )
-   ```
+### Application Containers
+```bash
+# Deploy your applications
+anvyl container create web-app nginx:alpine --port 8080:80
+anvyl container list
+anvyl container stop <container-id>
+anvyl container logs <container-id>
+```
 
 ## 📖 Usage Examples
 
@@ -140,228 +161,31 @@ db_container = client.add_container(
 client.disconnect()
 ```
 
-### Multi-Host Orchestration
-
-```python
-from anvyl_sdk import AnvylClient
-
-# Connect to multiple hosts via Netbird
-hosts = [
-    ("192.168.1.100", 50051),  # Mac Mini
-    ("192.168.1.101", 50051),  # MacBook Pro
-    ("192.168.1.102", 50051),  # Mac Studio
-]
-
-clients = {}
-
-# Connect to all hosts
-for ip, port in hosts:
-    try:
-        client = AnvylClient(ip, port)
-        if client.connect():
-            clients[ip] = client
-            print(f"Connected to {ip}")
-        else:
-            print(f"Failed to connect to {ip}")
-    except Exception as e:
-        print(f"Error connecting to {ip}: {e}")
-
-# Deploy containers across hosts
-for ip, client in clients.items():
-    # Deploy web app on first host
-    if ip == "192.168.1.100":
-        container = client.add_container(
-            name="web-app",
-            image="nginx:alpine",
-            ports=["8080:80"]
-        )
-        print(f"Deployed web app on {ip}")
-
-    # Deploy database on second host
-    elif ip == "192.168.1.101":
-        container = client.add_container(
-            name="database",
-            image="postgres:15",
-            ports=["5432:5432"]
-        )
-        print(f"Deployed database on {ip}")
-
-    # Deploy monitoring on third host
-    elif ip == "192.168.1.102":
-        container = client.add_container(
-            name="monitoring",
-            image="grafana/grafana:latest",
-            ports=["3000:3000"]
-        )
-        print(f"Deployed monitoring on {ip}")
-
-# Cleanup
-for client in clients.values():
-    client.disconnect()
-```
-
-### Advanced Container Configuration
+### Infrastructure Orchestration (NEW!)
 
 ```python
 from anvyl_sdk import create_client
 
 client = create_client()
 
-# Create a complex application stack
-app_container = client.add_container(
-    name="my-app",
-    image="myapp:latest",
-    ports=[
-        "8080:80",      # HTTP
-        "8443:443",     # HTTPS
-        "9000:9000"     # Admin interface
-    ],
-    volumes=[
-        "/Users/me/app-data:/app/data",           # Application data
-        "/Users/me/app-logs:/app/logs",           # Log files
-        "/Users/me/app-config:/app/config:ro"     # Read-only config
-    ],
-    environment=[
-        "NODE_ENV=production",
-        "DATABASE_URL=postgresql://user:pass@db:5432/myapp",
-        "REDIS_URL=redis://cache:6379",
-        "API_KEY=your-secret-key"
-    ],
-    labels={
-        "app": "myapp",
-        "version": "1.0.0",
-        "environment": "production",
-        "team": "backend"
-    }
-)
+# Build and deploy UI stack
+success = client.deploy_ui_stack("/path/to/anvyl")
+if success:
+    print("UI stack deployed successfully!")
+    print("Access at http://localhost:3000")
 
-# Create a development environment
-dev_container = client.add_container(
-    name="dev-environment",
-    image="node:18-alpine",
-    ports=["3000:3000"],
-    volumes=["/Users/me/project:/app"],
-    environment=["NODE_ENV=development"],
-    labels={"environment": "development"}
-)
+# Check UI stack status
+status = client.get_ui_stack_status()
+for service, info in status["services"].items():
+    print(f"{service}: {info['status']}")
 
-client.disconnect()
+# Stop UI stack
+client.stop_ui_stack("/path/to/anvyl")
 ```
 
-### Error Handling and Monitoring
+## 🖥 Command Line Interface (CLI)
 
-```python
-from anvyl_sdk import create_client
-import logging
-
-# Set up logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-try:
-    client = create_client()
-
-    # Check system health
-    hosts = client.list_hosts()
-    containers = client.list_containers()
-
-    logger.info(f"System Status: {len(hosts)} hosts, {len(containers)} containers")
-
-    # Monitor container status
-    for container in containers:
-        logger.info(f"Container {container.name}: {container.status}")
-
-        # Check for stopped containers
-        if container.status == "exited":
-            logger.warning(f"Container {container.name} has exited")
-
-            # Attempt to restart
-            # (This would be implemented in future versions)
-            logger.info(f"Would restart container {container.name}")
-
-    # Health check - try to create a test container
-    test_container = client.add_container(
-        name="health-check",
-        image="alpine:latest",
-        environment=["echo 'Health check passed'"]
-    )
-
-    if test_container:
-        logger.info("Health check passed - container creation working")
-    else:
-        logger.error("Health check failed - container creation not working")
-
-except Exception as e:
-    logger.error(f"Anvyl client error: {e}")
-
-finally:
-    if 'client' in locals():
-        client.disconnect()
-```
-
-### Integration with Other Tools
-
-```python
-from anvyl_sdk import create_client
-import subprocess
-import json
-
-def deploy_with_ansible():
-    """Deploy infrastructure using Ansible + Anvyl"""
-    client = create_client()
-
-    # Get current hosts
-    hosts = client.list_hosts()
-
-    # Generate Ansible inventory
-    inventory = {
-        "all": {
-            "hosts": [host.ip for host in hosts],
-            "vars": {
-                "ansible_user": "admin",
-                "ansible_ssh_private_key_file": "~/.ssh/id_rsa"
-            }
-        }
-    }
-
-    # Write inventory file
-    with open("inventory.json", "w") as f:
-        json.dump(inventory, f, indent=2)
-
-    # Run Ansible playbook
-    subprocess.run([
-        "ansible-playbook",
-        "-i", "inventory.json",
-        "deploy.yml"
-    ])
-
-    client.disconnect()
-
-def monitor_with_prometheus():
-    """Export Anvyl metrics for Prometheus"""
-    client = create_client()
-
-    # Collect metrics
-    hosts = client.list_hosts()
-    containers = client.list_containers()
-
-    metrics = {
-        "anvyl_hosts_total": len(hosts),
-        "anvyl_containers_total": len(containers),
-        "anvyl_containers_running": len([c for c in containers if c.status == "running"]),
-        "anvyl_containers_stopped": len([c for c in containers if c.status == "stopped"])
-    }
-
-    # Export in Prometheus format
-    for metric, value in metrics.items():
-        print(f"{metric} {value}")
-
-    client.disconnect()
-```
-
-## � Command Line Interface (CLI)
-
-Anvyl now includes a powerful CLI built with Typer that provides an intuitive command-line interface for all operations.
+Anvyl includes a powerful CLI built with Typer that provides an intuitive command-line interface for all operations.
 
 ### CLI Installation
 
@@ -374,7 +198,21 @@ pip install -r requirements.txt
 pip install -e .
 ```
 
-### CLI Usage Examples
+### Infrastructure Management (NEW!)
+```bash
+# Complete infrastructure lifecycle
+anvyl up                           # Start everything
+anvyl down                         # Stop everything  
+anvyl ps                           # Show status
+anvyl logs                         # View logs
+
+# Individual services
+anvyl logs frontend                # Frontend logs
+anvyl logs backend                 # Backend logs
+anvyl logs grpc-server            # Core server logs
+```
+
+### Traditional CLI Usage Examples
 
 ```bash
 # Show system status
@@ -407,35 +245,28 @@ anvyl container exec "container-id-12345" ls -la /app
 - **Comprehensive help system** with `--help` on any command
 - **Remote server support** with `--host` and `--port` options
 - **Streaming log support** with `--follow` option
+- **Infrastructure orchestration** with `anvyl up/down/ps`
 
-### CLI Command Structure
-
-```bash
-anvyl [GLOBAL-OPTIONS] COMMAND [COMMAND-OPTIONS] [ARGS]
-
-# Examples:
-anvyl --help                          # Global help
-anvyl host --help                     # Host command help
-anvyl container create --help         # Container create help
-
-# Global options (available on most commands):
---host HOST                           # Anvyl server host (default: localhost)
---port PORT                           # Anvyl server port (default: 50051)
---output FORMAT                       # Output format: table or json
-```
-
-For detailed CLI documentation, see [`docs/cli_usage.md`](docs/cli_usage.md).
-
-## �📁 Project Structure
+## 📁 Project Structure
 
 ```
 anvyl/
 ├── anvyl_grpc_server.py           # gRPC server with Docker integration
 ├── anvyl_cli.py                   # Typer-based CLI interface
+├── Dockerfile.grpc-server         # Main server containerization
 ├── setup.py                       # Package setup for CLI installation
 ├── anvyl_sdk/                     # Python SDK
 │   ├── __init__.py
 │   └── client.py                  # gRPC client implementation
+├── ui/                            # Web Interface (NEW!)
+│   ├── docker-compose.yml         # Complete stack orchestration
+│   ├── frontend/                  # React + TypeScript UI
+│   │   ├── Dockerfile
+│   │   ├── src/components/        # Beautiful UI components
+│   │   └── nginx.conf
+│   └── backend/                   # FastAPI bridge
+│       ├── Dockerfile
+│       └── main.py
 ├── protos/
 │   └── anvyl.proto                # gRPC service definitions
 ├── database/
@@ -443,10 +274,12 @@ anvyl/
 ├── generated/                     # Auto-generated gRPC code
 ├── scripts/
 │   ├── dev_setup.sh              # Development environment setup
-│   └── install_cli.sh             # CLI installation script
+│   ├── install_cli.sh             # CLI installation script
+│   └── start_ui.sh                # Quick UI start script (NEW!)
 ├── docs/
 │   └── cli_usage.md              # Comprehensive CLI documentation
 ├── requirements.txt               # Python dependencies
+├── DOCKER_SETUP.md               # Container documentation (NEW!)
 └── README.md
 ```
 
@@ -462,6 +295,22 @@ The `scripts/dev_setup.sh` script automates the entire setup process:
 - Generates gRPC Python code from proto files
 - Checks Docker installation
 - Creates configuration files
+
+### Working with the UI (NEW!)
+
+```bash
+# Start UI development environment
+cd ui/frontend
+npm install
+npm run dev                        # Frontend dev server (hot reload)
+
+# In another terminal
+cd ui/backend
+python main.py                     # Backend API server
+
+# Or start everything with containers
+anvyl up --build
+```
 
 ### Working with gRPC
 
@@ -493,115 +342,138 @@ db.add_host(host)
 hosts = db.list_hosts()
 ```
 
+## 🐳 Containerization (NEW!)
+
+Anvyl is now fully containerized with Docker support:
+
+### Quick Start
+```bash
+anvyl up                           # One command to rule them all
+```
+
+### Architecture
+- **Multi-container setup** with Docker Compose
+- **Health checks** and automatic restart
+- **Persistent volumes** for data storage
+- **Network isolation** with custom bridge network
+- **Production ready** with security considerations
+
+See [DOCKER_SETUP.md](DOCKER_SETUP.md) for complete containerization documentation.
+
 ## 🔌 API Reference
 
 ### gRPC Service Methods
 
 #### Host Management
-- `ListHosts()` - List all registered hosts
-- `AddHost(name, ip)` - Add a new host to the system
+- `ListHosts()` - Get all registered hosts
+- `AddHost(name, ip, os, tags)` - Register a new host
+- `UpdateHost(host_id, resources, status)` - Update host information
+- `GetHostMetrics(host_id)` - Get current host metrics
+- `HostHeartbeat(host_id)` - Update host heartbeat
 
 #### Container Management
-- `ListContainers(host_id?)` - List containers (optionally filtered by host)
-- `AddContainer(name, image, host_id?, labels?, ports?, volumes?, environment?)` - Create new container
-- `StopContainer(container_id, timeout?)` - Stop a running container
-- `GetLogs(container_id, follow?, tail?)` - Get container logs
-- `ExecCommand(container_id, command, tty?)` - Execute command in container
+- `ListContainers(host_id?)` - List containers (optionally by host)
+- `AddContainer(...)` - Create a new container
+- `StopContainer(container_id, timeout)` - Stop a container
+- `GetLogs(container_id, follow, tail)` - Get container logs
+- `StreamLogs(container_id)` - Stream container logs (streaming RPC)
+- `ExecCommand(container_id, command, tty)` - Execute command in container
 
-### SDK Client Usage
+#### Agent Management
+- `ListAgents(host_id?)` - List agents (optionally by host)
+- `LaunchAgent(...)` - Launch a Python agent
+- `StopAgent(agent_id)` - Stop an agent
+- `GetAgentStatus(agent_id)` - Get agent status
 
-```python
-from anvyl_sdk import AnvylClient
+#### Infrastructure Management (NEW!)
+- Build and deploy Docker images
+- Orchestrate multi-container stacks
+- Monitor container health and status
+- Manage container logs and networking
 
-# Create client
-client = AnvylClient("192.168.1.100", 50051)
-client.connect()
+### REST API (NEW!)
 
-# Host operations
-hosts = client.list_hosts()
-new_host = client.add_host("macbook-pro", "192.168.1.101")
+The UI backend provides a REST API bridge:
 
-# Container operations
-containers = client.list_containers()
-new_container = client.add_container(
-    name="web-app",
-    image="nginx:alpine",
-    ports=["8080:80"],
-    labels={"app": "web", "env": "dev"}
-)
+- **Base URL**: http://localhost:8000
+- **Documentation**: http://localhost:8000/docs
+- **Health Check**: http://localhost:8000/health
 
-# Cleanup
-client.disconnect()
+Key endpoints:
+- `GET /api/hosts` - List hosts
+- `POST /api/hosts` - Add host
+- `GET /api/containers` - List containers
+- `POST /api/containers` - Create container
+- `GET /api/system/status` - System overview
+
+## 🚀 Quick Usage Scenarios
+
+### Scenario 1: Complete Infrastructure Setup
+```bash
+# Start everything at once
+anvyl up
+
+# Access the beautiful web UI
+open http://localhost:3000
+
+# Or use the CLI
+anvyl status
+anvyl host list
+anvyl container list
 ```
 
-## 🔒 Security & Networking
+### Scenario 2: Deploy Application Stack
+```bash
+# Deploy a web application
+anvyl container create web nginx:alpine --port 8080:80
 
-### Netbird Integration
+# Deploy a database
+anvyl container create db postgres:15 --port 5432:5432
 
-Anvyl is designed to work with Netbird for secure mesh networking:
+# Monitor everything
+anvyl ps
+anvyl logs web -f
+```
 
-1. **Install Netbird** on each Mac
-2. **Configure mesh network** with private IPs
-3. **Update client connections** to use Netbird IPs instead of localhost
+### Scenario 3: Multi-Host Network (Future)
+```bash
+# Add remote hosts
+anvyl host add "mac-studio" "192.168.1.103"
+anvyl host add "macbook-air" "192.168.1.104"
 
-### Future Security Enhancements
-
-- TLS encryption for gRPC communication
-- Authentication and authorization
-- Certificate-based host verification
-- Unix Domain Sockets for local communication
-
-## 🗺 Roadmap
-
-### Phase 1: Core Infrastructure ✅
-- [x] gRPC server with Docker integration
-- [x] Python SDK client
-- [x] SQLite database with SQLModel
-- [x] Basic container management (list, create)
-
-### Phase 2: Enhanced Container Management
-- [ ] Stop container functionality
-- [ ] Container logs retrieval
-- [ ] Command execution in containers
-- [ ] Container health monitoring
-
-### Phase 3: UI & Dashboard
-- [ ] FastAPI-based web interface
-- [ ] Real-time container status
-- [ ] Host management dashboard
-- [ ] Log streaming interface
-
-### Phase 4: Apple Containerization
-- [ ] Swift sidecar for Apple Container APIs
-- [ ] Migration from Docker to Apple containers
-- [ ] macOS 16+ native containerization support
-
-### Phase 5: Advanced Features
-- [ ] Multi-host orchestration
-- [ ] Service discovery
-- [ ] Load balancing
-- [ ] Backup and restore
-- [ ] Monitoring and alerting
+# Deploy distributed services
+anvyl container create web nginx --host mac-studio
+anvyl container create db postgres --host macbook-air
+anvyl container create cache redis --host mac-studio
+```
 
 ## 🤝 Contributing
 
-1. Fork the repository at https://github.com/kessler-frost/anvyl
+1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Add tests if applicable
+4. Run tests: `python -m pytest`
 5. Submit a pull request
 
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🆘 Support
+## 🙏 Acknowledgments
 
-For support and questions:
-- Open an issue on GitHub
-- Check the documentation
-- Join our community discussions
+- **gRPC** for robust communication
+- **Docker** for containerization
+- **React** ecosystem for beautiful UI
+- **FastAPI** for modern Python web development
+- **Modern web design community** for inspiration and best practices
 
 ---
 
-**Anvyl** - Forging the future of self-hosted Apple infrastructure, one container at a time. 🔨
+**Ready to manage your Apple infrastructure with style!** 🍎✨
+
+#### 3. `anvyl-ui-frontend`
+- **Image**: `anvyl/ui-frontend:latest`
+- **Port**: `3000:80`
+- **Purpose**: React frontend with modern design
+- **Health Check**: HTTP GET `/health`
+- **Dependencies**: `anvyl-ui-backend`

@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """
 Simple script to manually generate protobuf files.
-This is a fallback - normally protobuf files are generated automatically during pip install.
+This is a fallback - protobuf files are now generated automatically during pip install.
+You should only need to run this script directly if you're doing development work
+and need to regenerate the protos without reinstalling the package.
 """
 
 import subprocess

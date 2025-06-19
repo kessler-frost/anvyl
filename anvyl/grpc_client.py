@@ -69,7 +69,7 @@ class AnvylClient:
         """Build a Docker image."""
         try:
             logger.info(f"Building Docker image {tag} from {path}")
-            
+
             # Build the image
             image, build_logs = self.docker_client.images.build(
                 path=path,
@@ -78,15 +78,15 @@ class AnvylClient:
                 rm=True,
                 **kwargs
             )
-            
+
             # Log build output
             for log in build_logs:
                 if isinstance(log, dict) and 'stream' in log and isinstance(log['stream'], str):
                     logger.debug(log['stream'].strip())
-            
+
             logger.info(f"Successfully built image {tag}")
             return True
-            
+
         except Exception as e:
             logger.error(f"Failed to build image {tag}: {e}")
             return False
@@ -94,15 +94,7 @@ class AnvylClient:
     def build_ui_images(self, project_root: str) -> Dict[str, bool]:
         """Build all UI-related Docker images."""
         results = {}
-        
-        # Build gRPC server image
-        logger.info("Building Anvyl gRPC server image...")
-        results['anvyl-grpc-server'] = self.build_image(
-            path=project_root,
-            tag="anvyl/grpc-server:latest",
-            dockerfile="Dockerfile.grpc-server"
-        )
-        
+
         # Build UI backend image
         logger.info("Building Anvyl UI backend image...")
         results['anvyl-ui-backend'] = self.build_image(
@@ -110,7 +102,7 @@ class AnvylClient:
             tag="anvyl/ui-backend:latest",
             dockerfile="ui/backend/Dockerfile"
         )
-        
+
         # Build UI frontend image
         logger.info("Building Anvyl UI frontend image...")
         results['anvyl-ui-frontend'] = self.build_image(
@@ -118,7 +110,7 @@ class AnvylClient:
             tag="anvyl/ui-frontend:latest",
             dockerfile="Dockerfile"
         )
-        
+
         return results
 
     def deploy_ui_stack(self, project_root: str) -> bool:
@@ -126,18 +118,51 @@ class AnvylClient:
         try:
             ui_dir = os.path.join(project_root, "ui")
             compose_file = os.path.join(ui_dir, "docker-compose.yml")
-            
+
             if not os.path.exists(compose_file):
                 logger.error(f"Docker compose file not found: {compose_file}")
                 return False
-            
+
             logger.info("Deploying Anvyl UI stack...")
-            
-            # Run docker-compose up
+
+            # First, check if gRPC server is already running
+            import socket
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                result = sock.connect_ex(('localhost', 50051))
+                sock.close()
+                if result == 0:
+                    logger.info("gRPC server is already running on port 50051")
+                else:
+                    logger.info("Starting gRPC server with Python...")
+                    # Start gRPC server in background
+                    import subprocess
+                    import sys
+                    grpc_process = subprocess.Popen([
+                        sys.executable, "-m", "anvyl.grpc_server"
+                    ], cwd=project_root, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+                    # Wait a moment for the server to start
+                    import time
+                    time.sleep(3)
+
+                    # Check if server started successfully
+                    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    result = sock.connect_ex(('localhost', 50051))
+                    sock.close()
+                    if result != 0:
+                        logger.error("Failed to start gRPC server")
+                        return False
+                    logger.info("gRPC server started successfully")
+            except Exception as e:
+                logger.error(f"Error starting gRPC server: {e}")
+                return False
+
+            # Run docker-compose up for UI stack
             result = subprocess.run([
-                "docker-compose", "-f", compose_file, "up", "-d", "--build"
+                "docker-compose", "-f", compose_file, "up", "-d"
             ], cwd=ui_dir, capture_output=True, text=True)
-            
+
             if result.returncode == 0:
                 logger.info("Successfully deployed UI stack")
                 logger.info("UI available at:")
@@ -148,54 +173,112 @@ class AnvylClient:
             else:
                 logger.error(f"Failed to deploy UI stack: {result.stderr}")
                 return False
-                
+
         except Exception as e:
             logger.error(f"Error deploying UI stack: {e}")
             return False
 
     def stop_ui_stack(self, project_root: str) -> bool:
-        """Stop the UI stack containers."""
+        """Stop the UI stack containers and gRPC server."""
         try:
+            import subprocess
+            import psutil
+
             ui_dir = os.path.join(project_root, "ui")
             compose_file = os.path.join(ui_dir, "docker-compose.yml")
-            
+
             logger.info("Stopping Anvyl UI stack...")
-            
+
+            # Stop UI containers
             result = subprocess.run([
                 "docker-compose", "-f", compose_file, "down"
             ], cwd=ui_dir, capture_output=True, text=True)
-            
-            if result.returncode == 0:
-                logger.info("Successfully stopped UI stack")
-                return True
-            else:
+
+            if result.returncode != 0:
                 logger.error(f"Failed to stop UI stack: {result.stderr}")
                 return False
-                
+
+            logger.info("Successfully stopped UI stack")
+
+            # Stop gRPC server process
+            logger.info("Stopping gRPC server...")
+
+            # Find and kill gRPC server processes
+            for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+                try:
+                    cmdline = proc.info['cmdline']
+                    if cmdline and 'anvyl.grpc_server' in ' '.join(cmdline):
+                        logger.info(f"Stopping gRPC server process (PID: {proc.info['pid']})")
+                        proc.terminate()
+                        proc.wait(timeout=5)
+                        logger.info("gRPC server stopped successfully")
+                        break
+                except (psutil.NoSuchProcess, psutil.TimeoutExpired):
+                    pass
+            else:
+                logger.info("No gRPC server process found")
+
+            return True
+
         except Exception as e:
             logger.error(f"Error stopping UI stack: {e}")
             return False
 
     def get_ui_stack_status(self) -> Dict[str, Any]:
-        """Get status of UI stack containers."""
+        """Get status of UI stack containers and gRPC server."""
         try:
             containers = self.docker_client.containers.list(
                 filters={"label": "anvyl.component"}
             )
-            
+
             status = {
                 "containers": [],
                 "services": {
-                    "grpc-server": {"status": "stopped", "container": None},
+                    "grpc-server": {"status": "stopped", "container": None, "process": None},
                     "ui-backend": {"status": "stopped", "container": None},
                     "ui-frontend": {"status": "stopped", "container": None}
                 }
             }
-            
+
+            # Check gRPC server process
+            import psutil
+            import socket
+
+            grpc_process_info = None
+            for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+                try:
+                    cmdline = proc.info['cmdline']
+                    if cmdline and 'anvyl.grpc_server' in ' '.join(cmdline):
+                        grpc_process_info = {
+                            "pid": proc.info['pid'],
+                            "name": proc.info['name'],
+                            "status": proc.status()
+                        }
+                        break
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass
+
+            # Check if gRPC server is listening on port 50051
+            grpc_listening = False
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                result = sock.connect_ex(('localhost', 50051))
+                sock.close()
+                grpc_listening = (result == 0)
+            except:
+                pass
+
+            if grpc_process_info and grpc_listening:
+                status["services"]["grpc-server"]["status"] = "running"
+                status["services"]["grpc-server"]["process"] = grpc_process_info
+            else:
+                status["services"]["grpc-server"]["status"] = "stopped"
+
+            # Check Docker containers
             for container in containers:
                 labels = container.labels
                 service = labels.get("anvyl.service", "unknown")
-                
+
                 container_info = {
                     "id": container.id[:12],
                     "name": container.name,
@@ -205,16 +288,16 @@ class AnvylClient:
                     "created": container.attrs["Created"]
                 }
                 status["containers"].append(container_info)
-                
+
                 # Update service status
-                if service in ["grpc-server", "ui-backend", "ui-frontend"]:
+                if service in ["ui-backend", "ui-frontend"]:
                     status["services"][service] = {
                         "status": container.status,
                         "container": container_info
                     }
-            
+
             return status
-            
+
         except Exception as e:
             logger.error(f"Error getting UI stack status: {e}")
             return {"error": str(e)}
@@ -233,7 +316,7 @@ class AnvylClient:
         """Add a new host to the system."""
         try:
             request = anvyl_pb2.AddHostRequest(
-                name=name, 
+                name=name,
                 ip=ip,
                 os=os,
                 tags=tags or []
@@ -251,7 +334,7 @@ class AnvylClient:
             logger.error(f"Error adding host: {e}")
             return None
 
-    def update_host(self, host_id: str, resources: Optional[Any] = None, 
+    def update_host(self, host_id: str, resources: Optional[Any] = None,
                    status: str = "", tags: Optional[List[str]] = None) -> Optional[Any]:
         """Update host information."""
         try:
@@ -368,7 +451,7 @@ class AnvylClient:
             )
 
             response = self.stub.StopContainer(request)
-            
+
             if response.success:
                 logger.info(f"Successfully stopped container: {container_id}")
                 return True
@@ -453,7 +536,7 @@ class AnvylClient:
             logger.error(f"Error listing agents: {e}")
             return []
 
-    def launch_agent(self, 
+    def launch_agent(self,
                     name: str,
                     host_id: str,
                     entrypoint: str,
@@ -522,7 +605,7 @@ class AnvylClient:
             return None
 
     # Host-level execution methods
-    def exec_command_on_host(self, 
+    def exec_command_on_host(self,
                            host_id: str,
                            command: List[str],
                            working_directory: str = "",
@@ -560,4 +643,4 @@ def create_client(host: str = "localhost", port: int = 50051) -> AnvylClient:
     if client.connect():
         return client
     else:
-        raise ConnectionError(f"Failed to connect to Anvyl server at {host}:{port}") 
+        raise ConnectionError(f"Failed to connect to Anvyl server at {host}:{port}")

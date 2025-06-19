@@ -51,67 +51,67 @@ def get_project_root() -> str:
         if all(os.path.exists(os.path.join(current_dir, f)) for f in ["anvyl", "ui", "pyproject.toml"]):
             return current_dir
         current_dir = os.path.dirname(current_dir)
-    
+
     # If not found, assume current directory
     return os.getcwd()
 
 # UI and Infrastructure Management Commands
 @app.command("up")
 def start_infrastructure(
-    build: bool = typer.Option(True, "--build/--no-build", help="Build images before starting"),
+    build: bool = typer.Option(True, "--build/--no-build", help="Build Docker images before starting"),
     ui_only: bool = typer.Option(False, "--ui-only", help="Start only UI components"),
     logs: bool = typer.Option(False, "--logs", "-l", help="Show logs after starting")
 ):
     """Start the Anvyl infrastructure stack (gRPC server + UI)."""
     project_root = get_project_root()
-    
+
     try:
         # Create a client for Docker operations (no gRPC connection needed yet)
         client = AnvylClient()
-        
+
         console.print("🚀 [bold blue]Starting Anvyl Infrastructure Stack[/bold blue]")
-        
-        if build:
+
+        if build and not ui_only:
             console.print("\n📦 Building Docker images...")
             with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
                 task = progress.add_task("Building images...", total=None)
                 build_results = client.build_ui_images(project_root)
-            
+
             # Show build results
             build_table = Table(title="Build Results")
             build_table.add_column("Image", style="cyan")
             build_table.add_column("Status", style="bold")
-            
+
             for image, success in build_results.items():
                 status = "[green]✓ Success[/green]" if success else "[red]✗ Failed[/red]"
                 build_table.add_row(image, status)
-            
+
             console.print(build_table)
-            
+
             # Check if all builds succeeded
             if not all(build_results.values()):
                 console.print("[red]Some images failed to build. Check Docker logs for details.[/red]")
                 raise typer.Exit(1)
-        
+
         console.print("\n🏗️ Deploying infrastructure stack...")
         with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
             task = progress.add_task("Starting services...", total=None)
             success = client.deploy_ui_stack(project_root)
-        
+
         if success:
             console.print("\n✅ [bold green]Anvyl infrastructure started successfully![/bold green]")
             console.print("\n🌐 [bold]Access Points:[/bold]")
             console.print("  • Web UI:      http://localhost:3000")
             console.print("  • API Server:  http://localhost:8000")
             console.print("  • gRPC Server: localhost:50051")
-            
+
             if logs:
                 console.print("\n📋 Use 'anvyl logs' to view container logs")
                 console.print("💡 Use 'anvyl down' to stop the stack")
         else:
             console.print("[red]✗ Failed to start infrastructure stack[/red]")
             raise typer.Exit(1)
-            
+
     except Exception as e:
         console.print(f"[red]Error starting infrastructure: {e}[/red]")
         raise typer.Exit(1)
@@ -120,22 +120,22 @@ def start_infrastructure(
 def stop_infrastructure():
     """Stop the Anvyl infrastructure stack."""
     project_root = get_project_root()
-    
+
     try:
         client = AnvylClient()
-        
+
         console.print("🛑 [bold red]Stopping Anvyl Infrastructure Stack[/bold red]")
-        
+
         with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
             task = progress.add_task("Stopping services...", total=None)
             success = client.stop_ui_stack(project_root)
-        
+
         if success:
             console.print("✅ [bold green]Infrastructure stack stopped successfully![/bold green]")
         else:
             console.print("[red]✗ Failed to stop infrastructure stack[/red]")
             raise typer.Exit(1)
-            
+
     except Exception as e:
         console.print(f"[red]Error stopping infrastructure: {e}[/red]")
         raise typer.Exit(1)
@@ -145,34 +145,40 @@ def list_infrastructure():
     """Show status of Anvyl infrastructure containers."""
     try:
         client = AnvylClient()
-        
+
         with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
             task = progress.add_task("Getting container status...", total=None)
             status = client.get_ui_stack_status()
-        
+
         if "error" in status:
             console.print(f"[red]Error getting status: {status['error']}[/red]")
             raise typer.Exit(1)
-        
+
         # Show services status
         services_table = Table(title="Anvyl Services")
         services_table.add_column("Service", style="cyan")
         services_table.add_column("Status", style="bold")
-        services_table.add_column("Container", style="dim")
-        
+        services_table.add_column("Details", style="dim")
+
         for service_name, service_info in status["services"].items():
-            if service_info["container"]:
-                container_name = service_info["container"]["name"]
-                status_style = "green" if service_info["status"] == "running" else "red"
-                status_text = f"[{status_style}]{service_info['status']}[/{status_style}]"
+            status_style = "green" if service_info["status"] == "running" else "red"
+            status_text = f"[{status_style}]{service_info['status']}[/{status_style}]"
+
+            # Handle different service types
+            if service_name == "grpc-server":
+                if service_info["process"]:
+                    details = f"PID: {service_info['process']['pid']} (Python)"
+                else:
+                    details = "Not running"
+            elif service_info["container"]:
+                details = service_info["container"]["name"]
             else:
-                container_name = "Not running"
-                status_text = "[red]stopped[/red]"
-            
-            services_table.add_row(service_name, status_text, container_name)
-        
+                details = "Not running"
+
+            services_table.add_row(service_name, status_text, details)
+
         console.print(services_table)
-        
+
         # Show containers details if any are running
         if status["containers"]:
             containers_table = Table(title="Container Details")
@@ -180,7 +186,7 @@ def list_infrastructure():
             containers_table.add_column("Name", style="green")
             containers_table.add_column("Status", style="bold")
             containers_table.add_column("Ports", style="blue")
-            
+
             for container in status["containers"]:
                 ports = []
                 for port_config in container.get("ports", {}).values():
@@ -189,22 +195,22 @@ def list_infrastructure():
                             host_port = port_info.get("HostPort", "")
                             if host_port:
                                 ports.append(f"{host_port}:{port_info.get('HostIp', '0.0.0.0')}")
-                
+
                 status_style = "green" if container["status"] == "running" else "red"
                 status_text = f"[{status_style}]{container['status']}[/{status_style}]"
-                
+
                 containers_table.add_row(
                     container["id"],
                     container["name"],
                     status_text,
                     ", ".join(ports) if ports else "None"
                 )
-            
+
             console.print(containers_table)
         else:
             console.print("\n[yellow]No Anvyl containers running[/yellow]")
             console.print("💡 Use 'anvyl up' to start the infrastructure")
-            
+
     except Exception as e:
         console.print(f"[red]Error getting infrastructure status: {e}[/red]")
         raise typer.Exit(1)
@@ -215,44 +221,53 @@ def show_logs(
     follow: bool = typer.Option(False, "--follow", "-f", help="Follow logs"),
     tail: int = typer.Option(100, "--tail", "-n", help="Number of lines to show")
 ):
-    """Show logs from Anvyl infrastructure containers."""
+    """Show logs from Anvyl infrastructure containers and processes."""
     try:
         import subprocess
         project_root = get_project_root()
         ui_dir = os.path.join(project_root, "ui")
-        
+
+        if service and service in ["grpc-server", "grpc"]:
+            # Handle gRPC server logs (Python process)
+            console.print(f"📋 [bold]Logs for gRPC server (Python process):[/bold]")
+            console.print("[yellow]Note: gRPC server logs are displayed in the terminal where it was started[/yellow]")
+            console.print("[yellow]To see gRPC server logs, start it manually with: python -m anvyl.grpc_server[/yellow]")
+            return
+
         if service:
             service_map = {
                 "frontend": "anvyl-ui-frontend",
-                "backend": "anvyl-ui-backend", 
-                "grpc-server": "anvyl-grpc-server",
-                "grpc": "anvyl-grpc-server"
+                "backend": "anvyl-ui-backend"
             }
-            
+
             container_name = service_map.get(service, service)
             cmd = ["docker-compose", "-f", "docker-compose.yml", "logs"]
-            
+
             if follow:
                 cmd.append("-f")
             if tail:
                 cmd.extend(["--tail", str(tail)])
-            
+
             cmd.append(container_name)
-            
+
             console.print(f"📋 [bold]Logs for {service}:[/bold]")
             subprocess.run(cmd, cwd=ui_dir)
         else:
-            # Show logs for all services
+            # Show logs for all Docker services
             cmd = ["docker-compose", "-f", "docker-compose.yml", "logs"]
-            
+
             if follow:
                 cmd.append("-f")
             if tail:
                 cmd.extend(["--tail", str(tail)])
-            
-            console.print("📋 [bold]Logs for all services:[/bold]")
+
+            console.print("📋 [bold]Logs for all Docker services:[/bold]")
             subprocess.run(cmd, cwd=ui_dir)
-            
+
+            # Add note about gRPC server
+            console.print("\n[yellow]Note: gRPC server runs as a Python process, not a Docker container[/yellow]")
+            console.print("[yellow]To see gRPC server logs, start it manually with: python -m anvyl.grpc_server[/yellow]")
+
     except Exception as e:
         console.print(f"[red]Error showing logs: {e}[/red]")
         raise typer.Exit(1)
@@ -269,15 +284,15 @@ def list_hosts(
 ):
     """List all registered hosts."""
     client = get_client(host, port)
-    
+
     with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
         task = progress.add_task("Fetching hosts...", total=None)
         hosts = client.list_hosts()
-    
+
     if not hosts:
         console.print("[yellow]No hosts found[/yellow]")
         return
-    
+
     if output == "json":
         # Convert to serializable format
         hosts_data = []
@@ -300,7 +315,7 @@ def list_hosts(
         table.add_column("OS", style="yellow")
         table.add_column("Status", style="magenta")
         table.add_column("Tags", style="dim")
-        
+
         for host in hosts:
             tags = ", ".join(getattr(host, 'tags', []))
             table.add_row(
@@ -311,7 +326,7 @@ def list_hosts(
                 getattr(host, 'status', ''),
                 tags
             )
-        
+
         console.print(table)
 
 @host_app.command("add")
@@ -325,11 +340,11 @@ def add_host(
 ):
     """Add a new host to the system."""
     client = get_client(host, port)
-    
+
     with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
         task = progress.add_task(f"Adding host {name}...", total=None)
         result = client.add_host(name, ip, os, tags)
-    
+
     if result:
         console.print(f"[green]✓[/green] Successfully added host: {name} ({ip})")
     else:
@@ -345,15 +360,15 @@ def get_host_metrics(
 ):
     """Get host metrics."""
     client = get_client(host, port)
-    
+
     with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
         task = progress.add_task(f"Fetching metrics for {host_id}...", total=None)
         metrics = client.get_host_metrics(host_id)
-    
+
     if not metrics:
         console.print(f"[red]No metrics found for host: {host_id}[/red]")
         raise typer.Exit(1)
-    
+
     if output == "json":
         metrics_dict = {
             "cpu_count": getattr(metrics, 'cpu_count', 0),
@@ -388,15 +403,15 @@ def list_containers(
 ):
     """List containers."""
     client = get_client(host, port)
-    
+
     with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
         task = progress.add_task("Fetching containers...", total=None)
         containers = client.list_containers(host_id)
-    
+
     if not containers:
         console.print("[yellow]No containers found[/yellow]")
         return
-    
+
     if output == "json":
         containers_data = []
         for container in containers:
@@ -419,7 +434,7 @@ def list_containers(
         table.add_column("Status", style="magenta")
         table.add_column("Host", style="yellow")
         table.add_column("Ports", style="dim")
-        
+
         for container in containers:
             ports = ", ".join(getattr(container, 'ports', []))
             table.add_row(
@@ -430,7 +445,7 @@ def list_containers(
                 getattr(container, 'host_id', ''),
                 ports
             )
-        
+
         console.print(table)
 
 @container_app.command("create")
@@ -447,14 +462,14 @@ def create_container(
 ):
     """Create a new container."""
     client = get_client(host, port)
-    
+
     # Parse labels
     labels_dict = {}
     for label in labels:
         if "=" in label:
             key, value = label.split("=", 1)
             labels_dict[key] = value
-    
+
     with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
         task = progress.add_task(f"Creating container {name}...", total=None)
         result = client.add_container(
@@ -466,7 +481,7 @@ def create_container(
             volumes=volumes,
             environment=env
         )
-    
+
     if result:
         console.print(f"[green]✓[/green] Successfully created container: {name}")
         console.print(f"Container ID: {getattr(result, 'id', 'N/A')}")
@@ -483,11 +498,11 @@ def stop_container(
 ):
     """Stop a container."""
     client = get_client(host, port)
-    
+
     with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
         task = progress.add_task(f"Stopping container {container_id}...", total=None)
         success = client.stop_container(container_id, timeout)
-    
+
     if success:
         console.print(f"[green]✓[/green] Successfully stopped container: {container_id}")
     else:
@@ -504,11 +519,11 @@ def get_container_logs(
 ):
     """Get container logs."""
     client = get_client(host, port)
-    
+
     with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
         task = progress.add_task(f"Fetching logs for {container_id}...", total=None)
         logs = client.get_container_logs(container_id, follow, tail)
-    
+
     if logs:
         console.print(f"[bold]Logs for container {container_id}:[/bold]")
         console.print(logs)
@@ -525,12 +540,12 @@ def exec_command(
 ):
     """Execute a command in a container."""
     client = get_client(host, port)
-    
+
     cmd_str = " ".join(command)
     console.print(f"[bold]Executing command in {container_id}:[/bold] {cmd_str}")
-    
+
     result = client.exec_container_command(container_id, command, tty)
-    
+
     if result:
         console.print(result)
     else:
@@ -550,15 +565,15 @@ def list_agents(
 ):
     """List agents."""
     client = get_client(host, port)
-    
+
     with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
         task = progress.add_task("Fetching agents...", total=None)
         agents = client.list_agents(host_id)
-    
+
     if not agents:
         console.print("[yellow]No agents found[/yellow]")
         return
-    
+
     if output == "json":
         agents_data = []
         for agent in agents:
@@ -580,7 +595,7 @@ def list_agents(
         table.add_column("Host", style="yellow")
         table.add_column("Entrypoint", style="blue")
         table.add_column("Persistent", style="dim")
-        
+
         for agent in agents:
             table.add_row(
                 getattr(agent, 'id', '')[:12],  # Short ID
@@ -590,7 +605,7 @@ def list_agents(
                 getattr(agent, 'entrypoint', ''),
                 "Yes" if getattr(agent, 'persistent', False) else "No"
             )
-        
+
         console.print(table)
 
 @agent_app.command("launch")
@@ -608,7 +623,7 @@ def launch_agent(
 ):
     """Launch a new agent."""
     client = get_client(host, port)
-    
+
     with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
         task = progress.add_task(f"Launching agent {name}...", total=None)
         result = client.launch_agent(
@@ -621,7 +636,7 @@ def launch_agent(
             arguments=arguments,
             persistent=persistent
         )
-    
+
     if result:
         console.print(f"[green]✓[/green] Successfully launched agent: {name}")
         console.print(f"Agent ID: {getattr(result, 'id', 'N/A')}")
@@ -637,11 +652,11 @@ def stop_agent(
 ):
     """Stop an agent."""
     client = get_client(host, port)
-    
+
     with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
         task = progress.add_task(f"Stopping agent {agent_id}...", total=None)
         success = client.stop_agent(agent_id)
-    
+
     if success:
         console.print(f"[green]✓[/green] Successfully stopped agent: {agent_id}")
     else:
@@ -656,16 +671,16 @@ def status(
 ):
     """Show overall system status."""
     client = get_client(host, port)
-    
+
     with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
         task = progress.add_task("Fetching system status...", total=None)
         hosts = client.list_hosts()
         containers = client.list_containers()
         agents = client.list_agents()
-    
+
     # Create status tree
     tree = Tree("🔨 Anvyl System Status")
-    
+
     hosts_branch = tree.add(f"📡 Hosts ({len(hosts)})")
     for host in hosts:
         host_name = getattr(host, 'name', 'Unknown')
@@ -673,17 +688,17 @@ def status(
         host_status = getattr(host, 'status', 'Unknown')
         status_color = "green" if host_status == "online" else "red"
         hosts_branch.add(f"[{status_color}]{host_name}[/{status_color}] ({host_ip}) - {host_status}")
-    
+
     containers_branch = tree.add(f"📦 Containers ({len(containers)})")
     running_containers = [c for c in containers if getattr(c, 'status', '') == 'running']
     containers_branch.add(f"[green]Running: {len(running_containers)}[/green]")
     containers_branch.add(f"[yellow]Total: {len(containers)}[/yellow]")
-    
+
     agents_branch = tree.add(f"🤖 Agents ({len(agents)})")
     running_agents = [a for a in agents if getattr(a, 'status', '') == 'running']
     agents_branch.add(f"[green]Running: {len(running_agents)}[/green]")
     agents_branch.add(f"[yellow]Total: {len(agents)}[/yellow]")
-    
+
     console.print(tree)
 
 @app.command("version")

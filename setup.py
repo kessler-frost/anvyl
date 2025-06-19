@@ -11,37 +11,6 @@ def read_readme():
     with open("README.md", "r", encoding="utf-8") as f:
         return f.read()
 
-# Runtime dependencies (core dependencies needed for the package to work)
-RUNTIME_REQUIREMENTS = [
-    "grpcio>=1.59.0",
-    "grpcio-tools>=1.59.0",
-    "docker>=6.1.0",
-    "sqlmodel>=0.0.14",
-    "fastapi>=0.104.0",
-    "typer[all]>=0.9.0",
-    "rich>=13.0.0",
-    "httpx>=0.25.2",
-    "pyinfra>=3.3.1",
-    "pydantic>=2.5.0",
-    "psutil>=5.9.0",
-    "uvicorn>=0.24.0",
-    "python-dotenv>=1.0.0",
-    "requests>=2.31.0",
-]
-
-# Development dependencies (only needed for development, testing, etc.)
-DEVELOPMENT_REQUIREMENTS = [
-    "black>=23.11.0",
-    "isort>=5.12.0",
-    "mypy>=1.7.1",
-    "pytest>=7.4.0",
-    "pytest-asyncio>=0.21.0",
-    "pytest-cov>=4.1.0",
-    "pytest-mock>=3.12.0",
-    "pytest-grpc>=0.8.0",
-    "pytest-docker>=2.0.1",
-]
-
 setup(
     name="anvyl",
     version="0.1.0",
@@ -69,15 +38,6 @@ setup(
     
     # Python version requirement
     python_requires=">=3.12",
-    
-    # Runtime dependencies
-    install_requires=RUNTIME_REQUIREMENTS,
-    
-    # Optional dependencies
-    extras_require={
-        "dev": DEVELOPMENT_REQUIREMENTS,
-        "all": RUNTIME_REQUIREMENTS + DEVELOPMENT_REQUIREMENTS,
-    },
     
     # Entry points for CLI
     entry_points={

@@ -7,7 +7,7 @@ __author__ = "Anvyl Team"
 __email__ = "team@anvyl.dev"
 
 # Import main components for easy access
-from .sdk import client
+from . import grpc_client
 from .database import models
 
-__all__ = ["client", "models", "__version__"]
+__all__ = ["grpc_client", "models", "__version__"]

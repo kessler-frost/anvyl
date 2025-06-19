@@ -6,11 +6,11 @@ from typing import List, Optional, Dict, Any
 import sys
 import os
 
-# Add the parent directory to the path to import from anvyl_sdk
+# Add the parent directory to the path to import from anvyl
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 
 try:
-    from anvyl_sdk import AnvylClient
+    from anvyl.grpc_client import AnvylClient
 except ImportError:
     # Fallback for development - create a mock client
     class AnvylClient:

@@ -1,223 +1,280 @@
 # Anvyl Installation Guide
 
-This guide covers different ways to install Anvyl as a Python package.
+This guide covers the complete installation and setup process for Anvyl Infrastructure Orchestrator.
 
-## System Requirements
+## Prerequisites
 
-- **Python**: 3.12 or higher
-- **Operating System**: macOS 15+ (primary target) or Linux
-- **Docker**: Required for container management
-- **Protobuf Compiler**: Required for development (installed automatically)
+- **macOS 15+** (Apple Silicon recommended)
+- **Python 3.8+**
+- **Docker Desktop** (for container management)
+- **Homebrew** (for development tools)
 
-## Installation Options
+## Quick Installation
 
-### Option 1: Install from PyPI (Recommended)
-
-Once published to PyPI, you can install Anvyl with:
+### Option 1: Automated Setup (Recommended)
 
 ```bash
-pip install anvyl
+# Clone the repository
+git clone https://github.com/your-org/anvyl.git
+cd anvyl
+
+# Run the automated setup script
+./scripts/dev_setup.sh
+
+# Start the infrastructure
+anvyl up
 ```
 
-### Option 2: Install from Source (Current)
-
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/kessler-frost/anvyl.git
-   cd anvyl
-   ```
-
-2. **Install the package:**
-   ```bash
-   pip install .
-   ```
-
-3. **Or install in development mode:**
-   ```bash
-   pip install -e .
-   ```
-
-### Option 3: Install from Distribution Files
-
-If you have the distribution files (`.whl` or `.tar.gz`):
+### Option 2: Manual Installation
 
 ```bash
-# Install from wheel (recommended)
-pip install anvyl-0.1.0-py3-none-any.whl
+# 1. Clone the repository
+git clone https://github.com/your-org/anvyl.git
+cd anvyl
 
-# Or install from tarball
-pip install anvyl-0.1.0.tar.gz
-```
+# 2. Create virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-### Option 4: Install with Development Dependencies
+# 3. Install dependencies
+pip install -r requirements.txt
+pip install -e .
 
-For development work:
+# 4. Generate protobuf files
+python -m grpc_tools.protoc \
+    --python_out=generated \
+    --grpc_python_out=generated \
+    --proto_path=protos \
+    protos/anvyl.proto
 
-```bash
-# Install with development dependencies
-pip install -e ".[dev]"
-
-# Or install all optional dependencies
-pip install -e ".[all]"
-```
-
-## Installation Verification
-
-After installation, verify that Anvyl is working:
-
-```bash
-# Check if the CLI is available
-anvyl --help
-
-# Check version
-anvyl version
-
-# Test basic functionality
-anvyl status
+# 5. Start the infrastructure
+anvyl up
 ```
 
 ## Development Setup
 
-For contributors and developers:
+### 1. Install Development Tools
 
-1. **Clone and set up development environment:**
-   ```bash
-   git clone https://github.com/kessler-frost/anvyl.git
-   cd anvyl
-   ./scripts/dev_setup.sh
-   ```
-
-2. **Activate virtual environment:**
-   ```bash
-   source venv/bin/activate
-   ```
-
-3. **Install in development mode:**
-   ```bash
-   pip install -e ".[dev]"
-   ```
-
-## Docker Requirements
-
-Anvyl requires Docker for container management. Install Docker based on your platform:
-
-### macOS
 ```bash
-# Install Docker Desktop
-brew install --cask docker
+# Install protobuf compiler
+brew install protobuf
+
+# Install additional development dependencies
+pip install -r requirements-dev.txt
 ```
 
-### Linux
+### 2. Generate Protocol Buffers
+
 ```bash
-# Install Docker Engine
-curl -fsSL https://get.docker.com -o get-docker.sh
-sudo sh get-docker.sh
+# Generate Python code from proto files
+python anvyl/generate_protos.py
+```
+
+### 3. Run Tests
+
+```bash
+# Run all tests
+pytest
+
+# Run with coverage
+pytest --cov=anvyl
+
+# Run specific test categories
+pytest -m unit
+pytest -m integration
+```
+
+## Docker Setup
+
+### Building Images
+
+```bash
+# Build all images
+anvyl up --build
+
+# Build individual components
+docker build -f Dockerfile.grpc-server -t anvyl/grpc-server:latest .
+docker build -f ui/backend/Dockerfile -t anvyl/ui-backend:latest .
+docker build -f ui/frontend/Dockerfile -t anvyl/ui-frontend:latest ui/frontend/
+```
+
+### Running with Docker Compose
+
+```bash
+# Start the complete stack
+cd ui
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop the stack
+docker-compose down
+```
+
+## Configuration
+
+### Environment Variables
+
+Create a `.env` file in the project root:
+
+```bash
+# gRPC Server Configuration
+ANVYL_HOST=localhost
+ANVYL_PORT=50051
+ANVYL_DB_PATH=./anvyl.db
+
+# UI Configuration
+UI_FRONTEND_PORT=3000
+UI_BACKEND_PORT=8000
+
+# Docker Configuration
+DOCKER_NETWORK=anvyl-network
+```
+
+### Database Configuration
+
+The default SQLite database is automatically created at `./anvyl.db`. For production use, consider using PostgreSQL:
+
+```python
+# In your configuration
+DATABASE_URL = "postgresql://user:password@localhost/anvyl"
+```
+
+## Verification
+
+### 1. Check Installation
+
+```bash
+# Verify CLI installation
+anvyl --version
+
+# Test gRPC client
+python -c "from anvyl.grpc_client import AnvylClient; print('✅ gRPC client imported successfully')"
+
+# Test server connection
+anvyl status
+```
+
+### 2. Access Points
+
+After starting the infrastructure:
+
+- **Web UI**: http://localhost:3000
+- **API Documentation**: http://localhost:8000/docs
+- **Health Check**: http://localhost:8000/health
+- **gRPC Server**: localhost:50051
+
+### 3. Basic Operations
+
+```bash
+# List hosts
+anvyl host list
+
+# Add a host
+anvyl host add my-host 192.168.1.100
+
+# List containers
+anvyl container list
+
+# Create a container
+anvyl container create web-app nginx:latest --port 8080:80
 ```
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **Python Version Error**
-   ```
-   ERROR: Package requires Python >=3.12
-   ```
-   **Solution**: Install Python 3.12 or higher
-
-2. **gRPC Installation Issues**
-   ```
-   ERROR: Failed building wheel for grpcio
-   ```
-   **Solution**: Install system dependencies
+1. **Port Already in Use**
    ```bash
-   # macOS
-   brew install protobuf
+   # Check what's using the port
+   lsof -i :50051
    
-   # Linux
-   sudo apt-get install protobuf-compiler
+   # Kill the process
+   kill -9 <PID>
    ```
 
-3. **Permission Errors**
-   ```
-   ERROR: Permission denied
-   ```
-   **Solution**: Use virtual environment or `--user` flag
+2. **Docker Not Running**
    ```bash
-   pip install --user anvyl
+   # Start Docker Desktop
+   open -a Docker
+   
+   # Wait for Docker to be ready
+   docker ps
    ```
 
-4. **CLI Not Found**
-   ```
-   command not found: anvyl
-   ```
-   **Solution**: Check if the installation directory is in your PATH
+3. **Permission Issues**
    ```bash
-   # Add to ~/.bashrc or ~/.zshrc
-   export PATH="$HOME/.local/bin:$PATH"
+   # Fix file permissions
+   chmod +x scripts/*.sh
+   
+   # Run with sudo if needed
+   sudo anvyl up
    ```
 
-### Getting Help
+4. **Protobuf Generation Issues**
+   ```bash
+   # Reinstall protobuf tools
+   pip uninstall grpcio-tools
+   pip install grpcio-tools
+   
+   # Regenerate protobuf files
+   python anvyl/generate_protos.py
+   ```
 
-- **Documentation**: [README.md](README.md)
-- **CLI Help**: `anvyl --help`
-- **Issues**: [GitHub Issues](https://github.com/kessler-frost/anvyl/issues)
-
-## Uninstallation
-
-To remove Anvyl:
+### Logs and Debugging
 
 ```bash
-pip uninstall anvyl
-```
+# View infrastructure logs
+anvyl logs
 
-## Package Structure
+# View specific service logs
+anvyl logs frontend
+anvyl logs backend
+anvyl logs grpc-server
 
-After installation, Anvyl provides:
-
-- **CLI Tool**: `anvyl` command-line interface
-- **Python SDK**: `anvyl_sdk` package for programmatic use
-- **Database Models**: `database` package for data persistence
-- **gRPC Bindings**: `generated` package for protocol buffer definitions
-
-## Usage Examples
-
-### Basic CLI Usage
-```bash
-# Start the infrastructure
+# Enable debug logging
+export ANVYL_LOG_LEVEL=DEBUG
 anvyl up
-
-# List containers
-anvyl container list
-
-# Create a container
-anvyl container create web nginx:alpine --port 8080:80
-
-# View logs
-anvyl logs frontend -f
 ```
 
-### Python SDK Usage
-```python
-from anvyl_sdk import create_client
+## Production Deployment
 
-# Connect to Anvyl
-client = create_client("localhost", 50051)
+### Security Considerations
 
-# List hosts
-hosts = client.list_hosts()
-print(f"Found {len(hosts)} hosts")
+1. **Network Security**
+   - Use HTTPS in production
+   - Configure firewall rules
+   - Use VPN for remote access
 
-# Disconnect
-client.disconnect()
-```
+2. **Authentication**
+   - Implement API key authentication
+   - Use OAuth2 for web UI
+   - Enable TLS for gRPC
 
-## Next Steps
+3. **Data Protection**
+   - Encrypt database at rest
+   - Use secure environment variables
+   - Regular backups
 
-1. **Read the Documentation**: Check [README.md](README.md) for detailed usage
-2. **Start the Services**: Run `anvyl up` to start the infrastructure
-3. **Explore the CLI**: Use `anvyl --help` to see all available commands
-4. **Access the Web UI**: Open http://localhost:3000 after running `anvyl up`
+### Scaling
+
+1. **Horizontal Scaling**
+   - Deploy multiple gRPC server instances
+   - Use load balancer for API
+   - Implement service discovery
+
+2. **Database Scaling**
+   - Use PostgreSQL for production
+   - Implement read replicas
+   - Consider connection pooling
+
+## Support
+
+- **Documentation**: [docs/](docs/)
+- **Issues**: [GitHub Issues](https://github.com/your-org/anvyl/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/your-org/anvyl/discussions)
 
 ---
 
-For more information, see the [project documentation](https://github.com/kessler-frost/anvyl#readme).
+For additional help, please refer to the [README.md](README.md) or create an issue on GitHub.

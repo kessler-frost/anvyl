@@ -16,7 +16,7 @@ import json
 import sys
 import logging
 
-from .sdk import AnvylClient
+from .grpc_client import AnvylClient
 
 # Ensure protobuf files are generated automatically
 from .proto_utils import ensure_protos_generated

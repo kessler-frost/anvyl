@@ -1,5 +1,5 @@
 """
-Unit tests for Anvyl SDK Client
+Unit tests for Anvyl gRPC Client
 """
 
 import unittest
@@ -8,7 +8,7 @@ import pytest
 import grpc
 
 # Import the client module
-from anvyl_sdk.client import AnvylClient, create_client
+from anvyl.grpc_client import AnvylClient, create_client
 
 # Mock the generated protobuf modules
 import sys
@@ -65,8 +65,8 @@ class TestAnvylClient(unittest.TestCase):
         self.assertEqual(client.port, 9999)
         self.assertEqual(client.address, "custom-host:9999")
 
-    @patch('anvyl_sdk.client.grpc.insecure_channel')
-    @patch('anvyl_sdk.client.anvyl_pb2_grpc.AnvylServiceStub')
+    @patch('anvyl.grpc_client.grpc.insecure_channel')
+    @patch('anvyl.grpc_client.anvyl_pb2_grpc.AnvylServiceStub')
     def test_connect_success(self, mock_stub_class, mock_channel):
         """Test successful connection."""
         mock_channel.return_value = self.mock_channel
@@ -85,7 +85,7 @@ class TestAnvylClient(unittest.TestCase):
         mock_stub_class.assert_called_once_with(self.mock_channel)
         self.mock_stub.ListHosts.assert_called_once()
 
-    @patch('anvyl_sdk.client.grpc.insecure_channel')
+    @patch('anvyl.grpc_client.grpc.insecure_channel')
     def test_connect_failure(self, mock_channel):
         """Test connection failure."""
         mock_channel.side_effect = Exception("Connection failed")
@@ -113,7 +113,7 @@ class TestAnvylClient(unittest.TestCase):
         # Should not raise an exception
         client.disconnect()
 
-    @patch('anvyl_sdk.client.anvyl_pb2.ListHostsRequest')
+    @patch('anvyl.grpc_client.anvyl_pb2.ListHostsRequest')
     def test_list_hosts_success(self, mock_request_class):
         """Test successful list_hosts call."""
         client = AnvylClient()
@@ -143,7 +143,7 @@ class TestAnvylClient(unittest.TestCase):
         
         self.assertEqual(result, [])
 
-    @patch('anvyl_sdk.client.anvyl_pb2.AddHostRequest')
+    @patch('anvyl.grpc_client.anvyl_pb2.AddHostRequest')
     def test_add_host_success(self, mock_request_class):
         """Test successful add_host call."""
         client = AnvylClient()
@@ -244,7 +244,7 @@ class TestAnvylClient(unittest.TestCase):
         self.assertEqual(result, self.mock_container)
         self.mock_stub.AddContainer.assert_called_once()
 
-    @patch('anvyl_sdk.client.anvyl_pb2.AddContainerRequest')
+    @patch('anvyl.grpc_client.anvyl_pb2.AddContainerRequest')
     def test_add_container_full_params(self, mock_request_class):
         """Test add_container with all parameters."""
         client = AnvylClient()
@@ -318,7 +318,7 @@ class TestAnvylClient(unittest.TestCase):
         self.assertTrue(result)
         self.mock_stub.StopContainer.assert_called_once()
 
-    @patch('anvyl_sdk.client.anvyl_pb2.StopContainerRequest')
+    @patch('anvyl.grpc_client.anvyl_pb2.StopContainerRequest')
     def test_stop_container_with_timeout(self, mock_request_class):
         """Test stop_container with custom timeout."""
         client = AnvylClient()
@@ -366,7 +366,7 @@ class TestAnvylClient(unittest.TestCase):
         self.assertEqual(result, "Container logs here")
         self.mock_stub.GetLogs.assert_called_once()
 
-    @patch('anvyl_sdk.client.anvyl_pb2.GetLogsRequest')
+    @patch('anvyl.grpc_client.anvyl_pb2.GetLogsRequest')
     def test_get_logs_with_params(self, mock_request_class):
         """Test get_logs with follow and tail parameters."""
         client = AnvylClient()
@@ -433,7 +433,7 @@ class TestAnvylClient(unittest.TestCase):
         self.assertEqual(result, mock_response)
         self.mock_stub.ExecCommand.assert_called_once()
 
-    @patch('anvyl_sdk.client.anvyl_pb2.ExecCommandRequest')
+    @patch('anvyl.grpc_client.anvyl_pb2.ExecCommandRequest')
     def test_exec_command_with_tty(self, mock_request_class):
         """Test exec_command with TTY parameter."""
         client = AnvylClient()
@@ -473,7 +473,7 @@ class TestAnvylClient(unittest.TestCase):
 class TestCreateClientFunction(unittest.TestCase):
     """Test cases for the create_client convenience function."""
 
-    @patch('anvyl_sdk.client.AnvylClient')
+    @patch('anvyl.grpc_client.AnvylClient')
     def test_create_client_success(self, mock_client_class):
         """Test successful create_client call."""
         mock_client = Mock()
@@ -486,7 +486,7 @@ class TestCreateClientFunction(unittest.TestCase):
         mock_client_class.assert_called_once_with("test-host", 9999)
         mock_client.connect.assert_called_once()
 
-    @patch('anvyl_sdk.client.AnvylClient')
+    @patch('anvyl.grpc_client.AnvylClient')
     def test_create_client_connection_failure(self, mock_client_class):
         """Test create_client with connection failure."""
         mock_client = Mock()
@@ -498,7 +498,7 @@ class TestCreateClientFunction(unittest.TestCase):
         
         self.assertIn("Failed to connect to Anvyl server", str(exc_info.value))
 
-    @patch('anvyl_sdk.client.AnvylClient')
+    @patch('anvyl.grpc_client.AnvylClient')
     def test_create_client_default_params(self, mock_client_class):
         """Test create_client with default parameters."""
         mock_client = Mock()

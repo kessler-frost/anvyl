@@ -1,5 +1,5 @@
 """
-Anvyl SDK Client
+Anvyl gRPC Client
 gRPC client for Anvyl infrastructure orchestrator
 """
 
@@ -10,9 +10,13 @@ import os
 import subprocess
 from typing import List, Dict, Optional, Iterator, Any
 
+# Ensure protobuf files are generated automatically
+from anvyl.proto_utils import ensure_protos_generated
+ensure_protos_generated()
+
 # Import generated gRPC code
-from ..generated import anvyl_pb2
-from ..generated import anvyl_pb2_grpc
+from anvyl.generated import anvyl_pb2
+from anvyl.generated import anvyl_pb2_grpc
 
 logger = logging.getLogger(__name__)
 
@@ -556,4 +560,4 @@ def create_client(host: str = "localhost", port: int = 50051) -> AnvylClient:
     if client.connect():
         return client
     else:
-        raise ConnectionError(f"Failed to connect to Anvyl server at {host}:{port}")
+        raise ConnectionError(f"Failed to connect to Anvyl server at {host}:{port}") 

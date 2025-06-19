@@ -16,12 +16,16 @@ from datetime import datetime, UTC
 from concurrent import futures
 from typing import Dict, List, Optional
 
+# Ensure protobuf files are generated automatically
+from anvyl.proto_utils import ensure_protos_generated
+ensure_protos_generated()
+
 # Import generated gRPC code
-from .generated import anvyl_pb2
-from .generated import anvyl_pb2_grpc
+from anvyl.generated import anvyl_pb2
+from anvyl.generated import anvyl_pb2_grpc
 
 # Import database models
-from .database.models import DatabaseManager, Host, Container, Agent
+from anvyl.database.models import DatabaseManager, Host, Container, Agent
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

@@ -19,9 +19,9 @@ WORKDIR /app
 COPY ui/backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the entire project (backend + SDK)
+# Copy the entire project (backend + anvyl module)
 COPY ui/backend/ .
-COPY anvyl_sdk ./anvyl_sdk
+COPY anvyl ./anvyl
 COPY generated ./generated
 COPY protos ./protos
 

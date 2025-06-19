@@ -95,13 +95,17 @@ Repository = "https://github.com/kessler-frost/anvyl"
 Changelog = "https://github.com/kessler-frost/anvyl/releases"
 
 [tool.setuptools]
+# Package discovery - include both packages and standalone modules
 packages = ["anvyl_sdk", "database", "generated"]
+py-modules = ["anvyl_cli", "anvyl_grpc_server"]
 include-package-data = true
+zip-safe = false
 
 [tool.setuptools.package-data]
 generated = ["*.py"]
 "anvyl_sdk" = ["*.py"]
 database = ["*.py"]
+protos = ["*.proto"]
 
 [tool.black]
 line-length = 88

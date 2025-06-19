@@ -16,7 +16,7 @@ Anvyl consists of several key components:
 
 ### Prerequisites
 
-- Python 3.8+
+- Python 3.12+
 - Docker Desktop
 - Apple Silicon Mac (M1/M2/M3)
 
@@ -138,10 +138,20 @@ anvyl/
 │   └── backend/                # FastAPI server
 ├── tests/                      # Test suite
 ├── docs/                       # Documentation
-└── scripts/                    # Utility scripts
+├── scripts/                    # Utility scripts
+└── pyproject.toml              # Project configuration and dependencies
 ```
 
 ## 🔧 Development
+
+### Development Dependencies
+
+To install development dependencies for testing and code formatting:
+
+```bash
+# Install with development dependencies
+pip install -e ".[dev]"
+```
 
 ### Running Tests
 

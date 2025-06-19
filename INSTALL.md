@@ -5,7 +5,7 @@ This guide covers the complete installation and setup process for Anvyl Infrastr
 ## Prerequisites
 
 - **macOS 15+** (Apple Silicon recommended)
-- **Python 3.8+**
+- **Python 3.12+**
 - **Docker Desktop** (for container management)
 - **Homebrew** (for development tools)
 
@@ -37,15 +37,10 @@ python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 # 3. Install dependencies
-pip install -r requirements.txt
 pip install -e .
 
-# 4. Generate protobuf files
-python -m grpc_tools.protoc \
-    --python_out=generated \
-    --grpc_python_out=generated \
-    --proto_path=protos \
-    protos/anvyl.proto
+# 4. Generate protobuf files (automatically done on first import)
+python -c "from anvyl.proto_utils import ensure_protos_generated; ensure_protos_generated()"
 
 # 5. Start the infrastructure
 anvyl up
@@ -59,14 +54,14 @@ anvyl up
 # Install protobuf compiler
 brew install protobuf
 
-# Install additional development dependencies
-pip install -r requirements-dev.txt
+# Install with development dependencies
+pip install -e ".[dev]"
 ```
 
 ### 2. Generate Protocol Buffers
 
 ```bash
-# Generate Python code from proto files
+# Generate Python code from proto files (done automatically)
 python anvyl/generate_protos.py
 ```
 

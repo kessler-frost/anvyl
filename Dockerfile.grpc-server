@@ -15,9 +15,9 @@ RUN apt-get update && apt-get install -y \
 # Create app directory
 WORKDIR /app
 
-# Copy requirements and install Python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy pyproject.toml and install Python dependencies
+COPY pyproject.toml .
+RUN pip install --no-cache-dir -e .
 
 # Copy the application
 COPY . .
@@ -38,4 +38,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
   CMD python -c "import grpc; grpc.insecure_channel('localhost:50051').get_state()" || exit 1
 
 # Run the gRPC server
-CMD ["python", "anvyl_grpc_server.py"]
+CMD ["python", "-m", "anvyl.grpc_server"]

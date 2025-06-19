@@ -1,0 +1,64 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+  
+  body {
+    @apply bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white min-h-screen;
+  }
+}
+
+@layer components {
+  .glass {
+    @apply bg-white/10 backdrop-blur-md border border-white/20 shadow-glass;
+  }
+  
+  .glass-hover {
+    @apply hover:bg-white/15 hover:shadow-glass-hover transition-all duration-300;
+  }
+  
+  .btn-primary {
+    @apply bg-primary-500 hover:bg-primary-600 text-white px-4 py-2 rounded-lg font-medium transition-all duration-200 shadow-lg hover:shadow-xl active:scale-95;
+  }
+  
+  .btn-secondary {
+    @apply bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg font-medium transition-all duration-200 backdrop-blur-md border border-white/20;
+  }
+  
+  .input-glass {
+    @apply bg-white/10 backdrop-blur-md border border-white/20 rounded-lg px-4 py-2 text-white placeholder-white/70 focus:border-primary-400 focus:ring-1 focus:ring-primary-400 focus:outline-none transition-all duration-200;
+  }
+  
+  .card {
+    @apply glass rounded-xl p-6 animate-slide-up;
+  }
+  
+  .nav-item {
+    @apply flex items-center space-x-2 px-3 py-2 rounded-lg text-white/80 hover:text-white hover:bg-white/10 transition-all duration-200;
+  }
+  
+  .nav-item.active {
+    @apply text-primary-400 bg-primary-500/20;
+  }
+  
+  .status-online {
+    @apply bg-green-500/20 text-green-300 border-green-500/30;
+  }
+  
+  .status-offline {
+    @apply bg-red-500/20 text-red-300 border-red-500/30;
+  }
+  
+  .status-running {
+    @apply bg-blue-500/20 text-blue-300 border-blue-500/30;
+  }
+  
+  .status-stopped {
+    @apply bg-gray-500/20 text-gray-300 border-gray-500/30;
+  }
+}

@@ -2,6 +2,9 @@
 
 A self-hosted infrastructure orchestrator designed specifically for **Apple Silicon (macOS 15+)** systems, with planned future support for macOS 16's native containerization platform.
 
+> **⚠️ Alpha Stage Notice**  
+> This project is currently in **alpha stage** and is under active development. Features may be incomplete, APIs may change, and the software may contain bugs. Use with caution in production environments.
+
 ## 🎯 Overview
 
 Anvyl is a Python-based backend system with a gRPC server and client SDK, designed to control containers (Docker for now, Apple containers later) across multiple Macs connected via **Netbird** (WireGuard-based mesh network). It's not a dev tool or package — it's a full **product** with a UI planned.

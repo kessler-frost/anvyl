@@ -4,9 +4,6 @@ import {
   Container, 
   Bot, 
   Activity, 
-  Cpu, 
-  HardDrive, 
-  MemoryStick,
   TrendingUp
 } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'

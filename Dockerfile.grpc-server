@@ -1,0 +1,41 @@
+FROM python:3.12-slim
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create app directory
+WORKDIR /app
+
+# Copy requirements and install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the application
+COPY . .
+
+# Create data directory
+RUN mkdir -p /data && chmod 755 /data
+
+# Create a non-root user
+RUN useradd --create-home --shell /bin/bash anvyl && \
+    chown -R anvyl:anvyl /app /data
+USER anvyl
+
+# Expose gRPC port
+EXPOSE 50051
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+  CMD python -c "import grpc; grpc.insecure_channel('localhost:50051').get_state()" || exit 1
+
+# Run the gRPC server
+CMD ["python", "anvyl_grpc_server.py"]

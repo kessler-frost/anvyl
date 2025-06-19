@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Anvyl Development Setup Script
-# Sets up the development environment for Anvyl infrastructure orchestrator
+# Anvyl Development Environment Setup Script
+# This script sets up the complete development environment for Anvyl
 
 set -e
 
@@ -32,131 +32,96 @@ print_error() {
 }
 
 # Check if we're on macOS
-if [[ "$OSTYPE" != "darwin"* ]]; then
-    print_error "This script is designed for macOS systems"
+if [[ "$(uname)" != "Darwin" ]]; then
+    echo "❌ This script is designed for macOS. Please set up manually."
     exit 1
 fi
-
-# Check Python version
-PYTHON_VERSION=$(python3 --version 2>&1 | awk '{print $2}' | cut -d. -f1,2)
-if [[ "$PYTHON_VERSION" < "3.12" ]]; then
-    print_error "Python 3.12+ is required. Current version: $PYTHON_VERSION"
-    print_warning "Please install Python 3.12+ using Homebrew: brew install python@3.12"
-    exit 1
-fi
-
-print_success "Python version check passed: $PYTHON_VERSION"
 
 # Check if Homebrew is installed
-if ! command -v brew &> /dev/null; then
-    print_error "Homebrew is not installed. Please install it first:"
-    echo "  /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""
+if ! command -v brew >/dev/null 2>&1; then
+    echo "❌ Homebrew is not installed. Please install it first: https://brew.sh"
     exit 1
 fi
 
 # Install protobuf compiler if not present
-if ! command -v protoc &> /dev/null; then
-    print_status "Installing protobuf compiler..."
-    brew install protobuf
-    print_success "protobuf compiler installed"
-else
-    print_success "protobuf compiler already installed"
+echo "📦 Installing/updating protobuf compiler..."
+brew install protobuf
+
+# Check for Python 3.12
+if ! command -v python3.12 >/dev/null 2>&1; then
+    echo "📦 Installing Python 3.12..."
+    brew install python@3.12
 fi
 
-# Create virtual environment if it doesn't exist
-if [ ! -d "venv" ]; then
-    print_status "Creating Python virtual environment..."
-    python3 -m venv venv
-    print_success "Virtual environment created"
+# Create virtual environment
+echo "🐍 Creating Python virtual environment..."
+if [[ ! -d "venv" ]]; then
+    python3.12 -m venv venv
+    echo "✅ Virtual environment created"
+else
+    echo "✅ Virtual environment already exists"
 fi
 
 # Activate virtual environment
-print_status "Activating virtual environment..."
+echo "🔄 Activating virtual environment..."
 source venv/bin/activate
 
 # Upgrade pip
-print_status "Upgrading pip..."
+echo "⬆️ Upgrading pip..."
 pip install --upgrade pip
 
 # Install Python dependencies
-print_status "Installing Python dependencies..."
+echo "📦 Installing Python dependencies..."
 pip install -r requirements.txt
-print_success "Python dependencies installed"
 
-# Create generated directory for gRPC code
-if [ ! -d "generated" ]; then
-    print_status "Creating generated directory for gRPC code..."
-    mkdir -p generated
-fi
-
-# Generate gRPC Python code from proto file
-print_status "Generating gRPC Python code from proto file..."
-if [ -f "protos/anvyl.proto" ]; then
-    python -m grpc_tools.protoc \
-        --python_out=generated \
-        --grpc_python_out=generated \
-        --proto_path=protos \
-        protos/anvyl.proto
-
-    # Create __init__.py in generated directory
+# Generate gRPC code from proto files
+echo "🔧 Generating gRPC code..."
+if [[ ! -d "generated" ]]; then
+    mkdir generated
     touch generated/__init__.py
-    print_success "gRPC code generated successfully"
-else
-    print_error "Proto file not found at protos/anvyl.proto"
-    exit 1
 fi
 
-# Check if Docker is installed and running
-if ! command -v docker &> /dev/null; then
-    print_warning "Docker is not installed. Please install Docker Desktop for Mac:"
-    echo "  https://www.docker.com/products/docker-desktop/"
+python -m grpc_tools.protoc \
+    --python_out=generated \
+    --grpc_python_out=generated \
+    --proto_path=protos \
+    protos/anvyl.proto
+
+echo "✅ gRPC code generated"
+
+# Check Docker installation
+echo "🐳 Checking Docker installation..."
+if ! command -v docker >/dev/null 2>&1; then
+    echo "⚠️ Docker is not installed. Please install Docker Desktop from: https://docker.com"
+    echo "   Docker is required for container management."
 else
-    if ! docker info &> /dev/null; then
-        print_warning "Docker is installed but not running. Please start Docker Desktop."
+    echo "✅ Docker is installed"
+    
+    # Check if Docker is running
+    if docker info >/dev/null 2>&1; then
+        echo "✅ Docker is running"
     else
-        print_success "Docker is installed and running"
+        echo "⚠️ Docker is installed but not running. Please start Docker Desktop."
     fi
 fi
 
-# Create database directory
-if [ ! -d "database" ]; then
-    print_status "Creating database directory..."
-    mkdir -p database
+# Create configuration directory
+echo "📁 Creating configuration directories..."
+mkdir -p logs
+mkdir -p data
+
+# Set up git hooks (if in a git repository)
+if [[ -d ".git" ]]; then
+    echo "🔗 Setting up git hooks..."
+    # Future: Add pre-commit hooks for code formatting
 fi
 
-# Set up pre-commit hooks (optional)
-if command -v pre-commit &> /dev/null; then
-    print_status "Setting up pre-commit hooks..."
-    pre-commit install
-    print_success "Pre-commit hooks installed"
-else
-    print_warning "pre-commit not installed. Install with: pip install pre-commit"
-fi
-
-# Create .env file template if it doesn't exist
-if [ ! -f ".env" ]; then
-    print_status "Creating .env file template..."
-    cat > .env << EOF
-# Anvyl Configuration
-ANVYL_DATABASE_URL=sqlite:///anvyl.db
-ANVYL_GRPC_PORT=50051
-ANVYL_HOST=0.0.0.0
-
-# Docker Configuration
-DOCKER_HOST=unix:///var/run/docker.sock
-
-# Development Configuration
-DEBUG=true
-LOG_LEVEL=INFO
-EOF
-    print_success ".env file created"
-fi
-
-print_success "🎉 Anvyl development environment setup complete!"
+echo ""
+echo "🎉 Development environment setup complete!"
 echo ""
 echo "Next steps:"
 echo "1. Activate the virtual environment: source venv/bin/activate"
 echo "2. Start the gRPC server: python anvyl_grpc_server.py"
-echo "3. Test the client: python -c \"from anvyl_sdk import create_client; client = create_client()\""
+echo "3. Or start the full UI stack: anvyl up"
 echo ""
-echo "For more information, see the README.md file."
+echo "📖 For more information, see README.md"

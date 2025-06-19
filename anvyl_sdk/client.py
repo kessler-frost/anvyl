@@ -5,6 +5,9 @@ gRPC client for Anvyl infrastructure orchestrator
 
 import grpc
 import logging
+import docker
+import os
+import subprocess
 from typing import List, Dict, Optional, Iterator, Any
 
 # Import generated gRPC code
@@ -23,6 +26,18 @@ class AnvylClient:
         self.address = f"{host}:{port}"
         self.channel = None
         self.stub = None
+        self._docker_client = None
+
+    @property
+    def docker_client(self):
+        """Get or create Docker client."""
+        if self._docker_client is None:
+            try:
+                self._docker_client = docker.from_env()
+            except Exception as e:
+                logger.error(f"Failed to connect to Docker: {e}")
+                raise ConnectionError("Docker is not available. Please ensure Docker is running.")
+        return self._docker_client
 
     def connect(self) -> bool:
         """Establish connection to the gRPC server."""
@@ -44,6 +59,161 @@ class AnvylClient:
         if self.channel:
             self.channel.close()
             logger.info("Disconnected from Anvyl server")
+
+    # Docker image building methods
+    def build_image(self, path: str, tag: str, dockerfile: str = "Dockerfile", **kwargs) -> bool:
+        """Build a Docker image."""
+        try:
+            logger.info(f"Building Docker image {tag} from {path}")
+            
+            # Build the image
+            image, build_logs = self.docker_client.images.build(
+                path=path,
+                tag=tag,
+                dockerfile=dockerfile,
+                rm=True,
+                **kwargs
+            )
+            
+            # Log build output
+            for log in build_logs:
+                if isinstance(log, dict) and 'stream' in log and isinstance(log['stream'], str):
+                    logger.debug(log['stream'].strip())
+            
+            logger.info(f"Successfully built image {tag}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to build image {tag}: {e}")
+            return False
+
+    def build_ui_images(self, project_root: str) -> Dict[str, bool]:
+        """Build all UI-related Docker images."""
+        results = {}
+        
+        # Build gRPC server image
+        logger.info("Building Anvyl gRPC server image...")
+        results['anvyl-grpc-server'] = self.build_image(
+            path=project_root,
+            tag="anvyl/grpc-server:latest",
+            dockerfile="Dockerfile.grpc-server"
+        )
+        
+        # Build UI backend image
+        logger.info("Building Anvyl UI backend image...")
+        results['anvyl-ui-backend'] = self.build_image(
+            path=project_root,
+            tag="anvyl/ui-backend:latest",
+            dockerfile="ui/backend/Dockerfile"
+        )
+        
+        # Build UI frontend image
+        logger.info("Building Anvyl UI frontend image...")
+        results['anvyl-ui-frontend'] = self.build_image(
+            path=os.path.join(project_root, "ui", "frontend"),
+            tag="anvyl/ui-frontend:latest",
+            dockerfile="Dockerfile"
+        )
+        
+        return results
+
+    def deploy_ui_stack(self, project_root: str) -> bool:
+        """Deploy the complete UI stack using docker-compose."""
+        try:
+            ui_dir = os.path.join(project_root, "ui")
+            compose_file = os.path.join(ui_dir, "docker-compose.yml")
+            
+            if not os.path.exists(compose_file):
+                logger.error(f"Docker compose file not found: {compose_file}")
+                return False
+            
+            logger.info("Deploying Anvyl UI stack...")
+            
+            # Run docker-compose up
+            result = subprocess.run([
+                "docker-compose", "-f", compose_file, "up", "-d", "--build"
+            ], cwd=ui_dir, capture_output=True, text=True)
+            
+            if result.returncode == 0:
+                logger.info("Successfully deployed UI stack")
+                logger.info("UI available at:")
+                logger.info("  Frontend: http://localhost:3000")
+                logger.info("  Backend API: http://localhost:8000")
+                logger.info("  gRPC Server: localhost:50051")
+                return True
+            else:
+                logger.error(f"Failed to deploy UI stack: {result.stderr}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Error deploying UI stack: {e}")
+            return False
+
+    def stop_ui_stack(self, project_root: str) -> bool:
+        """Stop the UI stack containers."""
+        try:
+            ui_dir = os.path.join(project_root, "ui")
+            compose_file = os.path.join(ui_dir, "docker-compose.yml")
+            
+            logger.info("Stopping Anvyl UI stack...")
+            
+            result = subprocess.run([
+                "docker-compose", "-f", compose_file, "down"
+            ], cwd=ui_dir, capture_output=True, text=True)
+            
+            if result.returncode == 0:
+                logger.info("Successfully stopped UI stack")
+                return True
+            else:
+                logger.error(f"Failed to stop UI stack: {result.stderr}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Error stopping UI stack: {e}")
+            return False
+
+    def get_ui_stack_status(self) -> Dict[str, Any]:
+        """Get status of UI stack containers."""
+        try:
+            containers = self.docker_client.containers.list(
+                filters={"label": "anvyl.component"}
+            )
+            
+            status = {
+                "containers": [],
+                "services": {
+                    "grpc-server": {"status": "stopped", "container": None},
+                    "ui-backend": {"status": "stopped", "container": None},
+                    "ui-frontend": {"status": "stopped", "container": None}
+                }
+            }
+            
+            for container in containers:
+                labels = container.labels
+                service = labels.get("anvyl.service", "unknown")
+                
+                container_info = {
+                    "id": container.id[:12],
+                    "name": container.name,
+                    "service": service,
+                    "status": container.status,
+                    "ports": container.ports,
+                    "created": container.attrs["Created"]
+                }
+                status["containers"].append(container_info)
+                
+                # Update service status
+                if service in ["grpc-server", "ui-backend", "ui-frontend"]:
+                    status["services"][service] = {
+                        "status": container.status,
+                        "container": container_info
+                    }
+            
+            return status
+            
+        except Exception as e:
+            logger.error(f"Error getting UI stack status: {e}")
+            return {"error": str(e)}
 
     # Host management methods
     def list_hosts(self) -> List[Any]:

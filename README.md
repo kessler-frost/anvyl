@@ -28,21 +28,34 @@ Anvyl consists of several key components:
    cd anvyl
    ```
 
-2. **Install dependencies:**
+2. **Set up the development environment:**
    ```bash
-   pip install -e .
+   ./scripts/dev_setup.sh
    ```
 
 3. **Start the infrastructure:**
    ```bash
-   anvyl up
+   ./scripts/start_anvyl_ui.sh
    ```
 
 4. **Access the web interface:**
    - Frontend: http://localhost:3000
    - API: http://localhost:8000
+   - gRPC Server: localhost:50051
 
-## 📖 Usage
+### Alternative Quick Start
+
+You can also use the CLI if you prefer:
+
+```bash
+# Install the package
+pip install -e .
+
+# Start the infrastructure
+anvyl up
+```
+
+## 🎯 Usage
 
 ### Command Line Interface
 
@@ -115,7 +128,7 @@ if client.connect():
     # Build and deploy UI stack
     client.build_ui_images("/path/to/project")
     client.deploy_ui_stack("/path/to/project")
-    
+
     # Get system status
     status = client.get_ui_stack_status()
     print(f"Services running: {len(status['containers'])}")
@@ -169,11 +182,10 @@ pytest tests/test_grpc_client.py
 ### Building Docker Images
 
 ```bash
-# Build all UI images
-anvyl up --build
+# Build UI images (gRPC server runs with Python)
+docker-compose -f ui/docker-compose.yml build
 
 # Build specific components
-docker build -f Dockerfile.grpc-server -t anvyl/grpc-server:latest .
 docker build -f ui/backend/Dockerfile -t anvyl/ui-backend:latest .
 docker build -f ui/frontend/Dockerfile -t anvyl/ui-frontend:latest ui/frontend/
 ```
@@ -184,7 +196,7 @@ docker build -f ui/frontend/Dockerfile -t anvyl/ui-frontend:latest ui/frontend/
 # Start development environment
 ./scripts/dev_setup.sh
 
-# Run gRPC server in development
+# Run gRPC server in development (Python)
 python -m anvyl.grpc_server
 
 # Run UI backend in development
@@ -192,6 +204,19 @@ cd ui/backend && uvicorn main:app --reload
 
 # Run UI frontend in development
 cd ui/frontend && npm run dev
+```
+
+### Starting the Complete Stack
+
+```bash
+# Start everything (gRPC server + UI stack)
+./scripts/start_anvyl_ui.sh
+
+# Stop everything
+./scripts/stop_anvyl_ui.sh
+
+# Or use the quick start script
+./scripts/start_ui.sh
 ```
 
 ## 📚 API Reference

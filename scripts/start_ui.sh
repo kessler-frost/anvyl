@@ -27,7 +27,7 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 echo "📁 Project root: $PROJECT_ROOT"
 
 # Check if we're in the right directory
-if [[ ! -f "$PROJECT_ROOT/anvyl_grpc_server.py" ]] || [[ ! -d "$PROJECT_ROOT/ui" ]]; then
+if [[ ! -f "$PROJECT_ROOT/anvyl/grpc_server.py" ]] || [[ ! -d "$PROJECT_ROOT/ui" ]]; then
     echo "❌ This doesn't appear to be the Anvyl project root."
     echo "   Please run this script from the Anvyl project directory."
     exit 1
@@ -39,39 +39,41 @@ if [[ ! -d "$PROJECT_ROOT/venv" ]]; then
     cd "$PROJECT_ROOT"
     python3.12 -m venv venv
     source venv/bin/activate
-    pip install -r requirements.txt
+    pip install -e .
 else
     echo "✅ Python virtual environment exists"
 fi
 
-# Start the infrastructure
+# Start the infrastructure using the new startup script
 echo ""
 echo "🏗️ Starting Anvyl infrastructure..."
 cd "$PROJECT_ROOT"
 
-# Use the CLI if available, otherwise use docker-compose directly
-if [[ -f "anvyl_cli.py" ]]; then
-    echo "Using Anvyl CLI..."
-    source venv/bin/activate
-    python anvyl_cli.py up --build
+# Use the new startup script
+if [[ -f "scripts/start_anvyl_ui.sh" ]]; then
+    echo "Using new startup script..."
+    ./scripts/start_anvyl_ui.sh
 else
-    echo "Using docker-compose directly..."
-    cd ui
-    docker-compose up -d --build
-fi
+    echo "Using fallback method..."
+    # Fallback: start gRPC server manually
+    source venv/bin/activate
+    python -m anvyl.grpc_server &
+    GRPC_PID=$!
 
-echo ""
-echo "✅ Anvyl UI started successfully!"
-echo ""
-echo "🌐 Access your Anvyl infrastructure:"
-echo "   • Web UI:       http://localhost:3000"
-echo "   • API Server:   http://localhost:8000"
-echo "   • API Docs:     http://localhost:8000/docs"
-echo "   • gRPC Server:  localhost:50051"
-echo ""
-echo "📋 Useful commands:"
-echo "   • View logs:    anvyl logs"
-echo "   • Check status: anvyl ps"
-echo "   • Stop stack:   anvyl down"
-echo ""
-echo "💡 The modern UI is now running!"
+    # Wait for gRPC server to start
+    sleep 3
+
+    # Start UI stack
+    cd ui
+    docker-compose up -d
+
+    echo ""
+    echo "✅ Anvyl UI started successfully!"
+    echo ""
+    echo "🌐 Access your Anvyl infrastructure:"
+    echo "   • Web UI:       http://localhost:3000"
+    echo "   • API Server:   http://localhost:8000"
+    echo "   • API Docs:     http://localhost:8000/docs"
+    echo "   • gRPC Server:  localhost:50051"
+    echo ""
+fi

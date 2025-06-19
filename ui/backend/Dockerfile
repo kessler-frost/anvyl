@@ -16,14 +16,14 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Copy requirements and install Python dependencies
-COPY requirements.txt .
+COPY ui/backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the entire project (backend + SDK)
-COPY . .
-COPY ../anvyl_sdk ./anvyl_sdk
-COPY ../generated ./generated
-COPY ../protos ./protos
+COPY ui/backend/ .
+COPY anvyl_sdk ./anvyl_sdk
+COPY generated ./generated
+COPY protos ./protos
 
 # Create a non-root user
 RUN useradd --create-home --shell /bin/bash app && \

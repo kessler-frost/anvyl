@@ -7,10 +7,7 @@ import {
   Globe,
   Database,
   Bell,
-  Palette,
   Monitor,
-  Key,
-  Users,
   Activity,
   AlertTriangle
 } from 'lucide-react'

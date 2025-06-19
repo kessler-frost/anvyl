@@ -359,11 +359,80 @@ def monitor_with_prometheus():
     client.disconnect()
 ```
 
-## 📁 Project Structure
+## � Command Line Interface (CLI)
+
+Anvyl now includes a powerful CLI built with Typer that provides an intuitive command-line interface for all operations.
+
+### CLI Installation
+
+```bash
+# Quick install using the provided script
+./scripts/install_cli.sh
+
+# Manual installation
+pip install -r requirements.txt
+pip install -e .
+```
+
+### CLI Usage Examples
+
+```bash
+# Show system status
+anvyl status
+
+# Host management
+anvyl host list
+anvyl host add "macbook-pro" "192.168.1.101" --os "macOS 15" --tag "production"
+anvyl host metrics "host-id-12345"
+
+# Container management
+anvyl container list
+anvyl container create "web-app" "nginx:alpine" --port "8080:80" --label "env=production"
+anvyl container stop "container-id-12345"
+anvyl container logs "container-id-12345" --follow
+
+# Agent management
+anvyl agent list
+anvyl agent launch "backup-agent" "host-12345" "/path/to/backup.py" --persistent
+
+# Execute commands in containers
+anvyl container exec "container-id-12345" ls -la /app
+```
+
+### CLI Features
+
+- **Rich output formatting** with colors and tables
+- **JSON output support** for scripting and automation
+- **Progress indicators** for long-running operations
+- **Comprehensive help system** with `--help` on any command
+- **Remote server support** with `--host` and `--port` options
+- **Streaming log support** with `--follow` option
+
+### CLI Command Structure
+
+```bash
+anvyl [GLOBAL-OPTIONS] COMMAND [COMMAND-OPTIONS] [ARGS]
+
+# Examples:
+anvyl --help                          # Global help
+anvyl host --help                     # Host command help
+anvyl container create --help         # Container create help
+
+# Global options (available on most commands):
+--host HOST                           # Anvyl server host (default: localhost)
+--port PORT                           # Anvyl server port (default: 50051)
+--output FORMAT                       # Output format: table or json
+```
+
+For detailed CLI documentation, see [`docs/cli_usage.md`](docs/cli_usage.md).
+
+## �📁 Project Structure
 
 ```
 anvyl/
 ├── anvyl_grpc_server.py           # gRPC server with Docker integration
+├── anvyl_cli.py                   # Typer-based CLI interface
+├── setup.py                       # Package setup for CLI installation
 ├── anvyl_sdk/                     # Python SDK
 │   ├── __init__.py
 │   └── client.py                  # gRPC client implementation
@@ -373,7 +442,10 @@ anvyl/
 │   └── models.py                  # SQLModel database models
 ├── generated/                     # Auto-generated gRPC code
 ├── scripts/
-│   └── dev_setup.sh              # Development environment setup
+│   ├── dev_setup.sh              # Development environment setup
+│   └── install_cli.sh             # CLI installation script
+├── docs/
+│   └── cli_usage.md              # Comprehensive CLI documentation
 ├── requirements.txt               # Python dependencies
 └── README.md
 ```

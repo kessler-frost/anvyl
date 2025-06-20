@@ -36,9 +36,6 @@ dependencies = [
     # Container management
     "docker>=6.1.0",
     
-    # LMStudio SDK for MLX model management
-    "lmstudio>=1.3.0",
-    
     # Database and API
     "sqlmodel>=0.0.14",
     "fastapi>=0.104.0",
@@ -51,10 +48,6 @@ dependencies = [
     # Core utilities
     "pydantic>=2.5.0",
     "psutil>=5.9.0",
-    
-    # MCP (Model Context Protocol) support
-    "mcp>=1.9.0",
-    "httpx>=0.25.0",
 ]
 
 [project.optional-dependencies]

@@ -97,7 +97,7 @@ class LMStudioProvider(ModelProvider):
             import lmstudio as lms
             # Create a client with the specified host (without http:// prefix)
             client = lms.Client(api_host=f"{self.host}:1234")
-            # Get the LLM using the client
+            # Get the LLM using the client - use 'model' instead of 'models'
             self.model = client.llm.model(self.model_id)
             logger.info(f"Connected to LMStudio at {self.host} with model: {self.model_id}")
             return True
@@ -432,6 +432,18 @@ def create_model_provider(provider_type: str = "lmstudio", **kwargs) -> ModelPro
         # Add any other kwargs that don't conflict
         for key, value in kwargs.items():
             if key not in ["ollama_host", "ollama_port"]:
+                provider_kwargs[key] = value
+
+        return providers[provider_type](**provider_kwargs)
+    elif provider_type == "lmstudio":
+        # Map CLI parameters to LMStudioProvider parameters
+        provider_kwargs = {}
+        if "lmstudio_host" in kwargs:
+            provider_kwargs["host"] = kwargs["lmstudio_host"]
+
+        # Add any other kwargs that don't conflict
+        for key, value in kwargs.items():
+            if key not in ["lmstudio_host"]:
                 provider_kwargs[key] = value
 
         return providers[provider_type](**provider_kwargs)

@@ -104,6 +104,11 @@ class AgentManager:
         # Use host.docker.internal for LM Studio on macOS
         lmstudio_host = "host.docker.internal" if platform.system() == "Darwin" else "localhost"
 
+        # Copy provider_kwargs and set LM Studio host if needed
+        provider_kwargs = config.provider_kwargs.copy()
+        if config.provider == "lmstudio":
+            provider_kwargs["lmstudio_host"] = lmstudio_host
+
         script_content = f'''#!/usr/bin/env python3
 """
 Anvyl AI Agent Container Script
@@ -183,14 +188,12 @@ def main():
             host="{grpc_host}",
             port={config.port},
             verbose={config.verbose},
-            agent_name="{config.name}",
-            lmstudio_host="{lmstudio_host}",
-            {', '.join([f'{k}={repr(v)}' for k, v in config.provider_kwargs.items()])}
+            agent_name="{config.name}"{', ' + ', '.join([f'{k}={repr(v)}' for k, v in provider_kwargs.items()]) if provider_kwargs else ''}
         )
 
         print("✅ Agent initialized successfully")
         print("🔄 Agent is running and ready to receive instructions")
-        print("💡 Use 'anvyl agent act {config.name} \"<instruction>\"' to execute actions")
+        print('💡 Use \'anvyl agent act {config.name} \"<instruction>\"\' to execute actions')
 
         # Keep the container running
         while True:
@@ -323,25 +326,12 @@ WORKDIR /app
 # Copy agent script
 COPY anvyl/agents/{config.name}_agent.py /app/agent.py
 
-# Install Python dependencies
-RUN pip install --no-cache-dir \\
-    rich \\
-    typer \\
-    grpcio \\
-    grpcio-tools \\
-    protobuf
-
-# Copy the anvyl package and build files from the host
-COPY anvyl /app/anvyl
-COPY pyproject.toml /app/pyproject.toml
+# Copy the entire anvyl directory and build files to /app
+COPY . /app
 '''
-        # Only copy setup.py if it exists
-        setup_py_path = project_root / 'setup.py'
-        if setup_py_path.exists():
-            dockerfile_content += 'COPY setup.py /app/setup.py\n'
         dockerfile_content += '''
-# Install anvyl in development mode
-RUN pip install -e /app
+# Install anvyl in editable mode with all dependencies
+RUN pip install -e .
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
@@ -371,7 +361,6 @@ CMD ["python", "/app/agent.py"]
         container_name = f"anvyl-agent-{config.name}"
         run_cmd = [
             'docker', 'run',
-            '--rm',  # Auto-remove container on exit
             '-d',
             '--name', container_name,
             # Default bridge networking (no --network or -p)

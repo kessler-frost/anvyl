@@ -12,20 +12,11 @@ WORKDIR /app
 # Copy agent script
 COPY anvyl/agents/deepseek-agent_agent.py /app/agent.py
 
-# Install Python dependencies
-RUN pip install --no-cache-dir \
-    rich \
-    typer \
-    grpcio \
-    grpcio-tools \
-    protobuf
+# Copy the entire anvyl directory and build files to /app
+COPY . /app
 
-# Copy the anvyl package and build files from the host
-COPY anvyl /app/anvyl
-COPY pyproject.toml /app/pyproject.toml
-
-# Install anvyl in development mode
-RUN pip install -e /app
+# Install anvyl in editable mode with all dependencies
+RUN pip install -e .
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1

@@ -77,14 +77,12 @@ def main():
             host="host.docker.internal",
             port=50051,
             verbose=False,
-            agent_name="deepseek-agent",
-            lmstudio_host="host.docker.internal",
-            
+            agent_name="deepseek-agent", lmstudio_host='host.docker.internal'
         )
 
         print("✅ Agent initialized successfully")
         print("🔄 Agent is running and ready to receive instructions")
-        print("💡 Use 'anvyl agent act deepseek-agent "<instruction>"' to execute actions")
+        print("💡 Use 'anvyl agent act deepseek-agent <instruction>' to execute actions")
 
         # Keep the container running
         while True:

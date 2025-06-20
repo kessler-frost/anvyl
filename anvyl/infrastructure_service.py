@@ -474,6 +474,209 @@ class InfrastructureService:
                 "error_message": str(e)
             }
 
+    # Agent container management methods
+    def build_agent_image(self, dockerfile_path: str = "Dockerfile.agent",
+                         context_path: str = ".", tag: str = "anvyl-agent:latest") -> bool:
+        """Build the agent Docker image."""
+        if not self.docker_client:
+            return False
+
+        try:
+            logger.info(f"Building agent image: {tag}")
+
+            # Build the image
+            image, build_logs = self.docker_client.images.build(
+                path=context_path,
+                dockerfile=dockerfile_path,
+                tag=tag,
+                rm=True  # Remove intermediate containers
+            )
+
+            logger.info(f"Successfully built agent image: {image.tags}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Error building agent image: {e}")
+            return False
+
+    def start_agent_container(self, lmstudio_url: str = "http://localhost:1234/v1",
+                            lmstudio_model: str = "llama-3.2-3b-instruct",
+                            port: int = 4200, image_tag: str = "anvyl-agent:latest") -> Optional[Dict[str, Any]]:
+        """Start the agent container."""
+        if not self.docker_client:
+            return None
+
+        try:
+            # Check if image exists, build if not
+            try:
+                self.docker_client.images.get(image_tag)
+                logger.info(f"Using existing agent image: {image_tag}")
+            except:
+                logger.info(f"Agent image not found, building: {image_tag}")
+                if not self.build_agent_image(tag=image_tag):
+                    return None
+
+            # Check if agent container already exists
+            container_name = "anvyl-agent"
+            try:
+                existing_container = self.docker_client.containers.get(container_name)
+                if existing_container.status == "running":
+                    logger.info("Agent container is already running")
+                    return {
+                        "id": existing_container.id,
+                        "name": container_name,
+                        "status": "running",
+                        "message": "Container already running"
+                    }
+                else:
+                    # Remove stopped container
+                    existing_container.remove()
+                    logger.info("Removed stopped agent container")
+            except:
+                pass  # Container doesn't exist
+
+            # Convert localhost to host.docker.internal for container-to-host communication
+            container_lmstudio_url = lmstudio_url.replace("localhost", "host.docker.internal")
+
+            # Prepare container configuration
+            environment = [
+                f"ANVYL_LMSTUDIO_URL={container_lmstudio_url}",
+                f"ANVYL_LMSTUDIO_MODEL={lmstudio_model}",
+                f"ANVYL_AGENT_PORT={port}",
+                "PYTHONUNBUFFERED=1"
+            ]
+
+            # Mount Docker socket for container management
+            volumes = {
+                "/var/run/docker.sock": {"bind": "/var/run/docker.sock", "mode": "ro"},
+                "/": {"bind": "/host", "mode": "ro"}
+            }
+
+            # Container command
+            command = [
+                "python", "-m", "anvyl.cli", "agent", "start",
+                "--lmstudio-url", container_lmstudio_url,
+                "--model", lmstudio_model,
+                "--port", "4200"
+            ]
+
+            # Run the container
+            container = self.docker_client.containers.run(
+                image=image_tag,
+                name=container_name,
+                environment=environment,
+                volumes=volumes,
+                ports={'4200/tcp': port},
+                command=command,
+                detach=True,
+                restart_policy={"Name": "unless-stopped"},
+                labels={
+                    "anvyl.type": "agent",
+                    "anvyl.model": lmstudio_model,
+                    "anvyl.lmstudio_url": lmstudio_url
+                }
+            )
+
+            # Add to database
+            db_container = Container(
+                id=container.id,
+                name=container_name,
+                image=image_tag,
+                host_id=self.host_id,
+                status=container.status
+            )
+            db_container.set_labels({
+                "anvyl.type": "agent",
+                "anvyl.model": lmstudio_model,
+                "anvyl.lmstudio_url": lmstudio_url
+            })
+            db_container.set_ports([f"{port}:4200"])
+            db_container.set_environment(environment)
+
+            self.db.add_container(db_container)
+
+            logger.info(f"Started agent container: {container.id}")
+            return {
+                "id": container.id,
+                "name": container_name,
+                "status": container.status,
+                "port": port,
+                "model": lmstudio_model,
+                "lmstudio_url": lmstudio_url
+            }
+
+        except Exception as e:
+            logger.error(f"Error starting agent container: {e}")
+            return None
+
+    def stop_agent_container(self) -> bool:
+        """Stop the agent container."""
+        if not self.docker_client:
+            return False
+
+        try:
+            container_name = "anvyl-agent"
+            container = self.docker_client.containers.get(container_name)
+
+            # Stop the container
+            container.stop(timeout=10)
+
+            # Remove the container
+            container.remove()
+
+            # Remove from database
+            db_container = self.db.get_container(container.id)
+            if db_container:
+                self.db.delete_container(container.id)
+
+            logger.info("Stopped and removed agent container")
+            return True
+
+        except Exception as e:
+            logger.error(f"Error stopping agent container: {e}")
+            return False
+
+    def get_agent_container_status(self) -> Optional[Dict[str, Any]]:
+        """Get the status of the agent container."""
+        if not self.docker_client:
+            return None
+
+        try:
+            container_name = "anvyl-agent"
+            container = self.docker_client.containers.get(container_name)
+
+            # Get container info
+            container_info = container.attrs
+
+            return {
+                "id": container.id,
+                "name": container.name,
+                "status": container.status,
+                "image": container_info['Config']['Image'],
+                "created": container_info['Created'],
+                "ports": container_info.get('NetworkSettings', {}).get('Ports', {}),
+                "labels": container_info.get('Config', {}).get('Labels', {}),
+                "environment": container_info.get('Config', {}).get('Env', [])
+            }
+
+        except Exception as e:
+            logger.error(f"Error getting agent container status: {e}")
+            return None
+
+    def get_agent_logs(self, follow: bool = False, tail: int = 100) -> Optional[str]:
+        """Get logs from the agent container."""
+        if not self.docker_client:
+            return None
+
+        try:
+            container_name = "anvyl-agent"
+            container = self.docker_client.containers.get(container_name)
+            return container.logs(tail=tail, follow=follow).decode('utf-8')
+
+        except Exception as e:
+            logger.error(f"Error getting agent logs: {e}")
+            return None
+
 
 # Global service instance
 _infrastructure_service = None

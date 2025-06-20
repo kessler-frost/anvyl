@@ -12,7 +12,7 @@ from langchain.agents import AgentExecutor, create_openai_tools_agent
 from langchain.agents import initialize_agent
 from langchain_community.llms import Ollama
 from langchain_community.chat_models import ChatOllama
-from langchain_community.llms import OpenAI
+from langchain_openai import OpenAI
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.schema import SystemMessage, HumanMessage
 from langchain.tools import BaseTool
@@ -36,12 +36,14 @@ class HostAgent:
                  host_ip: str,
                  lmstudio_url: Optional[str] = None,
                  lmstudio_model: str = "default",
-                 port: int = 8080):
+                 port: int = 4200):
         """Initialize the host agent."""
         self.infrastructure_service = infrastructure_service
         self.host_id = host_id
         self.host_ip = host_ip
         self.port = port
+        self.lmstudio_url = lmstudio_url or "http://localhost:1234/v1"
+        self.lmstudio_model = lmstudio_model
 
         # Initialize communication
         self.communication = AgentCommunication(host_id, host_ip, port)
@@ -50,33 +52,8 @@ class HostAgent:
         self.infrastructure_tools = InfrastructureTools(infrastructure_service)
         self.tools = self.infrastructure_tools.get_tools()
 
-        # Initialize LLM
-        if lmstudio_url:
-            self.llm = OpenAI(
-                openai_api_base=lmstudio_url,
-                model_name=lmstudio_model,
-                openai_api_key="dummy-key",
-                temperature=0,
-                max_tokens=1000
-            )
-        else:
-            # Try to use default LMStudio URL
-            try:
-                self.llm = OpenAI(
-                    openai_api_base="http://localhost:1234/v1",
-                    model_name="default",
-                    openai_api_key="dummy-key",
-                    temperature=0,
-                    max_tokens=1000
-                )
-                # Test the connection
-                test_response = self.llm("Hello")
-                if "Error" in test_response:
-                    logger.warning("LMStudio not available, falling back to mock LLM")
-                    self.llm = self._create_mock_llm()
-            except Exception as e:
-                logger.warning(f"LMStudio not available: {e}, falling back to mock LLM")
-                self.llm = self._create_mock_llm()
+        # Initialize LLM and get actual model info
+        self.llm, self.actual_model_name = self._initialize_llm()
 
         # Initialize agent
         self.agent_executor = self._create_agent()
@@ -85,6 +62,64 @@ class HostAgent:
         self._register_message_handlers()
 
         logger.info(f"Host agent initialized for host {host_id}")
+
+    def _get_actual_model_name(self, lmstudio_url: str) -> str:
+        """Get the actual model name from LMStudio."""
+        try:
+            import requests
+            response = requests.get(f"{lmstudio_url}/models", timeout=5)
+            if response.status_code == 200:
+                models = response.json()
+                if models and "data" in models and models["data"]:
+                    # Get the first available model
+                    model = models["data"][0]
+                    return model.get("id", "unknown")
+                else:
+                    return "no models available"
+            else:
+                return f"error: HTTP {response.status_code}"
+        except Exception as e:
+            logger.warning(f"Could not fetch model info from LMStudio: {e}")
+            return "unknown"
+
+    def _initialize_llm(self):
+        """Initialize the LLM and return both the LLM instance and actual model name."""
+        if self.lmstudio_url:
+            try:
+                llm = OpenAI(
+                    openai_api_base=self.lmstudio_url,
+                    model_name=self.lmstudio_model,
+                    openai_api_key="dummy-key",
+                    temperature=0,
+                    max_tokens=1000
+                )
+                # Test the connection and get actual model name
+                actual_model = self._get_actual_model_name(self.lmstudio_url)
+                return llm, actual_model
+            except Exception as e:
+                logger.warning(f"LMStudio not available: {e}, falling back to mock LLM")
+                return self._create_mock_llm(), "mock"
+        else:
+            # Try to use default LMStudio URL
+            try:
+                llm = OpenAI(
+                    openai_api_base="http://localhost:1234/v1",
+                    model_name="default",
+                    openai_api_key="dummy-key",
+                    temperature=0,
+                    max_tokens=1000
+                )
+                # Test the connection
+                test_response = llm("Hello")
+                if "Error" in test_response:
+                    logger.warning("LMStudio not available, falling back to mock LLM")
+                    return self._create_mock_llm(), "mock"
+                else:
+                    actual_model = self._get_actual_model_name("http://localhost:1234/v1")
+                    return llm, actual_model
+            except Exception as e:
+                logger.warning(f"LMStudio not available: {e}, falling back to mock LLM")
+                return self._create_mock_llm(), "mock"
 
     def _create_mock_llm(self):
         """Create a mock LLM for testing when LMStudio is not available."""
@@ -149,15 +184,18 @@ Current host: {host_id} ({host_ip})"""
             ])
 
             logger.info("Creating OpenAI tools agent...")
-            # Use initialize_agent instead of create_openai_tools_agent for better compatibility
-            agent = initialize_agent(
-                tools=self.tools,
+            # Use create_openai_tools_agent for better compatibility with newer LangChain
+            agent = create_openai_tools_agent(
                 llm=self.llm,
-                agent="structured-chat-zero-shot-react-description",
-                verbose=True
+                tools=self.tools,
+                prompt=prompt
             )
             logger.info("Creating agent executor...")
-            return agent  # initialize_agent already returns an AgentExecutor
+            return AgentExecutor(
+                agent=agent,
+                tools=self.tools,
+                verbose=True
+            )
         except Exception as e:
             logger.error("Error creating agent: %s", str(e))
             raise
@@ -262,5 +300,6 @@ Current host: {host_id} ({host_ip})"""
             "port": self.port,
             "known_hosts": self.get_known_hosts(),
             "tools_available": [tool.name for tool in self.tools],
-            "llm_model": self.llm._llm_type if hasattr(self.llm, '_llm_type') else "unknown"
+            "llm_model": self.llm._llm_type if hasattr(self.llm, '_llm_type') else "unknown",
+            "actual_model_name": self.actual_model_name
         }

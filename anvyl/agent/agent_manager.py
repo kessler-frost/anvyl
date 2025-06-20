@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import socket
 import os
+import uuid
 
 from .host_agent import HostAgent
 from .communication import AgentMessage
@@ -30,22 +31,26 @@ class AgentManager:
                  host_ip: str,
                  lmstudio_url: Optional[str] = None,
                  lmstudio_model: str = "default",
-                 port: int = 8080):
+                 port: int = 4200):
         """Initialize the agent manager."""
         self.infrastructure_service = infrastructure_service
         self.host_id = host_id
         self.host_ip = host_ip
         self.port = port
-
-        # Initialize host agent
-        self.host_agent = HostAgent(
-            infrastructure_service=infrastructure_service,
-            host_id=host_id,
-            host_ip=host_ip,
-            lmstudio_url=lmstudio_url,
-            lmstudio_model=lmstudio_model,
+        self.llm = None
+        self.communication = AgentCommunication(
+            local_host_id=str(uuid.uuid4()),
+            local_host_ip="127.0.0.1",
             port=port
         )
+        self.tools = AgentTools()
+        self.host_agent = HostAgent(self.communication, self.tools)
+
+        # Initialize LLM
+        self._initialize_llm()
+
+        # Register tools
+        self._register_tools()
 
         # Initialize FastAPI app
         self.app = self._create_fastapi_app()
@@ -86,6 +91,24 @@ class AgentManager:
                 "host_ip": self.host_ip,
                 "status": "running"
             }
+
+        @app.get("/health")
+        async def health_check():
+            """Health check endpoint for Docker."""
+            try:
+                # Basic health check - verify agent is responsive
+                agent_info = self.host_agent.get_agent_info()
+                return {
+                    "status": "healthy",
+                    "host_id": self.host_id,
+                    "host_ip": self.host_ip,
+                    "llm_model": agent_info.get("llm_model", "unknown"),
+                    "actual_model_name": agent_info.get("actual_model_name", "unknown"),
+                    "timestamp": asyncio.get_event_loop().time()
+                }
+            except Exception as e:
+                logger.error(f"Health check failed: {e}")
+                raise HTTPException(status_code=503, detail="Service unhealthy")
 
         @app.get("/agent/info")
         async def get_agent_info():
@@ -211,7 +234,7 @@ class AgentManager:
         # Add any cleanup logic here
 
 
-def create_agent_manager(lmstudio_url: Optional[str] = None, lmstudio_model: str = "default", port: int = 8080) -> AgentManager:
+def create_agent_manager(lmstudio_url: Optional[str] = None, lmstudio_model: str = "default", port: int = 4200) -> AgentManager:
     """Create an agent manager with default settings."""
     # Get infrastructure service
     infrastructure_service = InfrastructureService()

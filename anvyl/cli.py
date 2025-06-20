@@ -25,7 +25,11 @@ from .agent import AgentManager, create_agent_manager
 
 # Initialize rich console
 console = Console()
-app = typer.Typer(help="Anvyl Infrastructure Orchestrator CLI")
+app = typer.Typer(
+    help="Anvyl Infrastructure Orchestrator CLI",
+    no_args_is_help=True,
+    add_completion=False
+)
 
 def get_infrastructure():
     """Get the infrastructure service instance."""
@@ -244,7 +248,11 @@ def show_logs(
         raise typer.Exit(1)
 
 # Host Management Commands
-host_app = typer.Typer(help="Host management commands")
+host_app = typer.Typer(
+    help="Host management commands",
+    no_args_is_help=True,
+    add_completion=False
+)
 app.add_typer(host_app, name="host")
 
 @host_app.command("list")
@@ -359,7 +367,11 @@ def get_host_metrics(
         raise typer.Exit(1)
 
 # Container Management Commands
-container_app = typer.Typer(help="Container management commands")
+container_app = typer.Typer(
+    help="Container management commands",
+    no_args_is_help=True,
+    add_completion=False
+)
 app.add_typer(container_app, name="container")
 
 @container_app.command("list")
@@ -590,53 +602,216 @@ def version():
     ))
 
 # Agent Management Commands
-agent_group = typer.Typer(help="Manage AI agents for infrastructure automation.")
+agent_group = typer.Typer(
+    help="Manage AI agents for infrastructure automation.",
+    no_args_is_help=True,
+    add_completion=False
+)
 app.add_typer(agent_group, name="agent")
 
 @agent_group.command("start")
 def start_agent(
-    lmstudio_url: Optional[str] = typer.Option(None, "--lmstudio-url", "-u", help="LMStudio API URL (default: http://localhost:1234/v1)"),
-    lmstudio_model: str = typer.Option("default", "--model", "-m", help="LMStudio model name"),
-    port: int = typer.Option(8080, "--port", "-p", help="Port for agent API"),
-    background: bool = typer.Option(False, "--background", "-b", help="Run in background")
+    model: str = typer.Option("llama-3.2-3b-instruct", "--model", "-m", help="LMStudio model to use"),
+    lmstudio_url: str = typer.Option("http://localhost:1234/v1", "--lmstudio-url", "-u", help="LMStudio API URL"),
+    port: int = typer.Option(4200, "--port", "-p", help="Agent API port")
 ):
-    """Start the AI agent for this host."""
+    """Start the AI agent in a Docker container using the infrastructure service."""
     try:
         console.print("🤖 [bold blue]Starting Anvyl AI Agent[/bold blue]")
 
-        # Set default LMStudio URL if not provided
-        if not lmstudio_url:
-            lmstudio_url = "http://localhost:1234/v1"
-            console.print(f"[yellow]Using default LMStudio URL: {lmstudio_url}[/yellow]")
-            console.print("[yellow]Make sure LMStudio is running and serving models on this URL[/yellow]")
+        from .infrastructure_service import get_infrastructure_service
+        infrastructure_service = get_infrastructure_service()
 
-        # Create and start agent manager
-        agent_manager = create_agent_manager(lmstudio_url=lmstudio_url, lmstudio_model=lmstudio_model, port=port)
+        # Start the agent container
+        container_id = infrastructure_service.start_agent_container(
+            lmstudio_model=model,
+            lmstudio_url=lmstudio_url,
+            port=port
+        )
 
-        console.print(f"✅ [green]Agent initialized for host[/green]")
-        console.print(f"🌐 [bold]Agent API:[/bold] http://localhost:{port}")
-        console.print(f"📋 [bold]API Docs:[/bold] http://localhost:{port}/docs")
-        console.print(f"🧠 [bold]LLM:[/bold] LMStudio at {lmstudio_url}")
-        console.print(f"🤖 [bold]Model:[/bold] {lmstudio_model}")
+        if container_id is None:
+            console.print("[red]❌ Failed to start agent container[/red]")
+            raise typer.Exit(1)
 
-        if background:
-            console.print("🔄 [yellow]Starting agent in background...[/yellow]")
-            # In a real implementation, you'd want to use a proper process manager
-            # For now, we'll just run it in the foreground
-            console.print("[yellow]Background mode not yet implemented. Running in foreground.[/yellow]")
-
-        console.print("\n🚀 [bold green]Starting agent server...[/bold green]")
-        agent_manager.run()
+        console.print(f"✅ Agent container started successfully")
+        console.print(f"🌐 Agent API: http://localhost:{port}")
+        console.print(f"📋 API Docs: http://localhost:{port}/docs")
+        console.print(f"🧠 LLM: LMStudio at {lmstudio_url}")
+        console.print(f"🤖 Model: {model}")
+        console.print(f"🐳 Container ID: {container_id}")
+        console.print()
+        console.print("Use 'anvyl agent logs' to view logs")
+        console.print("Use 'anvyl agent stop' to stop the container")
 
     except Exception as e:
         console.print(f"[red]Error starting agent: {e}[/red]")
+        raise typer.Exit(1)
+
+@agent_group.command("stop")
+def stop_agent():
+    """Stop the AI agent Docker container using the infrastructure service."""
+    try:
+        console.print("🛑 [bold blue]Stopping Anvyl AI Agent[/bold blue]")
+
+        from .infrastructure_service import get_infrastructure_service
+        infrastructure_service = get_infrastructure_service()
+
+        if not infrastructure_service.stop_agent_container():
+            console.print("[red]❌ Failed to stop agent container[/red]")
+            raise typer.Exit(1)
+
+        console.print("[green]✅ Agent container stopped[/green]")
+
+    except Exception as e:
+        console.print(f"[red]Error stopping agent: {e}[/red]")
+        raise typer.Exit(1)
+
+@agent_group.command("logs")
+def logs_agent(
+    follow: bool = typer.Option(False, "--follow", "-f", help="Follow log output"),
+    tail: int = typer.Option(100, "--tail", "-n", help="Number of lines to show")
+):
+    """Show logs from the AI agent Docker container using the infrastructure service."""
+    try:
+        console.print("📋 [bold blue]Anvyl AI Agent Logs[/bold blue]")
+
+        from .infrastructure_service import get_infrastructure_service
+        infrastructure_service = get_infrastructure_service()
+
+        logs = infrastructure_service.get_agent_logs(follow=follow, tail=tail)
+
+        if logs is None:
+            console.print("[red]❌ Failed to get agent logs[/red]")
+            raise typer.Exit(1)
+
+        console.print(logs)
+
+    except Exception as e:
+        console.print(f"[red]Error viewing agent logs: {e}[/red]")
+        raise typer.Exit(1)
+
+@agent_group.command("info")
+def get_agent_info(
+    port: int = typer.Option(4200, "--port", "-p", help="Agent API port")
+):
+    """Get comprehensive information about the agent including container status and agent capabilities."""
+    try:
+        import requests
+
+        # First check if the agent container is running
+        from .infrastructure_service import get_infrastructure_service
+        infrastructure_service = get_infrastructure_service()
+
+        container_status = infrastructure_service.get_agent_container_status()
+        if not container_status:
+            console.print("[yellow]Agent container is not running[/yellow]")
+            console.print("[yellow]Use 'anvyl agent start' to start the agent[/yellow]")
+            return
+
+        # Display comprehensive information
+        console.print("📊 [bold blue]Anvyl AI Agent Information[/bold blue]")
+
+        # Container Information Section
+        console.print("\n[bold cyan]Container Information:[/bold cyan]")
+        from rich.table import Table
+
+        container_table = Table(show_header=False, box=None)
+        container_table.add_column("Property", style="cyan", width=15)
+        container_table.add_column("Value", style="green")
+
+        container_table.add_row("Container ID", container_status.get("id", "N/A")[:12])
+        container_table.add_row("Name", container_status.get("name", "N/A"))
+        container_table.add_row("Status", container_status.get("status", "N/A"))
+        container_table.add_row("Image", container_status.get("image", "N/A"))
+        container_table.add_row("Created", container_status.get("created", "N/A"))
+
+        # Add ports
+        ports = container_status.get("ports", {})
+        if ports:
+            port_str = ", ".join([f"{k} -> {v[0]['HostPort']}" for k, v in ports.items() if v])
+            container_table.add_row("Ports", port_str)
+
+        console.print(container_table)
+
+        # Configuration Information Section
+        console.print("\n[bold cyan]Configuration:[/bold cyan]")
+        config_table = Table(show_header=False, box=None)
+        config_table.add_column("Property", style="cyan", width=15)
+        config_table.add_column("Value", style="green")
+
+        # Get model from labels
+        labels = container_status.get("labels", {})
+        model = labels.get("anvyl.model", "N/A")
+        lmstudio_url = labels.get("anvyl.lmstudio_url", "N/A")
+
+        config_table.add_row("Model", model)
+        config_table.add_row("LMStudio URL", lmstudio_url)
+        config_table.add_row("API Port", str(port))
+
+        console.print(config_table)
+
+        # Try to get agent API information
+        try:
+            url = f"http://localhost:{port}/agent/info"
+            response = requests.get(url, timeout=5)
+
+            if response.status_code == 200:
+                info = response.json()
+
+                # Agent Information Section
+                console.print("\n[bold cyan]Agent Information:[/bold cyan]")
+                agent_table = Table(show_header=False, box=None)
+                agent_table.add_column("Property", style="cyan", width=15)
+                agent_table.add_column("Value", style="green")
+
+                agent_table.add_row("Host ID", info.get('host_id', 'N/A'))
+                agent_table.add_row("Host IP", info.get('host_ip', 'N/A'))
+                agent_table.add_row("LLM Model", info.get('llm_model', 'N/A'))
+                agent_table.add_row("Actual Model", info.get('actual_model_name', 'N/A'))
+
+                # Tools information
+                tools = info.get('tools_available', [])
+                if tools:
+                    tools_str = ", ".join(tools)
+                    agent_table.add_row("Tools Available", tools_str)
+                else:
+                    agent_table.add_row("Tools Available", "None")
+
+                console.print(agent_table)
+
+                # Known hosts section
+                known_hosts = info.get("known_hosts", {})
+                if known_hosts:
+                    console.print("\n[bold cyan]Known Hosts:[/bold cyan]")
+                    hosts_table = Table()
+                    hosts_table.add_column("Host ID", style="cyan")
+                    hosts_table.add_column("IP Address", style="green")
+
+                    for host_id, host_ip in known_hosts.items():
+                        hosts_table.add_row(host_id, host_ip)
+
+                    console.print(hosts_table)
+                else:
+                    console.print("\n[bold cyan]Known Hosts:[/bold cyan] [dim]None[/dim]")
+
+            else:
+                console.print(f"\n[bold cyan]Agent API:[/bold cyan] [yellow]Not ready (HTTP {response.status_code})[/yellow]")
+                console.print("[dim]Agent may still be starting up...[/dim]")
+
+        except requests.exceptions.RequestException as e:
+            console.print(f"\n[bold cyan]Agent API:[/bold cyan] [yellow]Not accessible[/yellow]")
+            console.print(f"[dim]Error: {e}[/dim]")
+            console.print("[dim]Agent may still be starting up...[/dim]")
+
+    except Exception as e:
+        console.print(f"[red]Error getting agent info: {e}[/red]")
         raise typer.Exit(1)
 
 @agent_group.command("query")
 def query_agent(
     query: str = typer.Argument(..., help="Query to send to the agent"),
     host_id: Optional[str] = typer.Option(None, "--host-id", help="Target host ID (default: local)"),
-    port: int = typer.Option(8080, "--port", "-p", help="Agent API port")
+    port: int = typer.Option(4200, "--port", "-p", help="Agent API port")
 ):
     """Send a query to an AI agent."""
     try:
@@ -669,7 +844,7 @@ def query_agent(
 
 @agent_group.command("hosts")
 def list_agent_hosts(
-    port: int = typer.Option(8080, "--port", "-p", help="Agent API port")
+    port: int = typer.Option(4200, "--port", "-p", help="Agent API port")
 ):
     """List hosts known to the agent."""
     try:
@@ -704,7 +879,7 @@ def list_agent_hosts(
 def add_agent_host(
     host_id: str = typer.Argument(..., help="Host ID"),
     host_ip: str = typer.Argument(..., help="Host IP address"),
-    port: int = typer.Option(8080, "--port", "-p", help="Agent API port")
+    port: int = typer.Option(4200, "--port", "-p", help="Agent API port")
 ):
     """Add a host to the agent's known hosts list."""
     try:
@@ -724,41 +899,6 @@ def add_agent_host(
 
     except Exception as e:
         console.print(f"[red]Error adding host: {e}[/red]")
-        raise typer.Exit(1)
-
-@agent_group.command("info")
-def get_agent_info(
-    port: int = typer.Option(8080, "--port", "-p", help="Agent API port")
-):
-    """Get information about the agent."""
-    try:
-        import requests
-
-        url = f"http://localhost:{port}/agent/info"
-        response = requests.get(url)
-
-        if response.status_code == 200:
-            info = response.json()
-
-            console.print(Panel(
-                f"Host ID: {info.get('host_id')}\n"
-                f"Host IP: {info.get('host_ip')}\n"
-                f"Port: {info.get('port')}\n"
-                f"LLM Model: {info.get('llm_model')}\n"
-                f"Tools Available: {', '.join(info.get('tools_available', []))}",
-                title="Agent Information"
-            ))
-
-            known_hosts = info.get("known_hosts", {})
-            if known_hosts:
-                console.print("\n[bold]Known Hosts:[/bold]")
-                for host_id, host_ip in known_hosts.items():
-                    console.print(f"  • {host_id} -> {host_ip}")
-        else:
-            console.print(f"[red]Error: HTTP {response.status_code}[/red]")
-
-    except Exception as e:
-        console.print(f"[red]Error getting agent info: {e}[/red]")
         raise typer.Exit(1)
 
 if __name__ == "__main__":

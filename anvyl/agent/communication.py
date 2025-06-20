@@ -35,7 +35,7 @@ class AgentMessage:
 class AgentCommunication:
     """Handles communication between agents across hosts."""
 
-    def __init__(self, local_host_id: str, local_host_ip: str, port: int = 8080):
+    def __init__(self, local_host_id: str, local_host_ip: str, port: int = 4200):
         """Initialize agent communication."""
         self.local_host_id = local_host_id
         self.local_host_ip = local_host_ip

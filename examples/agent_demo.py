@@ -24,11 +24,12 @@ async def demo_local_agent():
     print("🤖 Anvyl AI Agent Demo - Local Agent")
     print("=" * 50)
 
-    # Create agent manager
+    # Start the agent
+    print("Starting agent...")
     agent_manager = create_agent_manager(
         lmstudio_url="http://localhost:1234/v1",
-        lmstudio_model="default",
-        port=8080
+        lmstudio_model="llama-3.2-3b-instruct",
+        port=4200
     )
 
     # Demo queries
@@ -60,22 +61,18 @@ def demo_remote_queries():
     print("=" * 50)
 
     # This would typically be done through the CLI or API
-    print("To query remote agents, use the CLI:")
+    print("\nTo use the CLI instead:")
+    print("1. Start the agent:")
+    print("  anvyl agent start --lmstudio-url http://localhost:1234/v1 --model llama-3.2-3b-instruct --port 4200")
     print()
-    print("  # Start agent on Host A")
-    print("  anvyl agent start --lmstudio-url http://localhost:1234/v1 --model default --port 8080")
+    print("2. Add a remote host:")
+    print("  anvyl agent add-host <host_b_id> <host_b_ip> --port 4200")
     print()
-    print("  # Start agent on Host B")
-    print("  anvyl agent start --lmstudio-url http://localhost:1234/v1 --model default --port 8081")
+    print("3. Query the agent:")
+    print("  anvyl agent query 'How many containers are running?' --host-id <host_b_id> --port 4200")
     print()
-    print("  # Add Host B to Host A's known hosts")
-    print("  anvyl agent add-host <host_b_id> <host_b_ip> --port 8080")
-    print()
-    print("  # Query Host B from Host A")
-    print("  anvyl agent query 'How many containers are running?' --host-id <host_b_id> --port 8080")
-    print()
-    print("  # Get containers from Host B")
-    print("  anvyl agent query 'List all containers' --host-id <host_b_id> --port 8080")
+    print("4. List containers:")
+    print("  anvyl agent query 'List all containers' --host-id <host_b_id> --port 4200")
 
 
 def demo_infrastructure_tools():

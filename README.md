@@ -224,3 +224,63 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [ ] Infrastructure as Code templates
 - [ ] Plugin system for custom providers
 - [ ] Mobile app for monitoring
+
+## Agent Management
+
+### Creating Agents
+```bash
+# Create a basic agent
+anvyl agent create my-agent
+
+# Create with specific provider and model
+anvyl agent create my-agent --provider ollama --model llama2
+
+# Create and auto-start
+anvyl agent create my-agent --start
+```
+
+### Managing Agents
+```bash
+# List all agents
+anvyl agent list
+
+# Start an agent
+anvyl agent start my-agent
+
+# Stop an agent
+anvyl agent stop my-agent
+
+# Remove an agent
+anvyl agent remove my-agent
+
+# Clean up orphaned Docker resources
+anvyl agent cleanup
+
+# Clean up specific agent resources
+anvyl agent cleanup my-agent
+```
+
+### Using Agents
+```bash
+# Execute a single action
+anvyl agent act my-agent "Show me all running containers"
+
+# Start an interactive session
+anvyl agent session my-agent
+
+# View agent logs
+anvyl agent logs my-agent
+
+# Get agent information
+anvyl agent info my-agent
+```
+
+### Cleanup and Maintenance
+
+The Anvyl agent system includes comprehensive cleanup functionality to prevent resource leaks:
+
+- **Automatic cleanup on startup failure**: When an agent fails to start, all Docker containers, images, and temporary files are automatically cleaned up
+- **Manual cleanup**: Use `anvyl agent cleanup` to remove orphaned Docker resources
+- **Specific agent cleanup**: Use `anvyl agent cleanup <agent-name>` to clean up resources for a specific agent
+
+This ensures that failed agent startups don't leave behind Docker containers, images, or temporary build directories that could consume disk space or cause conflicts.

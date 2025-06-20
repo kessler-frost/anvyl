@@ -1004,6 +1004,47 @@ def agent_demo(
         console.print(f"[red]Error running demo: {e}[/red]")
         raise typer.Exit(1)
 
+@agent_app.command("cleanup")
+def agent_cleanup(
+    name: Optional[str] = typer.Argument(None, help="Specific agent name to clean up, or leave empty to clean up all orphaned resources"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Auto-accept all prompts")
+):
+    """Clean up orphaned Docker containers and images for agents."""
+    try:
+        from .agent_manager import get_agent_manager
+
+        manager = get_agent_manager()
+
+        if not yes:
+            if name:
+                console.print(f"[bold yellow]This will clean up orphaned Docker resources for agent '{name}'.[/bold yellow]")
+            else:
+                console.print(f"[bold yellow]This will clean up ALL orphaned Docker resources for all agents.[/bold yellow]")
+
+            confirm = typer.confirm(f"[bold]Are you sure you want to proceed?[/bold]", default=False)
+            if not confirm:
+                console.print("[yellow]Operation cancelled.[/yellow]")
+                return
+
+        console.print(f"🧹 [bold blue]Cleaning up orphaned Docker resources...[/bold blue]")
+
+        with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
+            task = progress.add_task("Cleaning up...", total=None)
+            success = manager.cleanup_orphaned_resources(name)
+
+        if success:
+            if name:
+                console.print(f"✅ [green]Successfully cleaned up orphaned resources for agent '{name}'[/green]")
+            else:
+                console.print(f"✅ [green]Successfully cleaned up all orphaned Docker resources[/green]")
+        else:
+            console.print(f"[red]Failed to clean up orphaned resources[/red]")
+            raise typer.Exit(1)
+
+    except Exception as e:
+        console.print(f"[red]Error during cleanup: {e}[/red]")
+        raise typer.Exit(1)
+
 # Main status command
 @app.command("status")
 def status():

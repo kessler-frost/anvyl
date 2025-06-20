@@ -17,6 +17,7 @@ from datetime import datetime
 import platform
 import socket
 import docker
+import shutil
 
 from .ai_agent import AnvylAIAgent, create_ai_agent
 from .model_providers import ModelProvider
@@ -281,6 +282,67 @@ CMD ["python", "/app/agent_script.py"]
         logger.info(f"Created agent configuration: {name}")
         return config
 
+    def _cleanup_failed_startup(self, name: str, container=None, image_name=None, temp_build_dir=None):
+        """
+        Clean up resources when agent startup fails.
+
+        Args:
+            name: Name of the agent
+            container: Docker container object (if created)
+            image_name: Docker image name
+            temp_build_dir: Temporary build directory path
+        """
+        logger.info(f"🧹 Cleaning up failed startup for agent '{name}'")
+
+        try:
+            client = docker.from_env()
+
+            # Clean up container if it exists
+            if container:
+                try:
+                    container.remove(force=True)
+                    logger.info(f"Removed failed container for agent '{name}'")
+                except Exception as e:
+                    logger.warning(f"Error removing container for agent '{name}': {e}")
+
+            # Also try to remove container by name in case container object is invalid
+            container_name = f"anvyl-agent-{name}"
+            try:
+                existing_container = client.containers.get(container_name)
+                existing_container.remove(force=True)
+                logger.info(f"Removed container by name: {container_name}")
+            except docker.errors.NotFound:
+                pass
+            except Exception as e:
+                logger.warning(f"Error removing container by name {container_name}: {e}")
+
+            # Clean up Docker image if it exists
+            if image_name:
+                try:
+                    image = client.images.get(image_name)
+                    client.images.remove(image.id, force=True)
+                    logger.info(f"Removed Docker image: {image_name}")
+                except docker.errors.ImageNotFound:
+                    logger.info(f"Docker image {image_name} not found")
+                except Exception as e:
+                    logger.warning(f"Error removing Docker image {image_name}: {e}")
+
+            # Clean up temporary build directory
+            if temp_build_dir and temp_build_dir.exists():
+                shutil.rmtree(temp_build_dir)
+                logger.info(f"Removed temporary build directory: {temp_build_dir}")
+
+            # Reset agent configuration status
+            config = self.configurations.get(name)
+            if config:
+                config.status = "stopped"
+                config.container_id = None
+                self._save_configurations()
+                logger.info(f"Reset agent '{name}' status to stopped")
+
+        except Exception as e:
+            logger.error(f"Error during cleanup for agent '{name}': {e}")
+
     def start_agent(self, name: str) -> bool:
         """
         Start an AI agent in a Docker container.
@@ -300,6 +362,11 @@ CMD ["python", "/app/agent_script.py"]
             logger.error("Docker is not available or not running")
             return False
 
+        # Initialize cleanup variables
+        container = None
+        image_name = f"anvyl-agent-{name}"
+        temp_build_dir = None
+
         try:
             # Check if agent is already running
             status = self.get_agent_status(name)
@@ -312,7 +379,6 @@ CMD ["python", "/app/agent_script.py"]
             agent_dir.mkdir(exist_ok=True)
 
             # Create temporary build directory at project root level
-            import shutil
             import tempfile
             import os
             from pathlib import Path
@@ -326,98 +392,108 @@ CMD ["python", "/app/agent_script.py"]
                 shutil.rmtree(temp_build_dir)
             temp_build_dir.mkdir(exist_ok=True)
 
+            # Write agent script to temporary build directory
+            agent_script_path = temp_build_dir / "agent_script.py"
+            with open(agent_script_path, 'w') as f:
+                f.write(self._create_agent_script(config))
+
+            # Create Dockerfile in temporary build directory
+            dockerfile_path = temp_build_dir / "Dockerfile"
+            with open(dockerfile_path, 'w') as f:
+                f.write(self._create_dockerfile(config))
+
+            # Copy the entire anvyl package to the temp build directory for Docker context
+            anvyl_package_dir = temp_build_dir / "anvyl"
+            shutil.copytree(Path(__file__).parent, anvyl_package_dir, dirs_exist_ok=True)
+
+            # Copy pyproject.toml and other necessary files to temp build directory
+            shutil.copy(project_root / "pyproject.toml", temp_build_dir / "pyproject.toml")
+            if (project_root / "MANIFEST.in").exists():
+                shutil.copy(project_root / "MANIFEST.in", temp_build_dir / "MANIFEST.in")
+
+            # Build Docker image using temp build directory as context
+            client = docker.from_env()
+
+            logger.info(f"Building Docker image for agent '{name}'...")
+            image, build_logs = client.images.build(
+                path=str(temp_build_dir),  # Use temp build directory as build context
+                dockerfile="Dockerfile",  # Dockerfile is in the temp directory
+                tag=image_name,
+                rm=True
+            )
+
+            # Run container
+            container_name = f"anvyl-agent-{name}"
+
+            # Remove existing container if it exists
             try:
-                # Write agent script to temporary build directory
-                agent_script_path = temp_build_dir / "agent_script.py"
-                with open(agent_script_path, 'w') as f:
-                    f.write(self._create_agent_script(config))
+                existing_container = client.containers.get(container_name)
+                existing_container.remove(force=True)
+            except docker.errors.NotFound:
+                pass
 
-                # Create Dockerfile in temporary build directory
-                dockerfile_path = temp_build_dir / "Dockerfile"
-                with open(dockerfile_path, 'w') as f:
-                    f.write(self._create_dockerfile(config))
+            # Create and start container
+            container = client.containers.run(
+                image_name,
+                name=container_name,
+                detach=True,
+                environment={
+                    'PYTHONPATH': '/app',
+                    'PYTHONUNBUFFERED': '1'
+                },
+                labels={
+                    'anvyl.agent.name': name,
+                    'anvyl.component': 'agent'
+                }
+            )
 
-                # Build Docker image using project root as context
-                client = docker.from_env()
-                image_name = f"anvyl-agent-{name}"
+            # Update configuration
+            config.container_id = container.id
+            config.status = "running"
+            self._save_configurations()
 
-                logger.info(f"Building Docker image for agent '{name}'...")
-                image, build_logs = client.images.build(
-                    path=str(project_root),  # Use actual project root as build context
-                    dockerfile=str(dockerfile_path.relative_to(project_root)),  # Relative path to Dockerfile
-                    tag=image_name,
-                    rm=True
+            # Register agent with infrastructure service
+            hosts = self.infrastructure_service.list_hosts()
+            if hosts:
+                host_id = hosts[0]["id"]  # Use first available host
+
+                # Launch agent through infrastructure service
+                agent_info = self.infrastructure_service.launch_agent(
+                    name=name,
+                    host_id=host_id,
+                    entrypoint=str(agent_script_path),
+                    env=[
+                        f"PYTHONPATH=/app",
+                        f"PYTHONUNBUFFERED=1"
+                    ],
+                    working_directory="/app",
+                    persistent=True
                 )
 
-                # Run container
-                container_name = f"anvyl-agent-{name}"
-
-                # Remove existing container if it exists
-                try:
-                    existing_container = client.containers.get(container_name)
-                    existing_container.remove(force=True)
-                except docker.errors.NotFound:
-                    pass
-
-                # Create and start container
-                container = client.containers.run(
-                    image_name,
-                    name=container_name,
-                    detach=True,
-                    environment={
-                        'PYTHONPATH': '/app',
-                        'PYTHONUNBUFFERED': '1'
-                    },
-                    labels={
-                        'anvyl.agent.name': name,
-                        'anvyl.component': 'agent'
-                    }
-                )
-
-                # Update configuration
-                config.container_id = container.id
-                config.status = "running"
-                self._save_configurations()
-
-                # Register agent with infrastructure service
-                hosts = self.infrastructure_service.list_hosts()
-                if hosts:
-                    host_id = hosts[0]["id"]  # Use first available host
-
-                    # Launch agent through infrastructure service
-                    agent_info = self.infrastructure_service.launch_agent(
-                        name=name,
-                        host_id=host_id,
-                        entrypoint=str(agent_script_path),
-                        env=[
-                            f"PYTHONPATH=/app",
-                            f"PYTHONUNBUFFERED=1"
-                        ],
-                        working_directory="/app",
-                        persistent=True
-                    )
-
-                    if agent_info:
-                        logger.info(f"Successfully started agent '{name}' in container {container.id}")
-                        return True
-                    else:
-                        logger.error(f"Failed to register agent '{name}' with infrastructure service")
-                        # Clean up container
-                        container.remove(force=True)
-                        return False
+                if agent_info:
+                    logger.info(f"Successfully started agent '{name}' in container {container.id}")
+                    return True
                 else:
-                    logger.error("No hosts available for agent")
-                    container.remove(force=True)
+                    logger.error(f"Failed to register agent '{name}' with infrastructure service")
+                    # Clean up on infrastructure service failure
+                    self._cleanup_failed_startup(name, container, image_name, temp_build_dir)
                     return False
-
-            finally:
-                # Clean up temporary build directory
-                if temp_build_dir.exists():
-                    shutil.rmtree(temp_build_dir)
+            else:
+                logger.error("No hosts available for agent")
+                # Clean up on no hosts available
+                self._cleanup_failed_startup(name, container, image_name, temp_build_dir)
+                return False
 
         except Exception as e:
             logger.error(f"Error starting agent '{name}': {e}")
+            # Clean up on any exception
+            self._cleanup_failed_startup(name, container, image_name, temp_build_dir)
             return False
+
+        finally:
+            # Clean up temporary build directory (always)
+            if temp_build_dir and temp_build_dir.exists():
+                shutil.rmtree(temp_build_dir)
 
     def stop_agent(self, name: str) -> bool:
         """
@@ -612,7 +688,6 @@ CMD ["python", "/app/agent_script.py"]
             # Remove agent directory and files
             agent_dir = self.config_dir / name
             if agent_dir.exists():
-                import shutil
                 shutil.rmtree(agent_dir)
                 logger.info(f"Removed agent directory: {agent_dir}")
 
@@ -655,6 +730,79 @@ CMD ["python", "/app/agent_script.py"]
 
         except Exception as e:
             logger.error(f"Error updating agent '{name}': {e}")
+            return False
+
+    def cleanup_orphaned_resources(self, name: str = None) -> bool:
+        """
+        Clean up orphaned Docker containers and images for agents.
+
+        Args:
+            name: Specific agent name to clean up, or None to clean up all orphaned resources
+
+        Returns:
+            True if cleanup successful, False otherwise
+        """
+        try:
+            client = docker.from_env()
+            cleaned_count = 0
+
+            if name:
+                # Clean up specific agent
+                container_name = f"anvyl-agent-{name}"
+                image_name = f"anvyl-agent-{name}"
+
+                # Remove container
+                try:
+                    container = client.containers.get(container_name)
+                    container.remove(force=True)
+                    logger.info(f"Removed orphaned container: {container_name}")
+                    cleaned_count += 1
+                except docker.errors.NotFound:
+                    pass
+                except Exception as e:
+                    logger.warning(f"Error removing container {container_name}: {e}")
+
+                # Remove image
+                try:
+                    image = client.images.get(image_name)
+                    client.images.remove(image.id, force=True)
+                    logger.info(f"Removed orphaned image: {image_name}")
+                    cleaned_count += 1
+                except docker.errors.ImageNotFound:
+                    pass
+                except Exception as e:
+                    logger.warning(f"Error removing image {image_name}: {e}")
+            else:
+                # Clean up all orphaned anvyl agent resources
+                # Find containers with anvyl agent labels
+                containers = client.containers.list(all=True, filters={"label": "anvyl.component=agent"})
+                for container in containers:
+                    try:
+                        container.remove(force=True)
+                        logger.info(f"Removed orphaned container: {container.name}")
+                        cleaned_count += 1
+                    except Exception as e:
+                        logger.warning(f"Error removing container {container.name}: {e}")
+
+                # Find and remove anvyl agent images
+                images = client.images.list(filters={"reference": "anvyl-agent-*"})
+                for image in images:
+                    try:
+                        client.images.remove(image.id, force=True)
+                        logger.info(f"Removed orphaned image: {image.tags[0] if image.tags else image.id}")
+                        cleaned_count += 1
+                    except Exception as e:
+                        logger.warning(f"Error removing image {image.id}: {e}")
+
+            if cleaned_count > 0:
+                logger.info(f"🧹 Cleaned up {cleaned_count} orphaned resources")
+            else:
+                logger.info("✅ No orphaned resources found")
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Error during orphaned resource cleanup: {e}")
             return False
 
 

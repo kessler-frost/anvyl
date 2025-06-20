@@ -316,34 +316,8 @@ CMD ["python", "/app/agent_script.py"]
             except Exception as e:
                 logger.warning(f"Error removing container by name {container_name}: {e}")
 
-            # Clean up intermediate build containers (created during failed builds)
-            try:
-                # Find containers that were created during the build process
-                # These often have random names and are from recent builds
-                import time
-                recent_containers = client.containers.list(
-                    all=True,
-                    filters={
-                        "status": "exited",
-                        "ancestor": "python:3.12-alpine"  # Base image we use
-                    }
-                )
-
-                # Remove containers created in the last 5 minutes (likely from our failed build)
-                current_time = time.time()
-                for cont in recent_containers:
-                    try:
-                        # Check if container was created recently (within 5 minutes)
-                        created_time = cont.attrs['Created']
-                        created_timestamp = time.mktime(time.strptime(created_time.split('.')[0], '%Y-%m-%dT%H:%M:%S'))
-
-                        if current_time - created_timestamp < 300:  # 5 minutes
-                            cont.remove(force=True)
-                            logger.info(f"Removed intermediate build container: {cont.name} ({cont.id[:12]})")
-                    except Exception as e:
-                        logger.warning(f"Error removing intermediate container {cont.id}: {e}")
-            except Exception as e:
-                logger.warning(f"Error cleaning up intermediate containers: {e}")
+            # NOTE: We do NOT remove Docker's intermediate build containers or dangling images here.
+            # Users should run 'docker system prune -f' for global cleanup of Docker's own intermediates.
 
             # Clean up Docker image if it exists
             if image_name:
@@ -363,26 +337,6 @@ CMD ["python", "/app/agent_script.py"]
                         logger.warning(f"Error removing Docker images by pattern: {e}")
                 except Exception as e:
                     logger.warning(f"Error removing Docker image {image_name}: {e}")
-
-            # Clean up dangling images (images with <none> tag) that might be from failed builds
-            try:
-                # Find dangling images created recently
-                dangling_images = client.images.list(filters={"dangling": True})
-                current_time = time.time()
-
-                for img in dangling_images:
-                    try:
-                        # Check if image was created recently (within 5 minutes)
-                        created_time = img.attrs['Created']
-                        created_timestamp = time.mktime(time.strptime(created_time.split('.')[0], '%Y-%m-%dT%H:%M:%S'))
-
-                        if current_time - created_timestamp < 300:  # 5 minutes
-                            client.images.remove(img.id, force=True)
-                            logger.info(f"Removed dangling image: {img.id[:12]}")
-                    except Exception as e:
-                        logger.warning(f"Error removing dangling image {img.id}: {e}")
-            except Exception as e:
-                logger.warning(f"Error cleaning up dangling images: {e}")
 
             # Clean up temporary build directory
             if temp_build_dir and temp_build_dir.exists():
@@ -867,52 +821,8 @@ CMD ["python", "/app/agent_script.py"]
                     except Exception as e:
                         logger.warning(f"Error removing image {image.id}: {e}")
 
-                # Clean up intermediate build containers (created during failed builds)
-                try:
-                    import time
-                    recent_containers = client.containers.list(
-                        all=True,
-                        filters={
-                            "status": "exited",
-                            "ancestor": "python:3.12-alpine"  # Base image we use
-                        }
-                    )
-
-                    current_time = time.time()
-                    for cont in recent_containers:
-                        try:
-                            # Check if container was created recently (within 10 minutes)
-                            created_time = cont.attrs['Created']
-                            created_timestamp = time.mktime(time.strptime(created_time.split('.')[0], '%Y-%m-%dT%H:%M:%S'))
-
-                            if current_time - created_timestamp < 600:  # 10 minutes
-                                cont.remove(force=True)
-                                logger.info(f"Removed intermediate build container: {cont.name} ({cont.id[:12]})")
-                                cleaned_count += 1
-                        except Exception as e:
-                            logger.warning(f"Error removing intermediate container {cont.id}: {e}")
-                except Exception as e:
-                    logger.warning(f"Error cleaning up intermediate containers: {e}")
-
-                # Clean up dangling images (images with <none> tag) that might be from failed builds
-                try:
-                    dangling_images = client.images.list(filters={"dangling": True})
-                    current_time = time.time()
-
-                    for img in dangling_images:
-                        try:
-                            # Check if image was created recently (within 10 minutes)
-                            created_time = img.attrs['Created']
-                            created_timestamp = time.mktime(time.strptime(created_time.split('.')[0], '%Y-%m-%dT%H:%M:%S'))
-
-                            if current_time - created_timestamp < 600:  # 10 minutes
-                                client.images.remove(img.id, force=True)
-                                logger.info(f"Removed dangling image: {img.id[:12]}")
-                                cleaned_count += 1
-                        except Exception as e:
-                            logger.warning(f"Error removing dangling image {img.id}: {e}")
-                except Exception as e:
-                    logger.warning(f"Error cleaning up dangling images: {e}")
+                # NOTE: We do NOT remove Docker's intermediate build containers or dangling images here.
+                # Users should run 'docker system prune -f' for global cleanup of Docker's own intermediates.
 
             if cleaned_count > 0:
                 logger.info(f"🧹 Cleaned up {cleaned_count} orphaned resources")

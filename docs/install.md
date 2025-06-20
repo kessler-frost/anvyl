@@ -184,7 +184,7 @@ anvyl container create web-app nginx:latest --port 8080:80
    ```bash
    # Check what's using the port
    lsof -i :50051
-   
+
    # Kill the process
    kill -9 <PID>
    ```
@@ -193,7 +193,7 @@ anvyl container create web-app nginx:latest --port 8080:80
    ```bash
    # Start Docker Desktop
    open -a Docker
-   
+
    # Wait for Docker to be ready
    docker ps
    ```
@@ -202,7 +202,7 @@ anvyl container create web-app nginx:latest --port 8080:80
    ```bash
    # Fix file permissions
    chmod +x scripts/*.sh
-   
+
    # Run with sudo if needed
    sudo anvyl up
    ```
@@ -212,7 +212,7 @@ anvyl container create web-app nginx:latest --port 8080:80
    # Reinstall protobuf tools
    pip uninstall grpcio-tools
    pip install grpcio-tools
-   
+
    # Regenerate protobuf files
    python anvyl/generate_protos.py
    ```

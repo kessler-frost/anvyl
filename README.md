@@ -182,8 +182,8 @@ Anvyl supports multiple AI model providers:
 ## 📚 Documentation
 
 - [CLI Usage Guide](docs/cli_usage.md)
-- [Model Providers](MODEL_PROVIDERS.md)
-- [AI Agent Guide](AI_AGENT_README.md)
+- [Model Providers](docs/model_providers.md)
+- [AI Agent Guide](docs/ai_agent_readme.md)
 
 ## 🧪 Testing
 

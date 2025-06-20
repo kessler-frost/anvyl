@@ -16,7 +16,7 @@ from typing import Dict, Any
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from anvyl.agent import create_agent_manager
-from anvyl.infrastructure_service import InfrastructureService
+from anvyl.infrastructure_service import get_infrastructure_service
 
 
 async def demo_local_agent():
@@ -81,7 +81,7 @@ def demo_infrastructure_tools():
     print("=" * 50)
 
     # Get infrastructure service
-    infrastructure_service = InfrastructureService()
+    infrastructure_service = get_infrastructure_service()
 
     # Demo tools
     print("Available infrastructure operations:")

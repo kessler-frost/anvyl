@@ -14,14 +14,15 @@ from rich.console import Console
 from rich.table import Table
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.panel import Panel
-from rich.tree import Tree
 import sys
 import logging
-import docker
+import requests
+import subprocess
+from pathlib import Path
 
-from .infrastructure_service import get_infrastructure_service
-from .database.models import DatabaseManager
-from .agent import AgentManager, create_agent_manager
+from anvyl.infrastructure_service import get_infrastructure_service
+from anvyl.database.models import DatabaseManager
+from anvyl.agent import AgentManager, create_agent_manager
 
 # Initialize rich console
 console = Console()
@@ -70,7 +71,6 @@ def start_infrastructure(
                 task = progress.add_task("Building images...", total=None)
 
                 # Build UI images using docker-compose
-                import subprocess
                 result = subprocess.run(
                     ["docker-compose", "-f", os.path.join(project_root, "ui", "docker-compose.yml"), "build"],
                     cwd=os.path.join(project_root, "ui"),
@@ -89,7 +89,6 @@ def start_infrastructure(
             task = progress.add_task("Starting services...", total=None)
 
             # Start UI stack using docker-compose
-            import subprocess
             result = subprocess.run(
                 ["docker-compose", "-f", os.path.join(project_root, "ui", "docker-compose.yml"), "up", "-d"],
                 cwd=os.path.join(project_root, "ui"),
@@ -126,7 +125,6 @@ def stop_infrastructure():
             task = progress.add_task("Stopping services...", total=None)
 
             # Stop UI stack using docker-compose
-            import subprocess
             result = subprocess.run(
                 ["docker-compose", "-f", os.path.join(project_root, "ui", "docker-compose.yml"), "down"],
                 cwd=os.path.join(project_root, "ui"),
@@ -587,19 +585,41 @@ def status():
         console.print(f"[red]Error getting status: {e}[/red]")
         raise typer.Exit(1)
 
+@app.command("infrastructure")
+def start_infrastructure_api(
+    host: str = typer.Option("0.0.0.0", "--host", "-h", help="Host to bind to"),
+    port: int = typer.Option(8080, "--port", "-p", help="Port to bind to"),
+    reload: bool = typer.Option(False, "--reload", help="Enable auto-reload")
+):
+    """Start the Anvyl Infrastructure API service."""
+    try:
+        console.print("🏗️ [bold blue]Starting Anvyl Infrastructure API[/bold blue]")
+        console.print(f"🌐 API URL: http://{host}:{port}")
+        console.print(f"📋 API Docs: http://{host}:{port}/docs")
+
+        from anvyl.infrastructure_api import run_infrastructure_api
+        run_infrastructure_api(host=host, port=port)
+
+    except Exception as e:
+        console.print(f"[red]Error starting infrastructure API: {e}[/red]")
+        raise typer.Exit(1)
+
 @app.command("version")
 def version():
-    """Show Anvyl version information."""
-    from . import __version__, __author__, __email__
+    """Show version information."""
+    try:
+        from anvyl import __version__, __author__, __email__
 
-    console.print(Panel.fit(
-        f"[bold blue]Anvyl Infrastructure Orchestrator[/bold blue]\n"
-        f"Version: [green]{__version__}[/green]\n"
-        f"Author: [cyan]{__author__}[/cyan]\n"
-        f"Contact: [cyan]{__email__}[/cyan]",
-        title="Version Info",
-        border_style="blue"
-    ))
+        console.print(Panel(
+            f"[bold blue]Anvyl Infrastructure Orchestrator[/bold blue]\n\n"
+            f"Version: [green]{__version__}[/green]\n"
+            f"Author: [cyan]{__author__}[/cyan]\n"
+            f"Email: [cyan]{__email__}[/cyan]",
+            title="Version Info"
+        ))
+    except Exception as e:
+        console.print(f"[red]Error getting version info: {e}[/red]")
+        raise typer.Exit(1)
 
 # Agent Management Commands
 agent_group = typer.Typer(
@@ -611,25 +631,26 @@ app.add_typer(agent_group, name="agent")
 
 @agent_group.command("start")
 def start_agent(
-    model: str = typer.Option("llama-3.2-3b-instruct", "--model", "-m", help="LMStudio model to use"),
-    lmstudio_url: str = typer.Option("http://localhost:1234/v1", "--lmstudio-url", "-u", help="LMStudio API URL"),
-    port: int = typer.Option(4200, "--port", "-p", help="Agent API port")
+    lmstudio_url: str = typer.Option("http://localhost:1234/v1", "--lmstudio-url", help="LMStudio API URL"),
+    lmstudio_model: str = typer.Option("llama-3.2-3b-instruct", "--model", help="LMStudio model name"),
+    port: int = typer.Option(4200, "--port", help="Agent API port"),
+    build: bool = typer.Option(True, "--build/--no-build", help="Build container image before starting")
 ):
-    """Start the AI agent in a Docker container using the infrastructure service."""
+    """Start the AI agent in a container using the infrastructure service."""
     try:
         console.print("🤖 [bold blue]Starting Anvyl AI Agent[/bold blue]")
 
-        from .infrastructure_service import get_infrastructure_service
-        infrastructure_service = get_infrastructure_service()
+        from anvyl.infrastructure_client import get_infrastructure_client
+        infrastructure_client = get_infrastructure_client(infrastructure_api_url)
 
         # Start the agent container
-        container_id = infrastructure_service.start_agent_container(
-            lmstudio_model=model,
+        result = infrastructure_client.start_agent_container(
+            lmstudio_model=lmstudio_model,
             lmstudio_url=lmstudio_url,
             port=port
         )
 
-        if container_id is None:
+        if result is None:
             console.print("[red]❌ Failed to start agent container[/red]")
             raise typer.Exit(1)
 
@@ -637,8 +658,8 @@ def start_agent(
         console.print(f"🌐 Agent API: http://localhost:{port}")
         console.print(f"📋 API Docs: http://localhost:{port}/docs")
         console.print(f"🧠 LLM: LMStudio at {lmstudio_url}")
-        console.print(f"🤖 Model: {model}")
-        console.print(f"🐳 Container ID: {container_id}")
+        console.print(f"🤖 Model: {lmstudio_model}")
+        console.print(f"🐳 Container ID: {result.get('id', 'unknown')}")
         console.print()
         console.print("Use 'anvyl agent logs' to view logs")
         console.print("Use 'anvyl agent stop' to stop the container")
@@ -648,15 +669,17 @@ def start_agent(
         raise typer.Exit(1)
 
 @agent_group.command("stop")
-def stop_agent():
-    """Stop the AI agent Docker container using the infrastructure service."""
+def stop_agent(
+    infrastructure_api_url: str = typer.Option("http://localhost:8080", "--infra-api-url", help="Infrastructure API URL")
+):
+    """Stop the AI agent container using the infrastructure service."""
     try:
         console.print("🛑 [bold blue]Stopping Anvyl AI Agent[/bold blue]")
 
-        from .infrastructure_service import get_infrastructure_service
-        infrastructure_service = get_infrastructure_service()
+        from anvyl.infrastructure_client import get_infrastructure_client
+        infrastructure_client = get_infrastructure_client(infrastructure_api_url)
 
-        if not infrastructure_service.stop_agent_container():
+        if not infrastructure_client.stop_agent_container():
             console.print("[red]❌ Failed to stop agent container[/red]")
             raise typer.Exit(1)
 
@@ -669,16 +692,17 @@ def stop_agent():
 @agent_group.command("logs")
 def logs_agent(
     follow: bool = typer.Option(False, "--follow", "-f", help="Follow log output"),
-    tail: int = typer.Option(100, "--tail", "-n", help="Number of lines to show")
+    tail: int = typer.Option(100, "--tail", "-n", help="Number of lines to show"),
+    infrastructure_api_url: str = typer.Option("http://localhost:8080", "--infra-api-url", help="Infrastructure API URL")
 ):
-    """Show logs from the AI agent Docker container using the infrastructure service."""
+    """Show logs from the AI agent container using the infrastructure service."""
     try:
         console.print("📋 [bold blue]Anvyl AI Agent Logs[/bold blue]")
 
-        from .infrastructure_service import get_infrastructure_service
-        infrastructure_service = get_infrastructure_service()
+        from anvyl.infrastructure_client import get_infrastructure_client
+        infrastructure_client = get_infrastructure_client(infrastructure_api_url)
 
-        logs = infrastructure_service.get_agent_logs(follow=follow, tail=tail)
+        logs = infrastructure_client.get_agent_logs(follow=follow, tail=tail)
 
         if logs is None:
             console.print("[red]❌ Failed to get agent logs[/red]")
@@ -692,17 +716,18 @@ def logs_agent(
 
 @agent_group.command("info")
 def get_agent_info(
-    port: int = typer.Option(4200, "--port", "-p", help="Agent API port")
+    port: int = typer.Option(4200, "--port", "-p", help="Agent API port"),
+    infrastructure_api_url: str = typer.Option("http://localhost:8080", "--infra-api-url", help="Infrastructure API URL")
 ):
     """Get comprehensive information about the agent including container status and agent capabilities."""
     try:
         import requests
 
         # First check if the agent container is running
-        from .infrastructure_service import get_infrastructure_service
-        infrastructure_service = get_infrastructure_service()
+        from anvyl.infrastructure_client import get_infrastructure_client
+        infrastructure_client = get_infrastructure_client(infrastructure_api_url)
 
-        container_status = infrastructure_service.get_agent_container_status()
+        container_status = infrastructure_client.get_agent_container_status()
         if not container_status:
             console.print("[yellow]Agent container is not running[/yellow]")
             console.print("[yellow]Use 'anvyl agent start' to start the agent[/yellow]")

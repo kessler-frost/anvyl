@@ -14,10 +14,12 @@ import uvicorn
 import socket
 import os
 import uuid
+from datetime import datetime
 
-from .host_agent import HostAgent
-from .communication import AgentMessage
-from ..infrastructure_service import InfrastructureService
+from anvyl.agent.host_agent import HostAgent
+from anvyl.agent.communication import AgentCommunication, AgentMessage
+from anvyl.agent.tools import InfrastructureTools
+from anvyl.infrastructure_client import get_infrastructure_client
 
 logger = logging.getLogger(__name__)
 
@@ -26,31 +28,40 @@ class AgentManager:
     """Manages the AI agent system and provides web API for communication."""
 
     def __init__(self,
-                 infrastructure_service: InfrastructureService,
-                 host_id: str,
-                 host_ip: str,
+                 infrastructure_api_url: str = "http://localhost:8080",
+                 host_id: str = None,
+                 host_ip: str = None,
                  lmstudio_url: Optional[str] = None,
                  lmstudio_model: str = "default",
                  port: int = 4200):
         """Initialize the agent manager."""
-        self.infrastructure_service = infrastructure_service
+        self.infrastructure_client = get_infrastructure_client(infrastructure_api_url)
+
         self.host_id = host_id
         self.host_ip = host_ip
         self.port = port
-        self.llm = None
+        self.lmstudio_url = lmstudio_url
+        self.lmstudio_model = lmstudio_model
+
+        # Initialize communication and tools
         self.communication = AgentCommunication(
-            local_host_id=str(uuid.uuid4()),
-            local_host_ip="127.0.0.1",
+            local_host_id=host_id,
+            local_host_ip=host_ip,
             port=port
         )
-        self.tools = AgentTools()
-        self.host_agent = HostAgent(self.communication, self.tools)
+        self.tools = InfrastructureTools(self.infrastructure_client)
 
-        # Initialize LLM
-        self._initialize_llm()
-
-        # Register tools
-        self._register_tools()
+        # Initialize host agent
+        self.host_agent = HostAgent(
+            communication=self.communication,
+            tools=self.tools.get_tools(),
+            infrastructure_api_url=infrastructure_api_url,
+            host_id=host_id,
+            host_ip=host_ip,
+            lmstudio_url=lmstudio_url,
+            lmstudio_model=lmstudio_model,
+            port=port
+        )
 
         # Initialize FastAPI app
         self.app = self._create_fastapi_app()
@@ -94,21 +105,8 @@ class AgentManager:
 
         @app.get("/health")
         async def health_check():
-            """Health check endpoint for Docker."""
-            try:
-                # Basic health check - verify agent is responsive
-                agent_info = self.host_agent.get_agent_info()
-                return {
-                    "status": "healthy",
-                    "host_id": self.host_id,
-                    "host_ip": self.host_ip,
-                    "llm_model": agent_info.get("llm_model", "unknown"),
-                    "actual_model_name": agent_info.get("actual_model_name", "unknown"),
-                    "timestamp": asyncio.get_event_loop().time()
-                }
-            except Exception as e:
-                logger.error(f"Health check failed: {e}")
-                raise HTTPException(status_code=503, detail="Service unhealthy")
+            """Health check endpoint for the agent."""
+            return {"status": "healthy", "timestamp": datetime.now().isoformat()}
 
         @app.get("/agent/info")
         async def get_agent_info():
@@ -194,7 +192,7 @@ class AgentManager:
         async def list_containers(host_id: Optional[str] = None):
             """List containers on a host."""
             try:
-                containers = self.infrastructure_service.list_containers(host_id)
+                containers = self.infrastructure_client.list_containers(host_id)
                 return {"containers": containers}
             except Exception as e:
                 logger.error(f"Error listing containers: {e}")
@@ -202,60 +200,35 @@ class AgentManager:
 
         @app.get("/infrastructure/hosts")
         async def list_hosts():
-            """List all hosts in the infrastructure."""
+            """List all hosts."""
             try:
-                hosts = self.infrastructure_service.list_hosts()
+                hosts = self.infrastructure_client.list_hosts()
                 return {"hosts": hosts}
             except Exception as e:
                 logger.error(f"Error listing hosts: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
 
     async def start(self):
-        """Start the agent manager and web server."""
-        logger.info(f"Starting agent manager on {self.host_ip}:{self.port}")
-
-        config = uvicorn.Config(
-            app=self.app,
-            host="0.0.0.0",
-            port=self.port,
-            log_level="info"
-        )
-
+        """Start the agent manager."""
+        logger.info(f"Starting agent manager on port {self.port}")
+        config = uvicorn.Config(self.app, host="0.0.0.0", port=self.port)
         server = uvicorn.Server(config)
         await server.serve()
 
     def run(self):
         """Run the agent manager synchronously."""
-        asyncio.run(self.start())
+        uvicorn.run(self.app, host="0.0.0.0", port=self.port)
 
     async def stop(self):
         """Stop the agent manager."""
         logger.info("Stopping agent manager")
-        # Add any cleanup logic here
 
 
-def create_agent_manager(lmstudio_url: Optional[str] = None, lmstudio_model: str = "default", port: int = 4200) -> AgentManager:
+def create_agent_manager(lmstudio_url: Optional[str] = None, lmstudio_model: str = "default",
+                        port: int = 4200, infrastructure_api_url: str = "http://localhost:8080") -> AgentManager:
     """Create an agent manager with default settings."""
-    # Get infrastructure service
-    infrastructure_service = InfrastructureService()
-
-    # Get host information
-    hosts = infrastructure_service.list_hosts()
-    local_host = None
-
-    for host in hosts:
-        if host.get('tags') and 'local' in host['tags']:
-            local_host = host
-            break
-
-    if not local_host:
-        raise RuntimeError("Local host not found in infrastructure")
-
-    # Create agent manager
     return AgentManager(
-        infrastructure_service=infrastructure_service,
-        host_id=local_host['id'],
-        host_ip=local_host['ip'],
+        infrastructure_api_url=infrastructure_api_url,
         lmstudio_url=lmstudio_url,
         lmstudio_model=lmstudio_model,
         port=port

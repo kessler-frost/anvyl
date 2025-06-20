@@ -7,22 +7,17 @@ local infrastructure using LangChain and tool-use capabilities.
 
 import logging
 import asyncio
+import uuid
+import socket
 from typing import Dict, List, Any, Optional
 from langchain.agents import AgentExecutor, create_openai_tools_agent
-from langchain.agents import initialize_agent
-from langchain_community.llms import Ollama
-from langchain_community.chat_models import ChatOllama
 from langchain_openai import OpenAI
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain.schema import SystemMessage, HumanMessage
 from langchain.tools import BaseTool
 import json
-from langchain_core.language_models.base import BaseLanguageModel
-from pydantic import Field
 
-from .tools import InfrastructureTools
-from .communication import AgentCommunication, AgentMessage
-from ..infrastructure_service import InfrastructureService
+from anvyl.agent.communication import AgentCommunication, AgentMessage
+from anvyl.infrastructure_client import get_infrastructure_client
 
 logger = logging.getLogger(__name__)
 
@@ -31,26 +26,35 @@ class HostAgent:
     """AI Agent that manages infrastructure on a single host."""
 
     def __init__(self,
-                 infrastructure_service: InfrastructureService,
-                 host_id: str,
-                 host_ip: str,
+                 communication: AgentCommunication,
+                 tools: List[BaseTool],
+                 infrastructure_api_url: str = "http://localhost:8080",
+                 host_id: str = None,
+                 host_ip: str = None,
                  lmstudio_url: Optional[str] = None,
                  lmstudio_model: str = "default",
                  port: int = 4200):
         """Initialize the host agent."""
-        self.infrastructure_service = infrastructure_service
+        self.infrastructure_client = get_infrastructure_client(infrastructure_api_url)
+
+        # Use provided communication and tools
+        self.communication = communication
+        self.tools = tools
+
+        # Generate host_id and host_ip if not provided
+        if host_id is None:
+            host_id = str(uuid.uuid4())
+        if host_ip is None:
+            try:
+                host_ip = socket.gethostbyname(socket.gethostname())
+            except:
+                host_ip = "127.0.0.1"
+
         self.host_id = host_id
         self.host_ip = host_ip
         self.port = port
         self.lmstudio_url = lmstudio_url or "http://localhost:1234/v1"
         self.lmstudio_model = lmstudio_model
-
-        # Initialize communication
-        self.communication = AgentCommunication(host_id, host_ip, port)
-
-        # Initialize tools
-        self.infrastructure_tools = InfrastructureTools(infrastructure_service)
-        self.tools = self.infrastructure_tools.get_tools()
 
         # Initialize LLM and get actual model info
         self.llm, self.actual_model_name = self._initialize_llm()
@@ -62,6 +66,18 @@ class HostAgent:
         self._register_message_handlers()
 
         logger.info(f"Host agent initialized for host {host_id}")
+
+        self.system_prompt = f"""You are an AI agent running on host {self.host_id}.
+
+Your capabilities include:
+- Managing containers (list, start, stop, create)
+- Querying host information and resources
+- Executing commands on the host
+- Communicating with other hosts in the network
+- Processing user queries and requests
+
+You have access to various tools to help you accomplish these tasks. Always be helpful and provide clear, actionable responses.
+"""
 
     def _get_actual_model_name(self, lmstudio_url: str) -> str:
         """Get the actual model name from LMStudio."""
@@ -163,21 +179,10 @@ class HostAgent:
             logger.info("Creating agent with LLM type: %s", self.llm._llm_type)
             logger.info("Number of tools: %d", len(self.tools))
 
-            system_prompt = """You are an AI agent responsible for managing infrastructure on this host.
-
-Your capabilities include:
-- Managing Docker containers (list, start, stop, create)
-- Monitoring host resources (CPU, memory, disk)
-- Executing commands on the host
-- Communicating with agents on other hosts
-
-When asked about other hosts, use the appropriate tools to query them.
-Always provide clear, actionable responses and explain what you're doing.
-
-Current host: {host_id} ({host_ip})"""
+            system_prompt = self.system_prompt
 
             prompt = ChatPromptTemplate.from_messages([
-                ("system", system_prompt.format(host_id=self.host_id, host_ip=self.host_ip)),
+                ("system", system_prompt),
                 MessagesPlaceholder(variable_name="chat_history"),
                 ("human", "{input}"),
                 MessagesPlaceholder(variable_name="agent_scratchpad"),

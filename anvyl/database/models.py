@@ -79,9 +79,9 @@ class Host(SQLModel, table=True):
         self.updated_at = datetime.now(UTC)
 
 class Container(SQLModel, table=True):
-    """Container model representing Docker containers managed by Anvyl."""
+    """Container model representing containers managed by Anvyl."""
 
-    id: str = Field(primary_key=True)  # Docker container ID
+    id: str = Field(primary_key=True)  # Container ID
     name: str = Field(index=True)
     image: str = Field(index=True)
     host_id: str = Field(foreign_key="host.id", index=True)

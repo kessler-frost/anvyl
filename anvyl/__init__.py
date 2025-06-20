@@ -1,18 +1,31 @@
 """
-Anvyl Infrastructure Orchestrator
+Anvyl - AI-Powered Infrastructure Management
 
-A self-hosted infrastructure management platform designed specifically for Apple Silicon,
-providing container orchestration capabilities.
+A modern infrastructure management system that uses AI agents to manage
+infrastructure across multiple hosts using modern AI/ML tools.
 """
 
 __version__ = "0.1.0"
 __author__ = "Anvyl Team"
-__email__ = "team@anvyl.dev"
+__email__ = "team@anvyl.ai"
 
-from .infrastructure_service import get_infrastructure_service
+# Core infrastructure service
+from anvyl.infrastructure_service import get_infrastructure_service
+
+# Agent system
+from anvyl.agent import AgentManager, create_agent_manager, HostAgent
+
+# Database models
+from anvyl.database import DatabaseManager, Host, Container
 
 __all__ = [
     "get_infrastructure_service",
+    "AgentManager",
+    "create_agent_manager",
+    "HostAgent",
+    "DatabaseManager",
+    "Host",
+    "Container",
     "__version__",
     "__author__",
     "__email__"

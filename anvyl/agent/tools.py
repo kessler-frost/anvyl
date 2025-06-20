@@ -9,12 +9,11 @@ import logging
 from typing import Dict, List, Any, Optional
 from langchain.tools import BaseTool
 from pydantic import BaseModel, Field, PrivateAttr
-import docker
 import psutil
 import socket
 import json
 
-from ..infrastructure_service import InfrastructureService
+from anvyl.infrastructure_client import InfrastructureClient
 
 logger = logging.getLogger(__name__)
 
@@ -26,14 +25,14 @@ class ListContainersInput(BaseModel):
 
 class ContainerActionInput(BaseModel):
     """Input for container actions."""
-    container_id: str = Field(description="Docker container ID")
+    container_id: str = Field(description="Container ID")
     host_id: Optional[str] = Field(default=None, description="Host ID (None for local host)")
 
 
 class CreateContainerInput(BaseModel):
     """Input for creating containers."""
     name: str = Field(description="Container name")
-    image: str = Field(description="Docker image name")
+    image: str = Field(description="Container image name")
     host_id: Optional[str] = Field(default=None, description="Host ID (None for local host)")
     ports: Optional[List[str]] = Field(default=None, description="Port mappings (e.g., ['8080:80'])")
     environment: Optional[List[str]] = Field(default=None, description="Environment variables")
@@ -59,23 +58,23 @@ class ExecuteCommandInput(BaseModel):
 class InfrastructureTools:
     """Tools for managing infrastructure that AI agents can use."""
 
-    def __init__(self, infrastructure_service: InfrastructureService):
-        """Initialize tools with infrastructure service."""
-        self._infrastructure_service = infrastructure_service
+    def __init__(self, infrastructure_client: InfrastructureClient):
+        """Initialize tools with infrastructure client."""
+        self._infrastructure_client = infrastructure_client
         self.tools = self._create_tools()
 
     def _create_tools(self) -> List[BaseTool]:
         """Create all available tools."""
         return [
-            ListContainersTool(self._infrastructure_service),
-            GetContainerInfoTool(self._infrastructure_service),
-            StartContainerTool(self._infrastructure_service),
-            StopContainerTool(self._infrastructure_service),
-            CreateContainerTool(self._infrastructure_service),
-            GetHostInfoTool(self._infrastructure_service),
-            GetHostResourcesTool(self._infrastructure_service),
-            ListHostsTool(self._infrastructure_service),
-            ExecuteCommandTool(self._infrastructure_service),
+            ListContainersTool(self._infrastructure_client),
+            GetContainerInfoTool(self._infrastructure_client),
+            StartContainerTool(self._infrastructure_client),
+            StopContainerTool(self._infrastructure_client),
+            CreateContainerTool(self._infrastructure_client),
+            GetHostInfoTool(self._infrastructure_client),
+            GetHostResourcesTool(self._infrastructure_client),
+            ListHostsTool(self._infrastructure_client),
+            ExecuteCommandTool(self._infrastructure_client),
         ]
 
     def get_tools(self) -> List[BaseTool]:
@@ -89,16 +88,16 @@ class ListContainersTool(BaseTool):
     name: str = "list_containers"
     description: str = "List all containers on a host. Use host_id=None for local host."
     args_schema: type = ListContainersInput
-    _infrastructure_service: Any = PrivateAttr()
+    _infrastructure_client: Any = PrivateAttr()
 
-    def __init__(self, infrastructure_service: InfrastructureService):
+    def __init__(self, infrastructure_client: InfrastructureClient):
         super().__init__()
-        self._infrastructure_service = infrastructure_service
+        self._infrastructure_client = infrastructure_client
 
     def _run(self, host_id: Optional[str] = None) -> str:
         """List containers on the specified host."""
         try:
-            containers = self._infrastructure_service.list_containers(host_id)
+            containers = self._infrastructure_client.list_containers(host_id)
             if not containers:
                 return f"No containers found on host {host_id or 'local'}"
 
@@ -117,16 +116,16 @@ class GetContainerInfoTool(BaseTool):
     name: str = "get_container_info"
     description: str = "Get detailed information about a specific container."
     args_schema: type = ContainerActionInput
-    _infrastructure_service: Any = PrivateAttr()
+    _infrastructure_client: Any = PrivateAttr()
 
-    def __init__(self, infrastructure_service: InfrastructureService):
+    def __init__(self, infrastructure_client: InfrastructureClient):
         super().__init__()
-        self._infrastructure_service = infrastructure_service
+        self._infrastructure_client = infrastructure_client
 
     def _run(self, container_id: str, host_id: Optional[str] = None) -> str:
         """Get container information."""
         try:
-            containers = self._infrastructure_service.list_containers(host_id)
+            containers = self._infrastructure_client.list_containers(host_id)
             for container in containers:
                 if container['id'] == container_id or container['id'].startswith(container_id):
                     return json.dumps(container, indent=2)
@@ -141,22 +140,18 @@ class StartContainerTool(BaseTool):
     name: str = "start_container"
     description: str = "Start a stopped container."
     args_schema: type = ContainerActionInput
-    _infrastructure_service: Any = PrivateAttr()
+    _infrastructure_client: Any = PrivateAttr()
 
-    def __init__(self, infrastructure_service: InfrastructureService):
+    def __init__(self, infrastructure_client: InfrastructureClient):
         super().__init__()
-        self._infrastructure_service = infrastructure_service
+        self._infrastructure_client = infrastructure_client
 
     def _run(self, container_id: str, host_id: Optional[str] = None) -> str:
         """Start a container."""
         try:
-            if host_id is None:  # Local host
-                client = docker.from_env()
-                container = client.containers.get(container_id)
-                container.start()
-                return f"Started container {container_id}"
-            else:
-                return f"Remote container start not yet implemented for host {host_id}"
+            # Use infrastructure client to start container
+            # This will be implemented when we add container start functionality to the API
+            return f"Container start functionality not yet implemented via infrastructure API"
         except Exception as e:
             return f"Error starting container: {str(e)}"
 
@@ -167,22 +162,21 @@ class StopContainerTool(BaseTool):
     name: str = "stop_container"
     description: str = "Stop a running container."
     args_schema: type = ContainerActionInput
-    _infrastructure_service: Any = PrivateAttr()
+    _infrastructure_client: Any = PrivateAttr()
 
-    def __init__(self, infrastructure_service: InfrastructureService):
+    def __init__(self, infrastructure_client: InfrastructureClient):
         super().__init__()
-        self._infrastructure_service = infrastructure_service
+        self._infrastructure_client = infrastructure_client
 
     def _run(self, container_id: str, host_id: Optional[str] = None) -> str:
         """Stop a container."""
         try:
-            if host_id is None:  # Local host
-                client = docker.from_env()
-                container = client.containers.get(container_id)
-                container.stop()
+            # Use infrastructure client to stop container
+            success = self._infrastructure_client.stop_container(container_id)
+            if success:
                 return f"Stopped container {container_id}"
             else:
-                return f"Remote container stop not yet implemented for host {host_id}"
+                return f"Failed to stop container {container_id}"
         except Exception as e:
             return f"Error stopping container: {str(e)}"
 
@@ -193,31 +187,29 @@ class CreateContainerTool(BaseTool):
     name: str = "create_container"
     description: str = "Create and start a new container."
     args_schema: type = CreateContainerInput
-    _infrastructure_service: Any = PrivateAttr()
+    _infrastructure_client: Any = PrivateAttr()
 
-    def __init__(self, infrastructure_service: InfrastructureService):
+    def __init__(self, infrastructure_client: InfrastructureClient):
         super().__init__()
-        self._infrastructure_service = infrastructure_service
+        self._infrastructure_client = infrastructure_client
 
     def _run(self, name: str, image: str, host_id: Optional[str] = None,
              ports: Optional[List[str]] = None, environment: Optional[List[str]] = None,
              volumes: Optional[List[str]] = None) -> str:
         """Create a new container."""
         try:
-            if host_id is None:  # Local host
-                container = self._infrastructure_service.add_container(
-                    name=name,
-                    image=image,
-                    ports=ports,
-                    environment=environment,
-                    volumes=volumes
-                )
-                if container:
-                    return f"Created container {name} with ID {container['id']}"
-                else:
-                    return f"Failed to create container {name}"
+            container = self._infrastructure_client.add_container(
+                name=name,
+                image=image,
+                host_id=host_id,
+                ports=ports,
+                environment=environment,
+                volumes=volumes
+            )
+            if container:
+                return f"Created container {name} with ID {container['id']}"
             else:
-                return f"Remote container creation not yet implemented for host {host_id}"
+                return f"Failed to create container {name}"
         except Exception as e:
             return f"Error creating container: {str(e)}"
 
@@ -228,16 +220,16 @@ class GetHostInfoTool(BaseTool):
     name: str = "get_host_info"
     description: str = "Get information about a specific host."
     args_schema: type = HostQueryInput
-    _infrastructure_service: Any = PrivateAttr()
+    _infrastructure_client: Any = PrivateAttr()
 
-    def __init__(self, infrastructure_service: InfrastructureService):
+    def __init__(self, infrastructure_client: InfrastructureClient):
         super().__init__()
-        self._infrastructure_service = infrastructure_service
+        self._infrastructure_client = infrastructure_client
 
     def _run(self, host_id: Optional[str] = None) -> str:
         """Get host information."""
         try:
-            hosts = self._infrastructure_service.list_hosts()
+            hosts = self._infrastructure_client.list_hosts()
             if host_id is None:
                 for host in hosts:
                     if host.get('tags') and 'local' in host['tags']:
@@ -258,11 +250,11 @@ class GetHostResourcesTool(BaseTool):
     name: str = "get_host_resources"
     description: str = "Get current resource usage for a host."
     args_schema: type = HostQueryInput
-    _infrastructure_service: Any = PrivateAttr()
+    _infrastructure_client: Any = PrivateAttr()
 
-    def __init__(self, infrastructure_service: InfrastructureService):
+    def __init__(self, infrastructure_client: InfrastructureClient):
         super().__init__()
-        self._infrastructure_service = infrastructure_service
+        self._infrastructure_client = infrastructure_client
 
     def _run(self, host_id: Optional[str] = None) -> str:
         """Get host resources."""
@@ -294,16 +286,16 @@ class ListHostsTool(BaseTool):
     name: str = "list_hosts"
     description: str = "List all hosts in the Anvyl network."
     args_schema: type = ListHostsInput
-    _infrastructure_service: Any = PrivateAttr()
+    _infrastructure_client: Any = PrivateAttr()
 
-    def __init__(self, infrastructure_service: InfrastructureService):
+    def __init__(self, infrastructure_client: InfrastructureClient):
         super().__init__()
-        self._infrastructure_service = infrastructure_service
+        self._infrastructure_client = infrastructure_client
 
     def _run(self) -> str:
         """List all hosts."""
         try:
-            hosts = self._infrastructure_service.list_hosts()
+            hosts = self._infrastructure_client.list_hosts()
             if not hosts:
                 return "No hosts found in the network"
 
@@ -323,11 +315,11 @@ class ExecuteCommandTool(BaseTool):
     name: str = "execute_command"
     description: str = "Execute a command on a host."
     args_schema: type = ExecuteCommandInput
-    _infrastructure_service: Any = PrivateAttr()
+    _infrastructure_client: Any = PrivateAttr()
 
-    def __init__(self, infrastructure_service: InfrastructureService):
+    def __init__(self, infrastructure_client: InfrastructureClient):
         super().__init__()
-        self._infrastructure_service = infrastructure_service
+        self._infrastructure_client = infrastructure_client
 
     def _run(self, command: str, host_id: Optional[str] = None) -> str:
         """Execute a command."""

@@ -1,14 +1,13 @@
 """
-Anvyl AI Agent System
+Anvyl Agent System
 
-This module provides distributed AI agents that can manage infrastructure
-across multiple hosts using LangChain and tool-use capabilities.
+This module provides the AI agent system for infrastructure management.
 """
 
-from .agent_manager import AgentManager, create_agent_manager
-from .host_agent import HostAgent
-from .tools import InfrastructureTools
-from .communication import AgentCommunication
+from anvyl.agent.agent_manager import AgentManager, create_agent_manager
+from anvyl.agent.host_agent import HostAgent
+from anvyl.agent.tools import InfrastructureTools
+from anvyl.agent.communication import AgentCommunication
 
 __all__ = [
     "AgentManager",

@@ -201,7 +201,7 @@ if __name__ == "__main__":
     def create_agent(self,
                     name: str,
                     provider: str = "lmstudio",
-                    model_id: str = "llama-3.2-1b-instruct-mlx",
+                    model_id: str = "deepseek/deepseek-r1-0528-qwen3-8b",
                     host: str = "localhost",
                     port: int = 50051,
                     verbose: bool = False,

@@ -76,9 +76,9 @@ class ModelProvider(ABC):
 
 
 class LMStudioProvider(ModelProvider):
-    """LM Studio model provider implementation."""
+    """LM Studio provider for local MLX models."""
 
-    def __init__(self, model_id: str = "llama-3.2-1b-instruct-mlx", **kwargs):
+    def __init__(self, model_id: str = "deepseek/deepseek-r1-0528-qwen3-8b", **kwargs):
         """
         Initialize LM Studio provider.
 
@@ -415,4 +415,21 @@ def create_model_provider(provider_type: str = "lmstudio", **kwargs) -> ModelPro
     if provider_type not in providers:
         raise ValueError(f"Unsupported provider type: {provider_type}. Available: {list(providers.keys())}")
 
-    return providers[provider_type](**kwargs)
+    # Handle parameter mapping for different providers
+    if provider_type == "ollama":
+        # Map CLI parameters to OllamaProvider parameters
+        provider_kwargs = {}
+        if "ollama_host" in kwargs:
+            provider_kwargs["host"] = kwargs["ollama_host"]
+        if "ollama_port" in kwargs:
+            provider_kwargs["port"] = kwargs["ollama_port"]
+
+        # Add any other kwargs that don't conflict
+        for key, value in kwargs.items():
+            if key not in ["ollama_host", "ollama_port"]:
+                provider_kwargs[key] = value
+
+        return providers[provider_type](**provider_kwargs)
+    else:
+        # For other providers, pass kwargs as-is
+        return providers[provider_type](**kwargs)

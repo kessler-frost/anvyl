@@ -563,7 +563,7 @@ app.add_typer(agent_app, name="agent")
 def agent_create(
     name: str = typer.Argument(..., help="Unique name for the AI agent"),
     provider: str = typer.Option("lmstudio", "--provider", "-pr", help="Model provider (lmstudio, ollama, openai, anthropic)"),
-    model_id: str = typer.Option("llama-3.2-1b-instruct-mlx", "--model", "-m", help="Model identifier to use"),
+    model_id: str = typer.Option("deepseek/deepseek-r1-0528-qwen3-8b", "--model", "-m", help="Model identifier to use"),
     anvyl_host: str = typer.Option("localhost", "--anvyl-host", help="Anvyl gRPC server host"),
     anvyl_port: int = typer.Option(50051, "--anvyl-port", help="Anvyl gRPC server port"),
     provider_host: str = typer.Option("localhost", "--provider-host", help="Model provider host (e.g., Ollama server host)"),
@@ -584,8 +584,8 @@ def agent_create(
         # Set provider host/port based on provider type
         if provider == "ollama":
             provider_kwargs.update({
-                "host": provider_host,
-                "port": provider_port or 11434  # Default Ollama port
+                "ollama_host": provider_host,
+                "ollama_port": provider_port or 11434  # Default Ollama port
             })
         elif provider in ["openai", "anthropic"]:
             if api_key:
@@ -1005,19 +1005,24 @@ def agent_info(
             console.print(f"[yellow]List available agents: anvyl agent list[/yellow]")
             raise typer.Exit(1)
 
-        is_running = manager.get_agent(name) is not None
+        # Check if agent is running using the new container-based method
+        status_info = manager.get_agent_status(name)
+        is_running = status_info and status_info.get("running", False)
 
         # Create info panel
         info_text = f"""[bold cyan]Name:[/bold cyan] {config.name}
 [bold cyan]Status:[/bold cyan] {'🟢 Running' if is_running else '🔴 Stopped'}
 [bold cyan]Provider:[/bold cyan] {config.provider}
 [bold cyan]Model:[/bold cyan] {config.model_id}
-[bold cyan]Host:[/bold cyan] {config.host}:{config.port}
+[bold cyan]Anvyl Server:[/bold cyan] {config.host}:{config.port}
 [bold cyan]Verbose:[/bold cyan] {config.verbose}
 [bold cyan]Created:[/bold cyan] {config.created_at}"""
 
         if config.provider_kwargs:
             info_text += f"\n[bold cyan]Provider Config:[/bold cyan] {config.provider_kwargs}"
+
+        if status_info and status_info.get("container_id"):
+            info_text += f"\n[bold cyan]Container:[/bold cyan] {status_info['container_id']}"
 
         console.print(Panel(info_text, title=f"🤖 Agent: {name}", border_style="blue"))
 
@@ -1026,7 +1031,7 @@ def agent_info(
         if not is_running:
             console.print(f"  Start agent: anvyl agent start {name}")
         console.print(f"  Execute action: anvyl agent act {name} \"show all hosts\"")
-        console.print(f"  Interactive session: anvyl agent session {name}")
+        console.print(f"  View logs: anvyl agent logs {name}")
         console.print(f"  Show actions: anvyl agent actions {name}")
 
     except Exception as e:

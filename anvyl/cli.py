@@ -21,6 +21,7 @@ import docker
 
 from .infrastructure_service import get_infrastructure_service
 from .database.models import DatabaseManager
+from .agent import AgentManager, create_agent_manager
 
 # Initialize rich console
 console = Console()
@@ -587,6 +588,178 @@ def version():
         title="Version Info",
         border_style="blue"
     ))
+
+# Agent Management Commands
+agent_group = typer.Typer(help="Manage AI agents for infrastructure automation.")
+app.add_typer(agent_group, name="agent")
+
+@agent_group.command("start")
+def start_agent(
+    lmstudio_url: Optional[str] = typer.Option(None, "--lmstudio-url", "-u", help="LMStudio API URL (default: http://localhost:1234/v1)"),
+    lmstudio_model: str = typer.Option("default", "--model", "-m", help="LMStudio model name"),
+    port: int = typer.Option(8080, "--port", "-p", help="Port for agent API"),
+    background: bool = typer.Option(False, "--background", "-b", help="Run in background")
+):
+    """Start the AI agent for this host."""
+    try:
+        console.print("🤖 [bold blue]Starting Anvyl AI Agent[/bold blue]")
+
+        # Set default LMStudio URL if not provided
+        if not lmstudio_url:
+            lmstudio_url = "http://localhost:1234/v1"
+            console.print(f"[yellow]Using default LMStudio URL: {lmstudio_url}[/yellow]")
+            console.print("[yellow]Make sure LMStudio is running and serving models on this URL[/yellow]")
+
+        # Create and start agent manager
+        agent_manager = create_agent_manager(lmstudio_url=lmstudio_url, lmstudio_model=lmstudio_model, port=port)
+
+        console.print(f"✅ [green]Agent initialized for host[/green]")
+        console.print(f"🌐 [bold]Agent API:[/bold] http://localhost:{port}")
+        console.print(f"📋 [bold]API Docs:[/bold] http://localhost:{port}/docs")
+        console.print(f"🧠 [bold]LLM:[/bold] LMStudio at {lmstudio_url}")
+        console.print(f"🤖 [bold]Model:[/bold] {lmstudio_model}")
+
+        if background:
+            console.print("🔄 [yellow]Starting agent in background...[/yellow]")
+            # In a real implementation, you'd want to use a proper process manager
+            # For now, we'll just run it in the foreground
+            console.print("[yellow]Background mode not yet implemented. Running in foreground.[/yellow]")
+
+        console.print("\n🚀 [bold green]Starting agent server...[/bold green]")
+        agent_manager.run()
+
+    except Exception as e:
+        console.print(f"[red]Error starting agent: {e}[/red]")
+        raise typer.Exit(1)
+
+@agent_group.command("query")
+def query_agent(
+    query: str = typer.Argument(..., help="Query to send to the agent"),
+    host_id: Optional[str] = typer.Option(None, "--host-id", help="Target host ID (default: local)"),
+    port: int = typer.Option(8080, "--port", "-p", help="Agent API port")
+):
+    """Send a query to an AI agent."""
+    try:
+        import requests
+
+        if host_id:
+            # Query remote agent
+            url = f"http://localhost:{port}/agent/remote-query"
+            data = {"host_id": host_id, "query": query}
+        else:
+            # Query local agent
+            url = f"http://localhost:{port}/agent/process"
+            data = {"query": query}
+
+        console.print(f"🤖 [bold blue]Sending query to agent:[/bold blue] {query}")
+
+        response = requests.post(url, json=data)
+
+        if response.status_code == 200:
+            result = response.json()
+            console.print(f"✅ [green]Agent response:[/green]")
+            console.print(Panel(result.get("response", "No response"), title="Agent Response"))
+        else:
+            console.print(f"[red]Error: HTTP {response.status_code}[/red]")
+            console.print(f"[red]Response: {response.text}[/red]")
+
+    except Exception as e:
+        console.print(f"[red]Error querying agent: {e}[/red]")
+        raise typer.Exit(1)
+
+@agent_group.command("hosts")
+def list_agent_hosts(
+    port: int = typer.Option(8080, "--port", "-p", help="Agent API port")
+):
+    """List hosts known to the agent."""
+    try:
+        import requests
+
+        url = f"http://localhost:{port}/agent/hosts"
+        response = requests.get(url)
+
+        if response.status_code == 200:
+            data = response.json()
+            known_hosts = data.get("known_hosts", {})
+
+            if known_hosts:
+                table = Table(title="Known Hosts")
+                table.add_column("Host ID", style="cyan")
+                table.add_column("IP Address", style="green")
+
+                for host_id, host_ip in known_hosts.items():
+                    table.add_row(host_id, host_ip)
+
+                console.print(table)
+            else:
+                console.print("[yellow]No known hosts[/yellow]")
+        else:
+            console.print(f"[red]Error: HTTP {response.status_code}[/red]")
+
+    except Exception as e:
+        console.print(f"[red]Error listing agent hosts: {e}[/red]")
+        raise typer.Exit(1)
+
+@agent_group.command("add-host")
+def add_agent_host(
+    host_id: str = typer.Argument(..., help="Host ID"),
+    host_ip: str = typer.Argument(..., help="Host IP address"),
+    port: int = typer.Option(8080, "--port", "-p", help="Agent API port")
+):
+    """Add a host to the agent's known hosts list."""
+    try:
+        import requests
+
+        url = f"http://localhost:{port}/agent/hosts"
+        data = {"host_id": host_id, "host_ip": host_ip}
+
+        response = requests.post(url, json=data)
+
+        if response.status_code == 200:
+            result = response.json()
+            console.print(f"✅ [green]{result.get('message', 'Host added')}[/green]")
+        else:
+            console.print(f"[red]Error: HTTP {response.status_code}[/red]")
+            console.print(f"[red]Response: {response.text}[/red]")
+
+    except Exception as e:
+        console.print(f"[red]Error adding host: {e}[/red]")
+        raise typer.Exit(1)
+
+@agent_group.command("info")
+def get_agent_info(
+    port: int = typer.Option(8080, "--port", "-p", help="Agent API port")
+):
+    """Get information about the agent."""
+    try:
+        import requests
+
+        url = f"http://localhost:{port}/agent/info"
+        response = requests.get(url)
+
+        if response.status_code == 200:
+            info = response.json()
+
+            console.print(Panel(
+                f"Host ID: {info.get('host_id')}\n"
+                f"Host IP: {info.get('host_ip')}\n"
+                f"Port: {info.get('port')}\n"
+                f"LLM Model: {info.get('llm_model')}\n"
+                f"Tools Available: {', '.join(info.get('tools_available', []))}",
+                title="Agent Information"
+            ))
+
+            known_hosts = info.get("known_hosts", {})
+            if known_hosts:
+                console.print("\n[bold]Known Hosts:[/bold]")
+                for host_id, host_ip in known_hosts.items():
+                    console.print(f"  • {host_id} -> {host_ip}")
+        else:
+            console.print(f"[red]Error: HTTP {response.status_code}[/red]")
+
+    except Exception as e:
+        console.print(f"[red]Error getting agent info: {e}[/red]")
+        raise typer.Exit(1)
 
 if __name__ == "__main__":
     app()

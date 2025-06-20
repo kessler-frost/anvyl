@@ -14,6 +14,7 @@ from typing import Dict, List, Any, Optional
 import docker
 import psutil
 import socket
+import json
 
 from .database.models import DatabaseManager, Host, Container
 
@@ -75,7 +76,7 @@ class InfrastructureService:
                 os="macOS",  # Can be detected dynamically
                 last_seen=datetime.now(UTC),
                 status="online",
-                tags=["local", "anvyl-server"]
+                tags=json.dumps(["local", "anvyl-server"])
             )
             self.db.add_host(host)
             logger.info(f"Registered new local host: {hostname} ({local_ip})")

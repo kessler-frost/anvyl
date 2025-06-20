@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 """
-Anvyl CLI - Command line interface for Anvyl infrastructure orchestrator
+Anvyl CLI - Command Line Interface for Anvyl Infrastructure Orchestrator
+
+This module provides a comprehensive CLI for managing Anvyl infrastructure,
+including hosts, containers, agents, and monitoring capabilities.
 """
 
 import typer
+import json
 import os
 from typing import List, Optional, Dict, Any
 from rich.console import Console
@@ -11,12 +15,11 @@ from rich.table import Table
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.panel import Panel
 from rich.tree import Tree
-from rich import print as rprint
-import json
 import sys
 import logging
 
 from .grpc_client import AnvylClient
+from .database.models import DatabaseManager
 
 # Ensure protobuf files are generated automatically
 from .proto_utils import ensure_protos_generated
@@ -556,339 +559,557 @@ def exec_command(
 agent_app = typer.Typer(help="Agent management commands.")
 app.add_typer(agent_app, name="agent")
 
-@agent_app.command("list")
-def list_agents(
-    host_id: Optional[str] = typer.Option(None, "--host-id", help="Filter by host ID"),
-    host: str = typer.Option("localhost", "--host", "-h", help="Anvyl server host"),
-    port: int = typer.Option(50051, "--port", "-p", help="Anvyl server port"),
-    output: str = typer.Option("table", "--output", "-o", help="Output format: table, json")
+@agent_app.command("create")
+def agent_create(
+    name: str = typer.Argument(..., help="Unique name for the AI agent"),
+    provider: str = typer.Option("lmstudio", "--provider", "-pr", help="Model provider (lmstudio, ollama, openai, anthropic)"),
+    model_id: str = typer.Option("llama-3.2-1b-instruct-mlx", "--model", "-m", help="Model identifier to use"),
+    anvyl_host: str = typer.Option("localhost", "--anvyl-host", help="Anvyl gRPC server host"),
+    anvyl_port: int = typer.Option(50051, "--anvyl-port", help="Anvyl gRPC server port"),
+    provider_host: str = typer.Option("localhost", "--provider-host", help="Model provider host (e.g., Ollama server host)"),
+    provider_port: int = typer.Option(None, "--provider-port", help="Model provider port (e.g., Ollama server port)"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output"),
+    api_key: Optional[str] = typer.Option(None, "--api-key", help="API key for cloud providers"),
+    auto_start: bool = typer.Option(False, "--start", "-s", help="Automatically start the agent after creation")
 ):
-    """List agents."""
-    client = get_client(host, port)
+    """Create a new AI agent with specified configuration."""
+    try:
+        from .agent_manager import get_agent_manager
 
-    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
-        task = progress.add_task("Fetching agents...", total=None)
-        agents = client.list_agents(host_id)
+        console.print(f"🤖 [bold blue]Creating AI Agent '{name}' with {provider}...[/bold blue]")
 
-    if not agents:
-        console.print("[yellow]No agents found[/yellow]")
-        return
+        # Prepare provider-specific kwargs
+        provider_kwargs = {}
 
-    if output == "json":
-        agents_data = []
-        for agent in agents:
-            agent_dict = {
-                "id": getattr(agent, 'id', ''),
-                "name": getattr(agent, 'name', ''),
-                "status": getattr(agent, 'status', ''),
-                "host_id": getattr(agent, 'host_id', ''),
-                "entrypoint": getattr(agent, 'entrypoint', ''),
-                "persistent": getattr(agent, 'persistent', False)
-            }
-            agents_data.append(agent_dict)
-        console.print(json.dumps(agents_data, indent=2))
-    else:
-        table = Table(title="Anvyl Agents")
-        table.add_column("ID", style="cyan")
-        table.add_column("Name", style="green")
-        table.add_column("Status", style="magenta")
-        table.add_column("Host", style="yellow")
-        table.add_column("Entrypoint", style="blue")
-        table.add_column("Persistent", style="dim")
+        # Set provider host/port based on provider type
+        if provider == "ollama":
+            provider_kwargs.update({
+                "host": provider_host,
+                "port": provider_port or 11434  # Default Ollama port
+            })
+        elif provider in ["openai", "anthropic"]:
+            if api_key:
+                provider_kwargs["api_key"] = api_key
+            else:
+                # Check environment variables
+                env_key = f"{provider.upper()}_API_KEY"
+                api_key = os.getenv(env_key)
+                if api_key:
+                    provider_kwargs["api_key"] = api_key
+                else:
+                    console.print(f"[yellow]Warning: No API key provided for {provider}. Set --api-key or {env_key} env var[/yellow]")
+        elif provider == "lmstudio":
+            # LM Studio typically runs locally, no additional host/port needed
+            pass
 
-        for agent in agents:
-            table.add_row(
-                getattr(agent, 'id', '')[:12],  # Short ID
-                getattr(agent, 'name', ''),
-                getattr(agent, 'status', ''),
-                getattr(agent, 'host_id', ''),
-                getattr(agent, 'entrypoint', ''),
-                "Yes" if getattr(agent, 'persistent', False) else "No"
-            )
-
-        console.print(table)
-
-@agent_app.command("launch")
-def launch_agent(
-    name: str = typer.Argument(..., help="Agent name"),
-    host_id: str = typer.Argument(..., help="Target host ID"),
-    entrypoint: str = typer.Argument(..., help="Agent entrypoint script"),
-    env: List[str] = typer.Option([], "--env", "-e", help="Environment variables"),
-    use_container: bool = typer.Option(False, "--container", help="Run in container"),
-    working_dir: str = typer.Option("", "--workdir", "-w", help="Working directory"),
-    arguments: List[str] = typer.Option([], "--arg", "-a", help="Command arguments"),
-    persistent: bool = typer.Option(False, "--persistent", help="Make agent persistent"),
-    host: str = typer.Option("localhost", "--host", "-h", help="Anvyl server host"),
-    port: int = typer.Option(50051, "--port", "-p", help="Anvyl server port")
-):
-    """Launch a new agent."""
-    client = get_client(host, port)
-
-    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
-        task = progress.add_task(f"Launching agent {name}...", total=None)
-        result = client.launch_agent(
+        # Create agent configuration
+        manager = get_agent_manager()
+        config = manager.create_agent(
             name=name,
-            host_id=host_id,
-            entrypoint=entrypoint,
-            env=env,
-            use_container=use_container,
-            working_directory=working_dir,
-            arguments=arguments,
-            persistent=persistent
+            provider=provider,
+            model_id=model_id,
+            host=anvyl_host,
+            port=anvyl_port,
+            verbose=verbose,
+            **provider_kwargs
         )
 
-    if result:
-        console.print(f"[green]✓[/green] Successfully launched agent: {name}")
-        console.print(f"Agent ID: {getattr(result, 'id', 'N/A')}")
-    else:
-        console.print(f"[red]✗[/red] Failed to launch agent: {name}")
+        console.print(f"✅ [bold green]Agent '{name}' created successfully![/bold green]")
+        console.print(f"   Provider: {config.provider}")
+        console.print(f"   Model: {config.model_id}")
+        console.print(f"   Anvyl Server: {config.host}:{config.port}")
+
+        # Show provider-specific info
+        if provider == "ollama":
+            provider_info = f"Ollama: {provider_host}:{provider_port or 11434}"
+        elif provider in ["openai", "anthropic"]:
+            provider_info = f"{provider.title()}: Cloud API"
+        else:
+            provider_info = f"{provider.title()}: Local"
+        console.print(f"   Provider Config: {provider_info}")
+
+        # Auto-start if requested
+        if auto_start:
+            console.print(f"\n🚀 [bold yellow]Starting agent '{name}'...[/bold yellow]")
+            manager.start_agent(name)
+            console.print(f"✅ [bold green]Agent '{name}' is now running![/bold green]")
+            console.print(f"\n💡 [bold]Usage:[/bold] anvyl agent act {name} \"<your instruction>\"")
+        else:
+            console.print(f"\n💡 [bold]Next steps:[/bold]")
+            console.print(f"   Start agent: anvyl agent start {name}")
+            console.print(f"   Execute actions: anvyl agent act {name} \"<your instruction>\"")
+
+    except ValueError as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
+    except Exception as e:
+        console.print(f"[red]Unexpected error: {e}[/red]")
+        raise typer.Exit(1)
+
+@agent_app.command("start")
+def agent_start(
+    name: str = typer.Argument(..., help="Name of the AI agent to start")
+):
+    """Start an AI agent in a Docker container."""
+    try:
+        from .agent_manager import get_agent_manager
+
+        console.print(f"🚀 [bold blue]Starting AI Agent '{name}' in container...[/bold blue]")
+
+        manager = get_agent_manager()
+
+        # Check if agent exists first
+        config = manager.get_agent_config(name)
+        if not config:
+            console.print(f"[red]Error: Agent '{name}' not found.[/red]")
+            console.print(f"[yellow]Create the agent first: anvyl agent create {name}[/yellow]")
+            raise typer.Exit(1)
+
+        # Start the agent
+        if manager.start_agent(name):
+            console.print(f"✅ [bold green]Agent '{name}' is now running in container![/bold green]")
+            console.print(f"   Provider: {config.provider}")
+            console.print(f"   Model: {config.model_id}")
+            console.print(f"   gRPC Server: {config.host}:{config.port}")
+
+            console.print(f"\n💡 [bold]Usage:[/bold] anvyl agent act {name} \"<your instruction>\"")
+            console.print(f"📋 [bold]View logs:[/bold] anvyl agent logs {name}")
+        else:
+            console.print(f"[red]Failed to start agent '{name}'[/red]")
+            raise typer.Exit(1)
+
+    except ValueError as e:
+        console.print(f"[red]Error: {e}[/red]")
+        if "not found" in str(e):
+            console.print(f"[yellow]Create the agent first: anvyl agent create {name}[/yellow]")
+        raise typer.Exit(1)
+    except RuntimeError as e:
+        console.print(f"[red]Error: {e}[/red]")
+        if "Docker is not available" in str(e):
+            console.print(f"[yellow]Please install and start Docker, then try again[/yellow]")
+        raise typer.Exit(1)
+    except Exception as e:
+        console.print(f"[red]Unexpected error: {e}[/red]")
         raise typer.Exit(1)
 
 @agent_app.command("stop")
-def stop_agent(
-    agent_id: str = typer.Argument(..., help="Agent ID"),
-    host: str = typer.Option("localhost", "--host", "-h", help="Anvyl server host"),
-    port: int = typer.Option(50051, "--port", "-p", help="Anvyl server port")
+def agent_stop(
+    name: str = typer.Argument(..., help="Name of the AI agent to stop")
 ):
-    """Stop an agent."""
-    client = get_client(host, port)
-
-    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
-        task = progress.add_task(f"Stopping agent {agent_id}...", total=None)
-        success = client.stop_agent(agent_id)
-
-    if success:
-        console.print(f"[green]✓[/green] Successfully stopped agent: {agent_id}")
-    else:
-        console.print(f"[red]✗[/red] Failed to stop agent: {agent_id}")
-        raise typer.Exit(1)
-
-@agent_app.command("chat")
-def agent_chat(
-    agent_name: str = typer.Argument(..., help="Name of the AI agent to use"),
-    message: str = typer.Argument(..., help="Natural language message for the AI agent"),
-    model_id: str = typer.Option("llama-3.2-1b-instruct-mlx", "--model", "-m", help="LMStudio model to use"),
-    host: str = typer.Option("localhost", "--host", "-h", help="Anvyl server host"),
-    port: int = typer.Option(50051, "--port", "-p", help="Anvyl server port"),
-    verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output")
-):
-    """Send a message to the AI agent and get a response."""
+    """Stop a running AI agent container."""
     try:
-        from .ai_agent import create_ai_agent
-        
-        console.print(f"🤖 [bold blue]Initializing AI Agent '{agent_name}'...[/bold blue]")
-        
-        # Create AI agent
-        agent = create_ai_agent(model_id, host, port, verbose, agent_name=agent_name)
-        
-        console.print(f"✅ Connected to Anvyl server at {host}:{port}")
-        console.print(f"✅ Using LMStudio model: {model_id}")
-        
-        # Discover agents and route command
-        console.print(f"🔍 [bold yellow]Discovering agents...[/bold yellow]")
-        discovery_result = agent._discover_agents()
-        
-        if not discovery_result["success"]:
-            console.print(f"[red]Error discovering agents: {discovery_result['error']}[/red]")
-            raise typer.Exit(1)
-        
-        # Find the target agent
-        target_agent = None
-        for agent_info in discovery_result["agents"]:
-            if agent_info["name"] == agent_name:
-                target_agent = agent_info
-                break
-        
-        if not target_agent:
-            available_agents = [a["name"] for a in discovery_result["agents"]]
-            console.print(f"[red]Agent '{agent_name}' not found.[/red]")
-            console.print(f"[yellow]Available agents: {available_agents}[/yellow]")
-            raise typer.Exit(1)
-        
-        console.print(f"✅ [bold green]Found agent '{agent_name}' on host {target_agent['host_name']} ({target_agent['host_ip']})[/bold green]")
-        
-        # Send message and get response
-        console.print(f"\n💬 [bold cyan]You:[/bold cyan] {message}")
-        console.print("\n[bold blue]AI:[/bold blue] Thinking...")
-        
-        response = agent.chat(message)
-        console.print(f"\n[bold blue]AI:[/bold blue] {response}")
-        
+        from .agent_manager import get_agent_manager
+
+        manager = get_agent_manager()
+        if manager.stop_agent(name):
+            console.print(f"✅ [bold green]Agent '{name}' stopped successfully![/bold green]")
+        else:
+            console.print(f"[yellow]Agent '{name}' is not running[/yellow]")
+
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
         raise typer.Exit(1)
 
-@agent_app.command("interactive")
-def agent_interactive(
-    agent_name: str = typer.Argument(..., help="Name of the AI agent to use"),
-    model_id: str = typer.Option("llama-3.2-1b-instruct-mlx", "--model", "-m", help="LMStudio model to use"),
-    host: str = typer.Option("localhost", "--host", "-h", help="Anvyl server host"),
-    port: int = typer.Option(50051, "--port", "-p", help="Anvyl server port"),
-    verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output")
+@agent_app.command("logs")
+def agent_logs(
+    name: str = typer.Argument(..., help="Name of the AI agent to show logs for"),
+    tail: int = typer.Option(100, "--tail", "-n", help="Number of lines to show"),
+    follow: bool = typer.Option(False, "--follow", "-f", help="Follow log output")
 ):
-    """Start an interactive chat session with the AI agent."""
+    """Show logs from an AI agent container."""
     try:
-        from .ai_agent import create_ai_agent
-        
-        console.print(f"🤖 [bold blue]Initializing AI Agent '{agent_name}'...[/bold blue]")
-        
-        # Create AI agent
-        agent = create_ai_agent(model_id, host, port, verbose, agent_name=agent_name)
-        
-        console.print(f"✅ Connected to Anvyl server at {host}:{port}")
-        console.print(f"✅ Using LMStudio model: {model_id}")
-        
-        # Discover agents and verify target agent exists
-        console.print(f"🔍 [bold yellow]Discovering agents...[/bold yellow]")
-        discovery_result = agent._discover_agents()
-        
-        if not discovery_result["success"]:
-            console.print(f"[red]Error discovering agents: {discovery_result['error']}[/red]")
-            raise typer.Exit(1)
-        
-        # Find the target agent
-        target_agent = None
-        for agent_info in discovery_result["agents"]:
-            if agent_info["name"] == agent_name:
-                target_agent = agent_info
-                break
-        
-        if not target_agent:
-            available_agents = [a["name"] for a in discovery_result["agents"]]
-            console.print(f"[red]Agent '{agent_name}' not found.[/red]")
-            console.print(f"[yellow]Available agents: {available_agents}[/yellow]")
-            raise typer.Exit(1)
-        
-        console.print(f"✅ [bold green]Found agent '{agent_name}' on host {target_agent['host_name']} ({target_agent['host_ip']})[/bold green]")
-        
-        # Start interactive session
-        agent.interactive_chat()
-        
+        from .agent_manager import get_agent_manager
+
+        manager = get_agent_manager()
+        logs = manager.get_agent_logs(name, tail=tail, follow=follow)
+
+        if logs:
+            if follow:
+                # For follow mode, we need to stream the logs
+                import subprocess
+                config = manager.get_agent_config(name)
+                if config and config.container_id:
+                    cmd = ['docker', 'logs', '-f', '--tail', str(tail), config.container_id]
+                    try:
+                        subprocess.run(cmd)
+                    except KeyboardInterrupt:
+                        console.print("\n[yellow]Stopped following logs[/yellow]")
+            else:
+                console.print(logs)
+        else:
+            console.print(f"[red]No logs available for agent '{name}'[/red]")
+
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
         raise typer.Exit(1)
 
-@agent_app.command("demo")
-def agent_demo(
+@agent_app.command("act")
+def agent_act(
     agent_name: str = typer.Argument(..., help="Name of the AI agent to use"),
-    model_id: str = typer.Option("llama-3.2-1b-instruct-mlx", "--model", "-m", help="LMStudio model to use"),
-    host: str = typer.Option("localhost", "--host", "-h", help="Anvyl server host"),
-    port: int = typer.Option(50051, "--port", "-p", help="Anvyl server port")
+    instruction: str = typer.Argument(..., help="Natural language instruction for the AI agent to execute")
 ):
-    """Run a demo of AI agent capabilities."""
+    """Execute an instruction using a configured AI agent."""
     try:
-        from .ai_agent import create_ai_agent
-        
-        console.print(f"🎬 [bold blue]Anvyl AI Agent Demo for '{agent_name}'[/bold blue]")
-        console.print("This demo will show various AI agent capabilities.\n")
-        
-        # Create AI agent
-        agent = create_ai_agent(model_id, host, port, verbose=False, agent_name=agent_name)
-        
-        # Discover agents and verify target agent exists
-        console.print(f"🔍 [bold yellow]Discovering agents...[/bold yellow]")
-        discovery_result = agent._discover_agents()
-        
-        if not discovery_result["success"]:
-            console.print(f"[red]Error discovering agents: {discovery_result['error']}[/red]")
+        from .agent_manager import get_agent_manager
+
+        manager = get_agent_manager()
+
+        # Check if agent exists
+        config = manager.get_agent_config(agent_name)
+        if not config:
+            console.print(f"[red]Error: Agent '{agent_name}' not found.[/red]")
+            console.print(f"[yellow]Create the agent first: anvyl agent create {agent_name}[/yellow]")
             raise typer.Exit(1)
-        
-        # Find the target agent
-        target_agent = None
-        for agent_info in discovery_result["agents"]:
-            if agent_info["name"] == agent_name:
-                target_agent = agent_info
-                break
-        
-        if not target_agent:
-            available_agents = [a["name"] for a in discovery_result["agents"]]
-            console.print(f"[red]Agent '{agent_name}' not found.[/red]")
-            console.print(f"[yellow]Available agents: {available_agents}[/yellow]")
-            raise typer.Exit(1)
-        
-        console.print(f"✅ [bold green]Found agent '{agent_name}' on host {target_agent['host_name']} ({target_agent['host_ip']})[/bold green]")
-        
-        # Demo messages
-        demo_messages = [
-            "What's the current system status?",
-            "Show me all hosts",
-            "List all containers",
-            "Create a simple nginx container",
-            "What agents are running?"
-        ]
-        
-        for i, message in enumerate(demo_messages, 1):
-            console.print(f"\n[bold yellow]Demo {i}/{len(demo_messages)}:[/bold yellow] {message}")
-            console.print("[bold blue]AI:[/bold blue] Processing...")
-            
+
+        # Check if agent is running
+        status_info = manager.get_agent_status(agent_name)
+        if not status_info or not status_info.get("running", False):
+            console.print(f"🚀 [bold yellow]Agent '{agent_name}' not running. Starting...[/bold yellow]")
             try:
-                response = agent.chat(message)
-                console.print(f"[bold blue]AI:[/bold blue] {response}")
+                if manager.start_agent(agent_name):
+                    console.print(f"✅ [bold green]Agent '{agent_name}' started![/bold green]")
+                else:
+                    console.print(f"[red]Failed to start agent '{agent_name}'[/red]")
+                    raise typer.Exit(1)
             except Exception as e:
-                console.print(f"[red]Error: {e}[/red]")
-            
-            if i < len(demo_messages):
-                console.print("\n" + "─" * 50)
-        
-        console.print("\n✅ [bold green]Demo completed![/bold green]")
-        console.print("💡 Try 'anvyl agent interactive <agent_name>' for a full interactive session.")
-        
+                console.print(f"[red]Error starting agent: {e}[/red]")
+                raise typer.Exit(1)
+
+        # Execute the instruction by calling the agent via gRPC
+        console.print(f"\n🔄 [bold cyan]Executing:[/bold cyan] {instruction}")
+        console.print("⏳ [bold blue]Processing...[/bold blue]")
+
+        # Execute the instruction via gRPC
+        try:
+            from .grpc_client import AnvylClient
+
+            # Connect to gRPC server
+            client = AnvylClient(config.host, config.port)
+            if not client.connect():
+                console.print(f"[red]Failed to connect to gRPC server at {config.host}:{config.port}[/red]")
+                raise typer.Exit(1)
+
+            # Execute instruction
+            result = client.execute_agent_instruction(agent_name, instruction)
+
+            if result and result.get("success"):
+                console.print(f"\n✅ [bold green]Result:[/bold green] {result['result']}")
+            else:
+                error_msg = result.get("error_message", "Unknown error") if result else "No response from server"
+                console.print(f"\n❌ [bold red]Error:[/bold red] {error_msg}")
+                raise typer.Exit(1)
+
+        except Exception as e:
+            console.print(f"\n❌ [bold red]Error executing instruction:[/bold red] {e}")
+            raise typer.Exit(1)
+
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
+
+@agent_app.command("execute")
+def agent_execute(
+    agent_name: str = typer.Argument(..., help="Name of the AI agent to use"),
+    instruction: str = typer.Argument(..., help="Natural language instruction for the AI agent to execute")
+):
+    """Execute an instruction using a configured AI agent (alias for 'act' command)."""
+    return agent_act(agent_name, instruction)
+
+@agent_app.command("session")
+def agent_session(
+    agent_name: str = typer.Argument(..., help="Name of the AI agent to use")
+):
+    """Start an interactive action execution session with a configured AI agent."""
+    try:
+        from .agent_manager import get_agent_manager
+
+        manager = get_agent_manager()
+
+        # Check if agent exists
+        config = manager.get_agent_config(agent_name)
+        if not config:
+            console.print(f"[red]Error: Agent '{agent_name}' not found.[/red]")
+            console.print(f"[yellow]Create the agent first: anvyl agent create {agent_name}[/yellow]")
+            raise typer.Exit(1)
+
+        # Check if agent is running
+        status_info = manager.get_agent_status(agent_name)
+        if not status_info or not status_info.get("running", False):
+            console.print(f"🚀 [bold yellow]Agent '{agent_name}' not running. Starting...[/bold yellow]")
+            try:
+                if manager.start_agent(agent_name):
+                    console.print(f"✅ [bold green]Agent '{agent_name}' started![/bold green]")
+                else:
+                    console.print(f"[red]Failed to start agent '{agent_name}'[/red]")
+                    raise typer.Exit(1)
+            except Exception as e:
+                console.print(f"[red]Error starting agent: {e}[/red]")
+                raise typer.Exit(1)
+
+        # For containerized agents, interactive sessions need to be implemented differently
+        console.print(f"\n⚠️  [bold yellow]Note:[/bold yellow] Interactive sessions with containerized agents are not yet implemented.")
+        console.print(f"   The agent '{agent_name}' is running in a container.")
+        console.print(f"   Use 'anvyl agent logs {agent_name} --follow' to see real-time agent activity.")
+        console.print(f"   Use 'anvyl agent act {agent_name} \"<instruction>\"' to execute individual instructions.")
+
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
+
+@agent_app.command("actions")
+def agent_actions(
+    agent_name: str = typer.Argument(..., help="Name of the AI agent to query")
+):
+    """Show available actions for a configured AI agent."""
+    try:
+        from .agent_manager import get_agent_manager
+
+        manager = get_agent_manager()
+
+        # Get agent config to show basic info
+        config = manager.get_agent_config(agent_name)
+        if not config:
+            console.print(f"[red]Agent '{agent_name}' not found.[/red]")
+            console.print(f"[yellow]Create the agent first: anvyl agent create {agent_name}[/yellow]")
+            console.print(f"[yellow]List available agents: anvyl agent list[/yellow]")
+            raise typer.Exit(1)
+
+        # Show agent configuration and status
+        status_info = manager.get_agent_status(agent_name)
+
+        console.print(f"[bold cyan]Agent Configuration:[/bold cyan]")
+        console.print(f"   Name: {config.name}")
+        console.print(f"   Provider: {config.provider}")
+        console.print(f"   Model: {config.model_id}")
+        console.print(f"   gRPC Server: {config.host}:{config.port}")
+        console.print(f"   Status: {status_info.get('status', 'unknown') if status_info else 'unknown'}")
+
+        if status_info and status_info.get("container_id"):
+            console.print(f"   Container: {status_info['container_id']}")
+
+        console.print(f"\n[bold cyan]Available Actions:[/bold cyan]")
+        console.print(f"   • Host Management: List, add, and monitor hosts")
+        console.print(f"   • Container Management: Create, stop, view logs, execute commands")
+        console.print(f"   • Agent Management: Launch and manage infrastructure agents")
+        console.print(f"   • System Monitoring: Get real-time status and metrics")
+        console.print(f"   • UI Stack Management: Monitor and manage the Anvyl UI components")
+
+        console.print(f"\n💡 [bold]Usage:[/bold] anvyl agent act {agent_name} \"<your instruction>\"")
+        console.print(f"📋 [bold]View logs:[/bold] anvyl agent logs {agent_name}")
+
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
         raise typer.Exit(1)
 
 @agent_app.command("list")
-def list_agents_discovery(
-    host: str = typer.Option("localhost", "--host", "-h", help="Anvyl server host"),
-    port: int = typer.Option(50051, "--port", "-p", help="Anvyl server port"),
+def agent_list(
+    running_only: bool = typer.Option(False, "--running", "-r", help="Show only running agents"),
     output: str = typer.Option("table", "--output", "-o", help="Output format: table, json")
 ):
-    """List all available agents across all hosts."""
+    """List all configured AI agents."""
     try:
-        from .ai_agent import create_ai_agent
-        
-        console.print(f"🔍 [bold blue]Discovering agents across all hosts...[/bold blue]")
-        
-        # Create AI agent for discovery
-        agent = create_ai_agent(host=host, port=port, verbose=False)
-        
-        # Discover all agents
-        discovery_result = agent._discover_agents()
-        
-        if not discovery_result["success"]:
-            console.print(f"[red]Error discovering agents: {discovery_result['error']}[/red]")
-            raise typer.Exit(1)
-        
-        agents = discovery_result["agents"]
-        
+        from .agent_manager import get_agent_manager
+
+        manager = get_agent_manager()
+        agents = manager.list_agents()
+
+        if running_only:
+            agents = [a for a in agents if a.get("running", False)]
+
         if output == "json":
-            console.print(json.dumps(discovery_result, indent=2))
+            console.print(json.dumps(agents, indent=2))
         else:
             if not agents:
-                console.print("[yellow]No agents found across all hosts.[/yellow]")
+                status_msg = "running agents" if running_only else "configured agents"
+                console.print(f"[yellow]No {status_msg} found.[/yellow]")
+                if not running_only:
+                    console.print(f"[yellow]Create an agent: anvyl agent create <name>[/yellow]")
                 return
-            
-            # Create table
-            table = Table(title="🤖 Available Agents")
-            table.add_column("Name", style="cyan", no_wrap=True)
-            table.add_column("Status", style="green")
-            table.add_column("Host", style="blue")
-            table.add_column("Host IP", style="magenta")
-            table.add_column("Agent ID", style="dim")
-            
-            for agent_info in agents:
-                status_color = "green" if agent_info["status"] == "running" else "red"
+
+            table = Table(title="Anvyl AI Agents")
+            table.add_column("Name", style="cyan")
+            table.add_column("Provider", style="green")
+            table.add_column("Model", style="blue")
+            table.add_column("Status", style="yellow")
+            table.add_column("Container ID", style="magenta")
+
+            for agent in agents:
+                status_style = "green" if agent.get("running", False) else "red"
+                container_id = agent.get("container_id", "")
+                if container_id:
+                    container_id = container_id[:12] + "..." if len(container_id) > 12 else container_id
+
                 table.add_row(
-                    agent_info["name"],
-                    f"[{status_color}]{agent_info['status']}[/{status_color}]",
-                    agent_info["host_name"],
-                    agent_info["host_ip"],
-                    agent_info["id"]
+                    agent["name"],
+                    agent["provider"],
+                    agent["model_id"],
+                    agent.get("status", "unknown"),
+                    container_id
                 )
-            
+
             console.print(table)
-            console.print(f"\n[bold]Total agents found: {len(agents)}[/bold]")
-        
+
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
+
+@agent_app.command("remove")
+def agent_remove(
+    name: str = typer.Argument(..., help="Name of the AI agent to remove"),
+    force: bool = typer.Option(False, "--force", "-f", help="Force removal without confirmation")
+):
+    """Remove an AI agent configuration."""
+    try:
+        from .agent_manager import get_agent_manager
+
+        manager = get_agent_manager()
+        config = manager.get_agent_config(name)
+
+        if not config:
+            console.print(f"[red]Agent '{name}' not found.[/red]")
+            raise typer.Exit(1)
+
+        # Confirm removal unless forced
+        if not force:
+            console.print(f"[yellow]Are you sure you want to remove agent '{name}'?[/yellow]")
+            console.print(f"  Provider: {config.provider}")
+            console.print(f"  Model: {config.model_id}")
+            console.print(f"  Created: {config.created_at}")
+
+            confirm = typer.confirm("Remove this agent?")
+            if not confirm:
+                console.print("[yellow]Removal cancelled.[/yellow]")
+                return
+
+        # Remove the agent
+        manager.remove_agent(name)
+        console.print(f"✅ [bold green]Agent '{name}' removed successfully![/bold green]")
+
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
+
+@agent_app.command("info")
+def agent_info(
+    name: str = typer.Argument(..., help="Name of the AI agent to show info for")
+):
+    """Show detailed information about an AI agent."""
+    try:
+        from .agent_manager import get_agent_manager
+
+        manager = get_agent_manager()
+        config = manager.get_agent_config(name)
+
+        if not config:
+            console.print(f"[red]Agent '{name}' not found.[/red]")
+            console.print(f"[yellow]List available agents: anvyl agent list[/yellow]")
+            raise typer.Exit(1)
+
+        is_running = manager.get_agent(name) is not None
+
+        # Create info panel
+        info_text = f"""[bold cyan]Name:[/bold cyan] {config.name}
+[bold cyan]Status:[/bold cyan] {'🟢 Running' if is_running else '🔴 Stopped'}
+[bold cyan]Provider:[/bold cyan] {config.provider}
+[bold cyan]Model:[/bold cyan] {config.model_id}
+[bold cyan]Host:[/bold cyan] {config.host}:{config.port}
+[bold cyan]Verbose:[/bold cyan] {config.verbose}
+[bold cyan]Created:[/bold cyan] {config.created_at}"""
+
+        if config.provider_kwargs:
+            info_text += f"\n[bold cyan]Provider Config:[/bold cyan] {config.provider_kwargs}"
+
+        console.print(Panel(info_text, title=f"🤖 Agent: {name}", border_style="blue"))
+
+        # Show usage examples
+        console.print(f"\n💡 [bold]Usage Examples:[/bold]")
+        if not is_running:
+            console.print(f"  Start agent: anvyl agent start {name}")
+        console.print(f"  Execute action: anvyl agent act {name} \"show all hosts\"")
+        console.print(f"  Interactive session: anvyl agent session {name}")
+        console.print(f"  Show actions: anvyl agent actions {name}")
+
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
+
+# Backward compatibility commands (deprecated)
+@agent_app.command("chat")
+def agent_chat_deprecated(
+    agent_name: str = typer.Argument(..., help="Name of the AI agent to use"),
+    message: str = typer.Argument(..., help="Natural language message for the AI agent")
+):
+    """[DEPRECATED] Send a message to the AI agent. Use 'act' command instead."""
+    console.print("[yellow]⚠️  The 'chat' command is deprecated. Use 'anvyl agent act' instead.[/yellow]")
+    console.print(f"[yellow]💡 Try: anvyl agent act {agent_name} \"{message}\"[/yellow]\n")
+
+    # Redirect to the act command
+    return agent_act(agent_name, message)
+
+@agent_app.command("interactive")
+def agent_interactive_deprecated(
+    agent_name: str = typer.Argument(..., help="Name of the AI agent to use")
+):
+    """[DEPRECATED] Start an interactive session. Use 'session' command instead."""
+    console.print("[yellow]⚠️  The 'interactive' command is deprecated. Use 'anvyl agent session' instead.[/yellow]")
+    console.print(f"[yellow]💡 Try: anvyl agent session {agent_name}[/yellow]\n")
+
+    # Redirect to the session command
+    return agent_session(agent_name)
+
+@agent_app.command("demo")
+def agent_demo(
+    agent_name: str = typer.Argument(..., help="Name of the AI agent to use")
+):
+    """Run a demonstration of AI agent action capabilities."""
+    try:
+        from .agent_manager import get_agent_manager
+
+        manager = get_agent_manager()
+
+        # Get the agent (start it if not running)
+        agent = manager.get_agent(agent_name)
+        if not agent:
+            console.print(f"🚀 [bold yellow]Agent '{agent_name}' not running. Starting...[/bold yellow]")
+            try:
+                agent = manager.start_agent(agent_name)
+                console.print(f"✅ [bold green]Agent '{agent_name}' started![/bold green]")
+            except ValueError as e:
+                console.print(f"[red]Error: {e}[/red]")
+                if "not found" in str(e):
+                    console.print(f"[yellow]Create the agent first: anvyl agent create {agent_name}[/yellow]")
+                    console.print(f"[yellow]List available agents: anvyl agent list[/yellow]")
+                raise typer.Exit(1)
+
+        model_info = agent.get_model_info()
+        console.print(f"🎬 [bold blue]Anvyl AI Agent Action Demo for '{agent_name}'[/bold blue]")
+        console.print(f"Using {model_info['provider']} with {model_info['model_id']}")
+        console.print("This demo will show various AI agent action capabilities.\n")
+
+        # Demo instructions
+        demo_instructions = [
+            "What's the current system status?",
+            "Show me all hosts",
+            "List all containers",
+            "What agents are running?"
+        ]
+
+        for i, instruction in enumerate(demo_instructions, 1):
+            console.print(f"\n[bold yellow]Demo {i}/{len(demo_instructions)}:[/bold yellow] {instruction}")
+            console.print("⏳ [bold blue]Executing...[/bold blue]")
+
+            try:
+                result = agent.act(instruction)
+                console.print(f"✅ [bold green]Result:[/bold green] {result}")
+            except Exception as e:
+                console.print(f"[red]Error: {e}[/red]")
+
+            if i < len(demo_instructions):
+                console.print("\n" + "─" * 50)
+
+        console.print("\n✅ [bold green]Demo completed![/bold green]")
+        console.print("💡 Try 'anvyl agent session <agent_name>' for a full interactive session.")
+
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
         raise typer.Exit(1)

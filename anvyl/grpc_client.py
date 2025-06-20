@@ -656,6 +656,40 @@ class AnvylClient:
             logger.error(f"Error getting agent status: {e}")
             return None
 
+    def execute_agent_instruction(self, agent_name: str, instruction: str) -> Optional[Dict[str, Any]]:
+        """Execute an instruction on an AI agent."""
+        try:
+            if not self.stub:
+                logger.error("Not connected to gRPC server")
+                return None
+            request = anvyl_pb2.ExecuteAgentInstructionRequest(  # type: ignore
+                agent_name=agent_name,
+                instruction=instruction
+            )
+
+            response = self.stub.ExecuteAgentInstruction(request)  # type: ignore
+
+            if response.success:
+                return {
+                    "success": True,
+                    "result": response.result,
+                    "error_message": ""
+                }
+            else:
+                return {
+                    "success": False,
+                    "result": "",
+                    "error_message": response.error_message
+                }
+
+        except Exception as e:
+            logger.error(f"Error executing agent instruction: {e}")
+            return {
+                "success": False,
+                "result": "",
+                "error_message": str(e)
+            }
+
     # Host-level execution methods
     def exec_command_on_host(self,
                            host_id: str,

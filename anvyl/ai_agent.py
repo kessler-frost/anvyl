@@ -1,8 +1,8 @@
 """
-Anvyl AI Agent - LMStudio integration for AI-powered infrastructure management
+Anvyl AI Agent - Model Provider Abstraction for AI-powered infrastructure management
 
-This module provides AI agents with access to Anvyl's gRPC client through LMStudio's act() function,
-allowing natural language interaction with the infrastructure orchestrator.
+This module provides AI agents with access to Anvyl's gRPC client through configurable
+model providers, allowing natural language instruction execution with the infrastructure orchestrator.
 """
 
 import logging
@@ -16,61 +16,77 @@ import asyncio
 from datetime import datetime
 
 from .grpc_client import AnvylClient
+from .model_providers import ModelProvider, create_model_provider
 
 logger = logging.getLogger(__name__)
 console = Console()
 
-import lmstudio as lms
-
 
 class AnvylAIAgent:
     """
-    AI Agent that uses LMStudio's act() function to interact with Anvyl infrastructure.
-    
-    This agent provides natural language access to:
+    AI Agent that uses configurable model providers to execute infrastructure actions.
+
+    This agent provides natural language instruction execution for:
     - Host management (list, add, monitor)
     - Container management (create, stop, logs, exec)
     - Agent management (launch, stop, monitor)
     - System status and monitoring
+
+    Supports multiple model providers:
+    - LM Studio (default)
+    - Ollama
+    - OpenAI
+    - Anthropic
     """
-    
-    def __init__(self, 
+
+    def __init__(self,
+                 model_provider: Union[str, ModelProvider] = "lmstudio",
                  model_id: str = "llama-3.2-1b-instruct-mlx",
-                 host: str = "localhost", 
+                 host: str = "localhost",
                  port: int = 50051,
                  verbose: bool = False,
-                 agent_name: Optional[str] = None):
+                 agent_name: Optional[str] = None,
+                 **provider_kwargs):
         """
         Initialize the AI agent.
-        
+
         Args:
-            model_id: LMStudio model to use for AI interactions
+            model_provider: Model provider to use ("lmstudio", "ollama", "openai", "anthropic")
+                           or a ModelProvider instance
+            model_id: Model identifier to use
             host: Anvyl gRPC server host
             port: Anvyl gRPC server port
             verbose: Enable verbose logging
             agent_name: Name of the AI agent
+            **provider_kwargs: Additional provider-specific configuration
         """
-        self.model_id = model_id
         self.host = host
         self.port = port
         self.verbose = verbose
         self.agent_name = agent_name
-        
+
         # Initialize gRPC client
         self.client = AnvylClient(host, port)
         if not self.client.connect():
             raise ConnectionError(f"Failed to connect to Anvyl server at {host}:{port}")
-        
-        # Initialize LMStudio model
-        try:
-            self.model = lms.llm(model_id)
-            logger.info(f"Connected to LMStudio with model: {model_id}")
-        except Exception as e:
-            logger.error(f"Failed to connect to LMStudio: {e}")
-            raise ConnectionError("LMStudio is not available. Please ensure LMStudio is running.")
-        
-        # Define available functions for the AI agent
-        self.functions = [
+
+        # Initialize model provider
+        if isinstance(model_provider, str):
+            self.model_provider = create_model_provider(
+                provider_type=model_provider,
+                model_id=model_id,
+                **provider_kwargs
+            )
+        else:
+            self.model_provider = model_provider
+
+        # Initialize the model provider
+        if not self.model_provider.initialize():
+            provider_name = self.model_provider.__class__.__name__
+            raise ConnectionError(f"{provider_name} is not available. Please ensure it's properly configured.")
+
+        # Define available actions for the AI agent
+        self.available_actions = [
             self._list_hosts,
             self._add_host,
             self._get_host_metrics,
@@ -87,7 +103,15 @@ class AnvylAIAgent:
             self._discover_agents,
             self._route_to_agent,
         ]
-    
+
+    def get_model_info(self) -> Dict[str, Any]:
+        """Get information about the current model provider."""
+        return self.model_provider.get_model_info()
+
+    def get_available_actions(self) -> List[str]:
+        """Get list of available actions."""
+        return [action.__name__.replace('_', ' ').title() for action in self.available_actions]
+
     def _list_hosts(self, **kwargs) -> Dict[str, Any]:
         """List all hosts."""
         try:
@@ -108,7 +132,7 @@ class AnvylAIAgent:
             }
         except Exception as e:
             return {"success": False, "error": str(e)}
-    
+
     def _add_host(self, name: str, ip: str, os: str = "", tags: Optional[List[str]] = None, **kwargs) -> Dict[str, Any]:
         """Add a new host."""
         try:
@@ -126,7 +150,7 @@ class AnvylAIAgent:
             return {"success": False, "error": "Failed to add host"}
         except Exception as e:
             return {"success": False, "error": str(e)}
-    
+
     def _get_host_metrics(self, host_id: str, **kwargs) -> Dict[str, Any]:
         """Get host metrics."""
         try:
@@ -144,7 +168,7 @@ class AnvylAIAgent:
             return {"success": False, "error": "Failed to get metrics"}
         except Exception as e:
             return {"success": False, "error": str(e)}
-    
+
     def _list_containers(self, host_id: Optional[str] = None, **kwargs) -> Dict[str, Any]:
         """List containers."""
         try:
@@ -164,9 +188,9 @@ class AnvylAIAgent:
             }
         except Exception as e:
             return {"success": False, "error": str(e)}
-    
-    def _create_container(self, name: str, image: str, host_id: Optional[str] = None, 
-                         ports: Optional[List[str]] = None, volumes: Optional[List[str]] = None, 
+
+    def _create_container(self, name: str, image: str, host_id: Optional[str] = None,
+                         ports: Optional[List[str]] = None, volumes: Optional[List[str]] = None,
                          environment: Optional[List[str]] = None, **kwargs) -> Dict[str, Any]:
         """Create a container."""
         try:
@@ -191,7 +215,7 @@ class AnvylAIAgent:
             return {"success": False, "error": "Failed to create container"}
         except Exception as e:
             return {"success": False, "error": str(e)}
-    
+
     def _stop_container(self, container_id: str, timeout: int = 10, **kwargs) -> Dict[str, Any]:
         """Stop a container."""
         try:
@@ -199,7 +223,7 @@ class AnvylAIAgent:
             return {"success": success, "message": "Container stopped" if success else "Failed to stop container"}
         except Exception as e:
             return {"success": False, "error": str(e)}
-    
+
     def _get_container_logs(self, container_id: str, tail: int = 100, **kwargs) -> Dict[str, Any]:
         """Get container logs."""
         try:
@@ -207,7 +231,7 @@ class AnvylAIAgent:
             return {"success": True, "logs": logs or "No logs available"}
         except Exception as e:
             return {"success": False, "error": str(e)}
-    
+
     def _exec_container_command(self, container_id: str, command: List[str], **kwargs) -> Dict[str, Any]:
         """Execute command in container."""
         try:
@@ -217,7 +241,7 @@ class AnvylAIAgent:
             return {"success": False, "error": "Failed to execute command"}
         except Exception as e:
             return {"success": False, "error": str(e)}
-    
+
     def _list_agents(self, host_id: Optional[str] = None, **kwargs) -> Dict[str, Any]:
         """List agents."""
         try:
@@ -236,8 +260,8 @@ class AnvylAIAgent:
             }
         except Exception as e:
             return {"success": False, "error": str(e)}
-    
-    def _launch_agent(self, name: str, host_id: str, entrypoint: str, 
+
+    def _launch_agent(self, name: str, host_id: str, entrypoint: str,
                      use_container: bool = False, environment: Optional[List[str]] = None, **kwargs) -> Dict[str, Any]:
         """Launch an agent."""
         try:
@@ -261,7 +285,7 @@ class AnvylAIAgent:
             return {"success": False, "error": "Failed to launch agent"}
         except Exception as e:
             return {"success": False, "error": str(e)}
-    
+
     def _stop_agent(self, agent_id: str, **kwargs) -> Dict[str, Any]:
         """Stop an agent."""
         try:
@@ -269,14 +293,14 @@ class AnvylAIAgent:
             return {"success": success, "message": "Agent stopped" if success else "Failed to stop agent"}
         except Exception as e:
             return {"success": False, "error": str(e)}
-    
+
     def _get_system_status(self, **kwargs) -> Dict[str, Any]:
         """Get overall system status."""
         try:
             hosts = self.client.list_hosts()
             containers = self.client.list_containers()
             agents = self.client.list_agents()
-            
+
             return {
                 "success": True,
                 "status": {
@@ -296,7 +320,7 @@ class AnvylAIAgent:
             }
         except Exception as e:
             return {"success": False, "error": str(e)}
-    
+
     def _get_ui_status(self, **kwargs) -> Dict[str, Any]:
         """Get UI stack status."""
         try:
@@ -304,18 +328,18 @@ class AnvylAIAgent:
             return {"success": True, "ui_status": status}
         except Exception as e:
             return {"success": False, "error": str(e)}
-    
+
     def _discover_agents(self, **kwargs) -> Dict[str, Any]:
         """Discover all agents across all connected hosts."""
         try:
             hosts = self.client.list_hosts()
             all_agents = []
-            
+
             for host in hosts:
                 host_id = getattr(host, 'id', '')
                 host_name = getattr(host, 'name', '')
                 host_ip = getattr(host, 'ip', '')
-                
+
                 # Get agents for this host
                 agents = self.client.list_agents(host_id)
                 for agent in agents:
@@ -328,7 +352,7 @@ class AnvylAIAgent:
                         "host_ip": host_ip
                     }
                     all_agents.append(agent_info)
-            
+
             return {
                 "success": True,
                 "agents": all_agents,
@@ -336,7 +360,7 @@ class AnvylAIAgent:
             }
         except Exception as e:
             return {"success": False, "error": str(e)}
-    
+
     def _route_to_agent(self, agent_name: str, command: str, **kwargs) -> Dict[str, Any]:
         """Route a command to a specific agent by name."""
         try:
@@ -344,20 +368,20 @@ class AnvylAIAgent:
             discovery_result = self._discover_agents()
             if not discovery_result["success"]:
                 return discovery_result
-            
+
             # Find the target agent
             target_agent = None
             for agent in discovery_result["agents"]:
                 if agent["name"] == agent_name:
                     target_agent = agent
                     break
-            
+
             if not target_agent:
                 return {
                     "success": False,
                     "error": f"Agent '{agent_name}' not found. Available agents: {[a['name'] for a in discovery_result['agents']]}"
                 }
-            
+
             # Execute command on the target agent
             # This would typically involve connecting to the agent's host and executing the command
             # For now, we'll simulate this by returning agent info and command
@@ -369,88 +393,187 @@ class AnvylAIAgent:
             }
         except Exception as e:
             return {"success": False, "error": str(e)}
-    
-    def chat(self, message: str) -> str:
+
+    def act(self, instruction: str) -> str:
         """
-        Chat with the AI agent using LMStudio's act() function.
-        
+        Execute an instruction using the configured model provider.
+
         Args:
-            message: Natural language message from user
-            
+            instruction: Natural language instruction to execute
+
         Returns:
-            AI response with action results
+            Result of the action execution
         """
         try:
-            # Use LMStudio's act() function with the model instance
-            response = self.model.act(
-                message,
-                self.functions,
+            # Use the model provider's act method
+            result = self.model_provider.act(
+                instruction,
+                self.available_actions,
                 on_message=lambda msg: None  # We'll capture the response differently
             )
-            
+
             if self.verbose:
-                console.print(Panel(f"AI Response: {response}", title="🤖 AI Agent", border_style="blue"))
-            
-            return str(response) if response else "No response received"
-            
+                console.print(Panel(f"Action Result: {result}", title="🤖 AI Agent", border_style="blue"))
+
+            return str(result) if result else "No action result received"
+
         except Exception as e:
-            error_msg = f"Error in AI agent chat: {e}"
+            error_msg = f"Error in AI agent action execution: {e}"
             logger.error(error_msg)
             return f"❌ {error_msg}"
-    
-    def interactive_chat(self):
-        """Start an interactive chat session with the AI agent."""
+
+    def execute_instruction(self, instruction: str) -> str:
+        """
+        Alias for act() method for clearer action-oriented interface.
+
+        Args:
+            instruction: Natural language instruction to execute
+
+        Returns:
+            Result of the instruction execution
+        """
+        return self.act(instruction)
+
+    def interactive_action_session(self):
+        """
+        Start an interactive action execution session.
+        Allow users to give instructions and see results.
+        """
         console.print(Panel(
-            "🤖 Anvyl AI Agent Ready!\n\n"
-            "I can help you manage your Anvyl infrastructure using natural language.\n"
-            "Try commands like:\n"
-            "• 'Show me all hosts'\n"
-            "• 'Create a container with nginx'\n"
-            "• 'What's the system status?'\n"
-            "• 'Stop all containers'\n\n"
-            "Type 'quit' or 'exit' to end the session.",
-            title="🚀 Anvyl AI Agent", 
-            border_style="green"
+            f"🚀 Interactive Action Session Started\n\n"
+            f"Agent: {self.agent_name or 'Unnamed'}\n"
+            f"Provider: {self.model_provider.__class__.__name__}\n"
+            f"Model: {self.model_provider.model_id}\n\n"
+            "Give me instructions to execute on your infrastructure.\n"
+            "Type 'help' for available actions, 'quit' to exit.",
+            title="🤖 Anvyl AI Agent - Action Mode",
+            border_style="blue"
         ))
-        
+
         while True:
             try:
-                user_input = console.input("\n[bold cyan]You:[/bold cyan] ").strip()
-                
-                if user_input.lower() in ['quit', 'exit', 'q']:
-                    console.print("\n👋 Goodbye! Thanks for using Anvyl AI Agent.")
+                # Get user instruction
+                instruction = console.input("\n[bold cyan]Instruction:[/bold cyan] ")
+
+                if instruction.lower() in ['quit', 'exit', 'q']:
+                    console.print("[yellow]Ending interactive session. Goodbye![/yellow]")
                     break
-                
-                if not user_input:
+                elif instruction.lower() in ['help', 'h']:
+                    self._show_help()
                     continue
-                
-                console.print("\n[bold blue]AI:[/bold blue] Thinking...")
-                response = self.chat(user_input)
-                console.print(f"\n[bold blue]AI:[/bold blue] {response}")
-                
+                elif instruction.lower() in ['actions', 'a']:
+                    self._show_available_actions()
+                    continue
+                elif not instruction.strip():
+                    continue
+
+                # Execute the instruction
+                console.print(f"\n🔄 [bold blue]Executing:[/bold blue] {instruction}")
+                console.print("⏳ Processing...")
+
+                result = self.act(instruction)
+
+                console.print(f"✅ [bold green]Result:[/bold green]")
+                console.print(result)
+
             except KeyboardInterrupt:
-                console.print("\n\n👋 Goodbye! Thanks for using Anvyl AI Agent.")
-                break
+                console.print("\n[yellow]Session interrupted. Type 'quit' to exit.[/yellow]")
             except Exception as e:
-                console.print(f"\n❌ Error: {e}")
+                console.print(f"\n❌ [red]Error: {e}[/red]")
+
+    def _show_help(self):
+        """Show help information."""
+        console.print(Panel(
+            "🔧 Available Commands:\n\n"
+            "• Type any natural language instruction\n"
+            "• 'help' or 'h' - Show this help\n"
+            "• 'actions' or 'a' - Show available actions\n"
+            "• 'quit' or 'q' - Exit session\n\n"
+            "Example Instructions:\n"
+            "• 'Show me all hosts'\n"
+            "• 'Create a nginx container'\n"
+            "• 'List running containers'\n"
+            "• 'Get system status'\n"
+            "• 'Launch a new agent on host-1'",
+            title="Help",
+            border_style="yellow"
+        ))
+
+    def _show_available_actions(self):
+        """Show available actions."""
+        table = Table(title="Available Actions")
+        table.add_column("Action", style="cyan")
+        table.add_column("Description", style="white")
+
+        for action in self.available_actions:
+            action_name = action.__name__.replace('_', ' ').title()
+            description = action.__doc__ or "No description available"
+            # Get first line of docstring
+            description = description.split('\n')[0].strip()
+            table.add_row(action_name, description)
+
+        console.print(table)
+
+    # Legacy method for backward compatibility
+    def chat(self, message: str) -> str:
+        """
+        Legacy chat method - redirects to act() for backward compatibility.
+
+        Args:
+            message: Natural language message/instruction
+
+        Returns:
+            Result of the action execution
+        """
+        console.print("[yellow]Note: chat() is deprecated. Use act() or execute_instruction() instead.[/yellow]")
+        return self.act(message)
+
+    def interactive_chat(self):
+        """
+        Legacy interactive chat method - redirects to interactive_action_session().
+        """
+        console.print("[yellow]Note: interactive_chat() is deprecated. Use interactive_action_session() instead.[/yellow]")
+        return self.interactive_action_session()
 
 
-def create_ai_agent(model_id: str = "llama-3.2-1b-instruct-mlx", 
-                   host: str = "localhost", 
+def create_ai_agent(model_provider: Union[str, ModelProvider] = "lmstudio",
+                   model_id: str = "llama-3.2-1b-instruct-mlx",
+                   host: str = "localhost",
                    port: int = 50051,
                    verbose: bool = False,
-                   agent_name: Optional[str] = None) -> AnvylAIAgent:
+                   agent_name: Optional[str] = None,
+                   **provider_kwargs) -> AnvylAIAgent:
     """
-    Create an Anvyl AI agent instance.
-    
+    Create an Anvyl AI agent instance for executing infrastructure actions.
+
     Args:
-        model_id: LMStudio model to use
+        model_provider: Model provider to use ("lmstudio", "ollama", "openai", "anthropic")
+                       or a ModelProvider instance
+        model_id: Model identifier to use
         host: Anvyl gRPC server host
         port: Anvyl gRPC server port
         verbose: Enable verbose logging
         agent_name: Name of the AI agent
-        
+        **provider_kwargs: Additional provider-specific configuration
+
     Returns:
-        Configured AnvylAIAgent instance
+        Configured AnvylAIAgent instance ready to execute actions
+
+    Examples:
+        # LM Studio (default)
+        agent = create_ai_agent()
+
+        # Ollama
+        agent = create_ai_agent("ollama", "llama3.2", host="localhost", port=11434)
+
+        # OpenAI
+        agent = create_ai_agent("openai", "gpt-4o-mini", api_key="your-key")
+
+        # Anthropic
+        agent = create_ai_agent("anthropic", "claude-3-haiku-20240307", api_key="your-key")
+
+        # Execute actions
+        result = agent.act("Show me all hosts")
+        result = agent.execute_instruction("Create a nginx container")
     """
-    return AnvylAIAgent(model_id, host, port, verbose, agent_name=agent_name) 
+    return AnvylAIAgent(model_provider, model_id, host, port, verbose, agent_name, **provider_kwargs)

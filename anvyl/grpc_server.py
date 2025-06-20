@@ -38,7 +38,7 @@ class AnvylService(anvyl_pb2_grpc.AnvylServiceServicer):
         """Initialize the service with Docker client and database."""
         self.docker_client: Optional[docker.DockerClient] = None
         self.db: DatabaseManager = DatabaseManager()
-        
+
         # Initialize Docker client
         try:
             # Try multiple approaches to connect to Docker
@@ -115,7 +115,7 @@ class AnvylService(anvyl_pb2_grpc.AnvylServiceServicer):
             cpu_percent = psutil.cpu_percent(interval=1)
             memory = psutil.virtual_memory()
             disk = psutil.disk_usage('/')
-            
+
             return anvyl_pb2.HostResources(  # type: ignore
                 cpu_usage_percent=cpu_percent,
                 memory_total_bytes=memory.total,
@@ -393,7 +393,7 @@ class AnvylService(anvyl_pb2_grpc.AnvylServiceServicer):
             container.set_ports(list(request.ports))
             container.set_volumes(list(request.volumes))
             container.set_environment(list(request.environment))
-            
+
             self.db.add_container(container)
 
             logger.info(f"Successfully created container: {docker_container.name}")
@@ -424,7 +424,7 @@ class AnvylService(anvyl_pb2_grpc.AnvylServiceServicer):
         try:
             container = self.docker_client.containers.get(request.container_id)
             container.stop(timeout=request.timeout if request.timeout > 0 else 10)
-            
+
             # Update database
             db_container = self.db.get_container(request.container_id)
             if db_container:
@@ -462,10 +462,10 @@ class AnvylService(anvyl_pb2_grpc.AnvylServiceServicer):
                 follow=request.follow,
                 tail=request.tail if request.tail > 0 else "all"
             )
-            
+
             if isinstance(logs, bytes):
                 logs = logs.decode('utf-8')
-            
+
             return anvyl_pb2.GetLogsResponse(  # type: ignore
                 logs=logs,
                 success=True,
@@ -498,7 +498,7 @@ class AnvylService(anvyl_pb2_grpc.AnvylServiceServicer):
             for log_line in container.logs(stream=True, follow=request.follow):
                 if isinstance(log_line, bytes):
                     log_line = log_line.decode('utf-8').strip()
-                
+
                 yield anvyl_pb2.StreamLogsResponse(  # type: ignore
                     log_line=log_line,
                     timestamp=datetime.now(UTC).isoformat(),
@@ -533,9 +533,9 @@ class AnvylService(anvyl_pb2_grpc.AnvylServiceServicer):
                 cmd=list(request.command),
                 tty=request.tty
             )
-            
+
             output = result.output.decode('utf-8') if isinstance(result.output, bytes) else result.output
-            
+
             return anvyl_pb2.ExecCommandResponse(  # type: ignore
                 output=output,
                 exit_code=result.exit_code,
@@ -572,7 +572,7 @@ class AnvylService(anvyl_pb2_grpc.AnvylServiceServicer):
 
         try:
             agent_id = str(uuid.uuid4())
-            
+
             # Create agent record
             agent = Agent(
                 id=agent_id,
@@ -627,12 +627,12 @@ class AnvylService(anvyl_pb2_grpc.AnvylServiceServicer):
             }
 
             docker_container = self.docker_client.containers.run(**container_config)
-            
+
             # Update agent with container info
             agent.container_id = docker_container.id
             agent.status = "running"
             agent.started_at = datetime.now(UTC)
-            
+
             self.db.add_agent(agent)
 
             logger.info(f"Successfully launched agent {agent.name} in container {docker_container.id}")
@@ -655,10 +655,10 @@ class AnvylService(anvyl_pb2_grpc.AnvylServiceServicer):
         try:
             # Prepare command
             cmd = ['python', request.entrypoint] + list(request.arguments)
-            
+
             # Prepare environment
             env = dict(request.env) if request.env else None
-            
+
             # Start process
             process = subprocess.Popen(
                 cmd,
@@ -667,14 +667,14 @@ class AnvylService(anvyl_pb2_grpc.AnvylServiceServicer):
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE
             )
-            
+
             # Track running process
             self.running_agents[agent.id] = process
-            
+
             # Update agent status
             agent.status = "running"
             agent.started_at = datetime.now(UTC)
-            
+
             self.db.add_agent(agent)
 
             logger.info(f"Successfully launched agent {agent.name} as process {process.pid}")
@@ -775,6 +775,95 @@ class AnvylService(anvyl_pb2_grpc.AnvylServiceServicer):
                 error_message=str(e)
             )
 
+    def ExecuteAgentInstruction(self, request, context):
+        """Execute an instruction on an AI agent."""
+        logger.info(f"ExecuteAgentInstruction called: {request.agent_name}")
+
+        try:
+            # Import agent manager here to avoid circular imports
+            from .agent_manager import get_agent_manager
+
+            manager = get_agent_manager()
+
+            # Check if agent exists and is running
+            config = manager.get_agent_config(request.agent_name)
+            if not config:
+                return anvyl_pb2.ExecuteAgentInstructionResponse(  # type: ignore
+                    result="",
+                    success=False,
+                    error_message=f"Agent '{request.agent_name}' not found"
+                )
+
+            status_info = manager.get_agent_status(request.agent_name)
+            if not status_info or not status_info.get("running", False):
+                return anvyl_pb2.ExecuteAgentInstructionResponse(  # type: ignore
+                    result="",
+                    success=False,
+                    error_message=f"Agent '{request.agent_name}' is not running"
+                )
+
+            # For containerized agents, we need to execute the instruction in the container
+            if config.container_id:
+                # Execute the instruction in the agent container
+                cmd = [
+                    'docker', 'exec', config.container_id,
+                    'python', '-c', f'''
+import sys
+sys.path.insert(0, "/app")
+from anvyl.ai_agent import create_ai_agent
+
+# Create agent instance
+agent = create_ai_agent(
+    model_provider="{config.provider}",
+    model_id="{config.model_id}",
+    host="{config.host}",
+    port={config.port},
+    verbose={config.verbose},
+    agent_name="{config.name}",
+    {', '.join([f'{k}={repr(v)}' for k, v in config.provider_kwargs.items()])}
+)
+
+# Execute instruction
+result = agent.act("{request.instruction}")
+print(result)
+'''
+                ]
+
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)  # 5 minute timeout
+
+                if result.returncode == 0:
+                    return anvyl_pb2.ExecuteAgentInstructionResponse(  # type: ignore
+                        result=result.stdout.strip(),
+                        success=True,
+                        error_message=""
+                    )
+                else:
+                    return anvyl_pb2.ExecuteAgentInstructionResponse(  # type: ignore
+                        result="",
+                        success=False,
+                        error_message=f"Failed to execute instruction: {result.stderr}"
+                    )
+            else:
+                return anvyl_pb2.ExecuteAgentInstructionResponse(  # type: ignore
+                    result="",
+                    success=False,
+                    error_message="Agent is not running in a container"
+                )
+
+        except subprocess.TimeoutExpired:
+            return anvyl_pb2.ExecuteAgentInstructionResponse(  # type: ignore
+                result="",
+                success=False,
+                error_message="Instruction execution timed out"
+            )
+        except Exception as e:
+            logger.error(f"Error executing agent instruction: {e}")
+            return anvyl_pb2.ExecuteAgentInstructionResponse(  # type: ignore
+                result="",
+                success=False,
+                error_message=str(e)
+            )
+
     # Host-level execution methods
     def ExecCommandOnHost(self, request, context):
         """Execute command on host (Beszel agent functionality)."""
@@ -792,7 +881,7 @@ class AnvylService(anvyl_pb2_grpc.AnvylServiceServicer):
         try:
             # Prepare environment
             env = dict(request.env) if request.env else None
-            
+
             # Execute command
             result = subprocess.run(
                 list(request.command),

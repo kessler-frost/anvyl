@@ -1,80 +1,71 @@
 #!/bin/bash
-
-# Anvyl UI Startup Script
-# Starts the gRPC server with Python and then the UI stack with Docker Compose
+# Starts the UI stack with Docker Compose
 
 set -e
 
-echo "🚀 Starting Anvyl Infrastructure"
-echo "================================"
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
 
-# Get the project root
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+# Get the project root directory
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-echo "📁 Project root: $PROJECT_ROOT"
+echo -e "${BLUE}🚀 Starting Anvyl UI Stack${NC}"
 
-# Check if we're in the right directory
-if [[ ! -f "$PROJECT_ROOT/anvyl/grpc_server.py" ]] || [[ ! -d "$PROJECT_ROOT/ui" ]]; then
-    echo "❌ This doesn't appear to be the Anvyl project root."
-    echo "   Please run this script from the Anvyl project directory."
+# Check if required files exist
+if [[ ! -d "$PROJECT_ROOT/ui" ]]; then
+    echo -e "${RED}❌ UI directory not found at $PROJECT_ROOT/ui${NC}"
     exit 1
 fi
 
 # Check if Docker is running
-if ! docker info >/dev/null 2>&1; then
-    echo "❌ Docker is not running. Please start Docker and try again."
+if ! docker info > /dev/null 2>&1; then
+    echo -e "${RED}❌ Docker is not running. Please start Docker and try again.${NC}"
     exit 1
 fi
 
-# Check if Python virtual environment exists
-if [[ ! -d "$PROJECT_ROOT/venv" ]]; then
-    echo "❌ Python virtual environment not found."
-    echo "   Please run the setup script first: ./scripts/dev_setup.sh"
-    exit 1
-fi
+echo -e "${GREEN}✅ Docker is running${NC}"
 
-# Activate virtual environment
-echo "🐍 Activating Python virtual environment..."
-source "$PROJECT_ROOT/venv/bin/activate"
-
-# Check if gRPC server is already running
-if lsof -i :50051 >/dev/null 2>&1; then
-    echo "⚠️  gRPC server is already running on port 50051"
-else
-    echo "🔧 Starting gRPC server..."
-    cd "$PROJECT_ROOT"
-    python -m anvyl.grpc_server &
-    GRPC_PID=$!
-
-    # Wait a moment for the server to start
-    sleep 3
-
-    # Check if the server started successfully
-    if ! lsof -i :50051 >/dev/null 2>&1; then
-        echo "❌ Failed to start gRPC server"
-        exit 1
-    fi
-
-    echo "✅ gRPC server started (PID: $GRPC_PID)"
-fi
-
-# Start the UI stack
-echo "🏗️  Starting UI stack..."
+# Change to UI directory
 cd "$PROJECT_ROOT/ui"
+
+# Build and start the UI stack
+echo -e "${BLUE}🏗️  Building and starting UI stack...${NC}"
+
+# Build images first
+echo -e "${YELLOW}📦 Building Docker images...${NC}"
+docker-compose build
+
+# Start services
+echo -e "${YELLOW}🚀 Starting services...${NC}"
 docker-compose up -d
 
-echo ""
-echo "✅ Anvyl infrastructure started successfully!"
-echo ""
-echo "🌐 Access your Anvyl infrastructure:"
-echo "   • Web UI:       http://localhost:3000"
-echo "   • API Server:   http://localhost:8000"
-echo "   • API Docs:     http://localhost:8000/docs"
-echo "   • gRPC Server:  localhost:50051"
-echo ""
-echo "📋 Useful commands:"
-echo "   • View logs:    docker-compose logs -f"
-echo "   • Stop UI:      docker-compose down"
-echo "   • Stop gRPC:    kill $GRPC_PID (if started by this script)"
-echo ""
+# Wait a moment for services to start
+sleep 5
+
+# Check if services are running
+echo -e "${YELLOW}🔍 Checking service status...${NC}"
+
+FRONTEND_STATUS=$(docker-compose ps -q frontend 2>/dev/null || echo "")
+BACKEND_STATUS=$(docker-compose ps -q backend 2>/dev/null || echo "")
+
+if [[ -n "$FRONTEND_STATUS" ]] && [[ -n "$BACKEND_STATUS" ]]; then
+    echo -e "${GREEN}✅ Anvyl UI stack started successfully!${NC}"
+    echo ""
+    echo -e "${BLUE}🌐 Access Points:${NC}"
+    echo -e "   • Web UI:      ${GREEN}http://localhost:3000${NC}"
+    echo -e "   • API Server:  ${GREEN}http://localhost:8000${NC}"
+    echo ""
+    echo -e "${YELLOW}📋 Useful Commands:${NC}"
+    echo -e "   • View logs:   ${BLUE}docker-compose logs -f${NC}"
+    echo -e "   • Stop stack:  ${BLUE}docker-compose down${NC}"
+    echo -e "   • Restart:     ${BLUE}docker-compose restart${NC}"
+else
+    echo -e "${RED}❌ Failed to start UI stack${NC}"
+    echo -e "${YELLOW}📋 Checking logs...${NC}"
+    docker-compose logs
+    exit 1
+fi

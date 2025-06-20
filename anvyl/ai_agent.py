@@ -1,7 +1,7 @@
 """
 Anvyl AI Agent - Model Provider Abstraction for AI-powered infrastructure management
 
-This module provides AI agents with access to Anvyl's gRPC client through configurable
+This module provides AI agents with access to Anvyl's infrastructure service through configurable
 model providers, allowing natural language instruction execution with the infrastructure orchestrator.
 """
 
@@ -15,7 +15,7 @@ import json
 import asyncio
 from datetime import datetime
 
-from .grpc_client import AnvylClient
+from .infrastructure_service import get_infrastructure_service
 from .model_providers import ModelProvider, create_model_provider
 
 logger = logging.getLogger(__name__)
@@ -54,8 +54,8 @@ class AnvylAIAgent:
             model_provider: Model provider to use ("lmstudio", "ollama", "openai", "anthropic")
                            or a ModelProvider instance
             model_id: Model identifier to use
-            host: Anvyl gRPC server host
-            port: Anvyl gRPC server port
+            host: Infrastructure service host
+            port: Infrastructure service port
             verbose: Enable verbose logging
             agent_name: Name of the AI agent
             **provider_kwargs: Additional provider-specific configuration
@@ -65,10 +65,8 @@ class AnvylAIAgent:
         self.verbose = verbose
         self.agent_name = agent_name
 
-        # Initialize gRPC client
-        self.client = AnvylClient(host, port)
-        if not self.client.connect():
-            raise ConnectionError(f"Failed to connect to Anvyl server at {host}:{port}")
+        # Initialize infrastructure service
+        self.infrastructure_service = get_infrastructure_service()
 
         # Initialize model provider
         if isinstance(model_provider, str):
@@ -115,20 +113,10 @@ class AnvylAIAgent:
     def _list_hosts(self, **kwargs) -> Dict[str, Any]:
         """List all hosts."""
         try:
-            hosts = self.client.list_hosts()
+            hosts = self.infrastructure_service.list_hosts()
             return {
                 "success": True,
-                "hosts": [
-                    {
-                        "id": getattr(host, 'id', ''),
-                        "name": getattr(host, 'name', ''),
-                        "ip": getattr(host, 'ip', ''),
-                        "status": getattr(host, 'status', ''),
-                        "os": getattr(host, 'os', ''),
-                        "tags": getattr(host, 'tags', [])
-                    }
-                    for host in hosts
-                ]
+                "hosts": hosts
             }
         except Exception as e:
             return {"success": False, "error": str(e)}
@@ -136,16 +124,11 @@ class AnvylAIAgent:
     def _add_host(self, name: str, ip: str, os: str = "", tags: Optional[List[str]] = None, **kwargs) -> Dict[str, Any]:
         """Add a new host."""
         try:
-            host = self.client.add_host(name, ip, os, tags or [])
+            host = self.infrastructure_service.add_host(name, ip, os, tags)
             if host:
                 return {
                     "success": True,
-                    "host": {
-                        "id": getattr(host, 'id', ''),
-                        "name": getattr(host, 'name', ''),
-                        "ip": getattr(host, 'ip', ''),
-                        "status": getattr(host, 'status', '')
-                    }
+                    "host": host
                 }
             return {"success": False, "error": "Failed to add host"}
         except Exception as e:
@@ -154,16 +137,11 @@ class AnvylAIAgent:
     def _get_host_metrics(self, host_id: str, **kwargs) -> Dict[str, Any]:
         """Get host metrics."""
         try:
-            metrics = self.client.get_host_metrics(host_id)
+            metrics = self.infrastructure_service.get_host_metrics(host_id)
             if metrics:
                 return {
                     "success": True,
-                    "metrics": {
-                        "cpu_usage": getattr(metrics, 'cpu_usage', 0),
-                        "memory_usage": getattr(metrics, 'memory_usage', 0),
-                        "disk_usage": getattr(metrics, 'disk_usage', 0),
-                        "network_usage": getattr(metrics, 'network_usage', 0)
-                    }
+                    "metrics": metrics
                 }
             return {"success": False, "error": "Failed to get metrics"}
         except Exception as e:
@@ -172,19 +150,10 @@ class AnvylAIAgent:
     def _list_containers(self, host_id: Optional[str] = None, **kwargs) -> Dict[str, Any]:
         """List containers."""
         try:
-            containers = self.client.list_containers(host_id)
+            containers = self.infrastructure_service.list_containers(host_id)
             return {
                 "success": True,
-                "containers": [
-                    {
-                        "id": getattr(container, 'id', ''),
-                        "name": getattr(container, 'name', ''),
-                        "image": getattr(container, 'image', ''),
-                        "status": getattr(container, 'status', ''),
-                        "host_id": getattr(container, 'host_id', '')
-                    }
-                    for container in containers
-                ]
+                "containers": containers
             }
         except Exception as e:
             return {"success": False, "error": str(e)}
@@ -194,23 +163,18 @@ class AnvylAIAgent:
                          environment: Optional[List[str]] = None, **kwargs) -> Dict[str, Any]:
         """Create a container."""
         try:
-            container = self.client.add_container(
+            container = self.infrastructure_service.add_container(
                 name=name,
                 image=image,
                 host_id=host_id,
-                ports=ports or [],
-                volumes=volumes or [],
-                environment=environment or []
+                ports=ports,
+                volumes=volumes,
+                environment=environment
             )
             if container:
                 return {
                     "success": True,
-                    "container": {
-                        "id": getattr(container, 'id', ''),
-                        "name": getattr(container, 'name', ''),
-                        "image": getattr(container, 'image', ''),
-                        "status": getattr(container, 'status', '')
-                    }
+                    "container": container
                 }
             return {"success": False, "error": "Failed to create container"}
         except Exception as e:
@@ -219,25 +183,37 @@ class AnvylAIAgent:
     def _stop_container(self, container_id: str, timeout: int = 10, **kwargs) -> Dict[str, Any]:
         """Stop a container."""
         try:
-            success = self.client.stop_container(container_id, timeout)
-            return {"success": success, "message": "Container stopped" if success else "Failed to stop container"}
+            success = self.infrastructure_service.stop_container(container_id, timeout)
+            return {
+                "success": success,
+                "message": "Container stopped successfully" if success else "Failed to stop container"
+            }
         except Exception as e:
             return {"success": False, "error": str(e)}
 
     def _get_container_logs(self, container_id: str, tail: int = 100, **kwargs) -> Dict[str, Any]:
         """Get container logs."""
         try:
-            logs = self.client.get_logs(container_id, tail=tail)
-            return {"success": True, "logs": logs or "No logs available"}
+            logs = self.infrastructure_service.get_logs(container_id, tail=tail)
+            if logs:
+                return {
+                    "success": True,
+                    "logs": logs
+                }
+            return {"success": False, "error": "Failed to get logs"}
         except Exception as e:
             return {"success": False, "error": str(e)}
 
     def _exec_container_command(self, container_id: str, command: List[str], **kwargs) -> Dict[str, Any]:
         """Execute command in container."""
         try:
-            result = self.client.exec_command(container_id, command)
+            result = self.infrastructure_service.exec_command(container_id, command)
             if result:
-                return {"success": True, "output": str(result)}
+                return {
+                    "success": result["success"],
+                    "output": result["output"],
+                    "exit_code": result["exit_code"]
+                }
             return {"success": False, "error": "Failed to execute command"}
         except Exception as e:
             return {"success": False, "error": str(e)}
@@ -245,15 +221,22 @@ class AnvylAIAgent:
     def _list_agents(self, host_id: Optional[str] = None, **kwargs) -> Dict[str, Any]:
         """List agents."""
         try:
-            agents = self.client.list_agents(host_id)
+            agents = self.infrastructure_service.list_agents(host_id)
             return {
                 "success": True,
                 "agents": [
                     {
-                        "id": getattr(agent, 'id', ''),
-                        "name": getattr(agent, 'name', ''),
-                        "status": getattr(agent, 'status', ''),
-                        "host_id": getattr(agent, 'host_id', '')
+                        "id": agent["id"],
+                        "name": agent["name"],
+                        "host_id": agent["host_id"],
+                        "entrypoint": agent["entrypoint"],
+                        "working_directory": agent["working_directory"],
+                        "status": agent["status"],
+                        "container_id": agent["container_id"],
+                        "persistent": agent["persistent"],
+                        "started_at": agent["started_at"],
+                        "stopped_at": agent["stopped_at"],
+                        "exit_code": agent["exit_code"]
                     }
                     for agent in agents
                 ]
@@ -263,23 +246,18 @@ class AnvylAIAgent:
 
     def _launch_agent(self, name: str, host_id: str, entrypoint: str,
                      environment: Optional[List[str]] = None, **kwargs) -> Dict[str, Any]:
-        """Launch an agent in a container."""
+        """Launch an agent."""
         try:
-            agent = self.client.launch_agent(
+            agent = self.infrastructure_service.launch_agent(
                 name=name,
                 host_id=host_id,
                 entrypoint=entrypoint,
-                env=environment or []
+                env=environment
             )
             if agent:
                 return {
                     "success": True,
-                    "agent": {
-                        "id": getattr(agent, 'id', ''),
-                        "name": getattr(agent, 'name', ''),
-                        "status": getattr(agent, 'status', ''),
-                        "host_id": getattr(agent, 'host_id', '')
-                    }
+                    "agent": agent
                 }
             return {"success": False, "error": "Failed to launch agent"}
         except Exception as e:
@@ -288,32 +266,38 @@ class AnvylAIAgent:
     def _stop_agent(self, agent_id: str, **kwargs) -> Dict[str, Any]:
         """Stop an agent."""
         try:
-            success = self.client.stop_agent(agent_id)
-            return {"success": success, "message": "Agent stopped" if success else "Failed to stop agent"}
+            success = self.infrastructure_service.stop_agent(agent_id)
+            return {
+                "success": success,
+                "message": "Agent stopped successfully" if success else "Failed to stop agent"
+            }
         except Exception as e:
             return {"success": False, "error": str(e)}
 
     def _get_system_status(self, **kwargs) -> Dict[str, Any]:
         """Get overall system status."""
         try:
-            hosts = self.client.list_hosts()
-            containers = self.client.list_containers()
-            agents = self.client.list_agents()
+            hosts = self.infrastructure_service.list_hosts()
+            containers = self.infrastructure_service.list_containers()
+            agents = self.infrastructure_service.list_agents()
 
             return {
                 "success": True,
                 "status": {
                     "hosts": {
                         "total": len(hosts),
-                        "online": len([h for h in hosts if getattr(h, 'status', '') == 'online'])
+                        "online": len([h for h in hosts if h.get("status") == "online"]),
+                        "offline": len([h for h in hosts if h.get("status") == "offline"])
                     },
                     "containers": {
                         "total": len(containers),
-                        "running": len([c for c in containers if getattr(c, 'status', '') == 'running'])
+                        "running": len([c for c in containers if c.get("status") == "running"]),
+                        "stopped": len([c for c in containers if c.get("status") == "stopped"])
                     },
                     "agents": {
                         "total": len(agents),
-                        "running": len([a for a in agents if getattr(a, 'status', '') == 'running'])
+                        "running": len([a for a in agents if a.get("status") == "running"]),
+                        "stopped": len([a for a in agents if a.get("status") == "stopped"])
                     }
                 }
             }
@@ -321,218 +305,305 @@ class AnvylAIAgent:
             return {"success": False, "error": str(e)}
 
     def _get_ui_status(self, **kwargs) -> Dict[str, Any]:
-        """Get UI stack status."""
+        """Get UI status."""
         try:
-            status = self.client.get_ui_stack_status()
-            return {"success": True, "ui_status": status}
+            # Check if UI containers are running
+            containers = self.infrastructure_service.list_containers()
+            ui_containers = [c for c in containers if "ui" in c.get("name", "").lower() or "frontend" in c.get("name", "").lower()]
+
+            return {
+                "success": True,
+                "ui_status": {
+                    "containers": len(ui_containers),
+                    "running": len([c for c in ui_containers if c.get("status") == "running"])
+                }
+            }
         except Exception as e:
             return {"success": False, "error": str(e)}
 
     def _discover_agents(self, **kwargs) -> Dict[str, Any]:
-        """Discover all agents across all connected hosts."""
+        """Discover available agents."""
         try:
-            hosts = self.client.list_hosts()
-            all_agents = []
+            # Import agent manager to get agent configurations
+            from .agent_manager import get_agent_manager
 
-            for host in hosts:
-                host_id = getattr(host, 'id', '')
-                host_name = getattr(host, 'name', '')
-                host_ip = getattr(host, 'ip', '')
-
-                # Get agents for this host
-                agents = self.client.list_agents(host_id)
-                for agent in agents:
-                    agent_info = {
-                        "id": getattr(agent, 'id', ''),
-                        "name": getattr(agent, 'name', ''),
-                        "status": getattr(agent, 'status', ''),
-                        "host_id": host_id,
-                        "host_name": host_name,
-                        "host_ip": host_ip
-                    }
-                    all_agents.append(agent_info)
+            manager = get_agent_manager()
+            agent_configs = manager.list_agents()
 
             return {
                 "success": True,
-                "agents": all_agents,
-                "total": len(all_agents)
+                "agents": [
+                    {
+                        "name": agent["name"],
+                        "provider": agent["provider"],
+                        "model_id": agent["model_id"],
+                        "status": agent["status"],
+                        "running": agent["running"]
+                    }
+                    for agent in agent_configs
+                ]
             }
         except Exception as e:
             return {"success": False, "error": str(e)}
 
     def _route_to_agent(self, agent_name: str, command: str, **kwargs) -> Dict[str, Any]:
-        """Route a command to a specific agent by name."""
+        """Route a command to a specific agent."""
         try:
-            # First discover all agents
-            discovery_result = self._discover_agents()
-            if not discovery_result["success"]:
-                return discovery_result
-
-            # Find the target agent
-            target_agent = None
-            for agent in discovery_result["agents"]:
-                if agent["name"] == agent_name:
-                    target_agent = agent
-                    break
-
-            if not target_agent:
+            result = self.infrastructure_service.execute_agent_instruction(agent_name, command)
+            if result:
                 return {
-                    "success": False,
-                    "error": f"Agent '{agent_name}' not found. Available agents: {[a['name'] for a in discovery_result['agents']]}"
+                    "success": result["success"],
+                    "result": result["result"],
+                    "error_message": result.get("error_message", "")
                 }
-
-            # Execute command on the target agent
-            # This would typically involve connecting to the agent's host and executing the command
-            # For now, we'll simulate this by returning agent info and command
-            return {
-                "success": True,
-                "agent": target_agent,
-                "command": command,
-                "message": f"Command '{command}' routed to agent '{agent_name}' on host {target_agent['host_name']} ({target_agent['host_ip']})"
-            }
+            return {"success": False, "error": "Failed to execute instruction"}
         except Exception as e:
             return {"success": False, "error": str(e)}
 
     def act(self, instruction: str) -> str:
         """
-        Execute an instruction using the configured model provider.
+        Execute an action based on natural language instruction.
 
         Args:
-            instruction: Natural language instruction to execute
+            instruction: Natural language instruction
 
         Returns:
             Result of the action execution
         """
         try:
-            # Use the model provider's act method
-            result = self.model_provider.act(
-                instruction,
-                self.available_actions,
-                on_message=lambda msg: None  # We'll capture the response differently
+            # Use the model provider to determine the action
+            response = self.model_provider.generate_response(
+                instruction=instruction,
+                available_actions=self.get_available_actions(),
+                context="You are an AI agent that can execute infrastructure management actions."
             )
 
-            if self.verbose:
-                console.print(Panel(f"Action Result: {result}", title="🤖 AI Agent", border_style="blue"))
+            # Parse the response to determine the action
+            action_name, action_args = self._parse_action_response(response, instruction)
 
-            return str(result) if result else "No action result received"
+            if action_name:
+                # Execute the action
+                action_func = next((action for action in self.available_actions
+                                  if action.__name__.replace('_', ' ').title() == action_name), None)
+
+                if action_func:
+                    result = action_func(**action_args)
+                    return self._format_action_result(result)
+                else:
+                    return f"❌ Unknown action: {action_name}"
+            else:
+                return f"❌ Could not determine action from instruction: {instruction}"
 
         except Exception as e:
-            error_msg = f"Error in AI agent action execution: {e}"
-            logger.error(error_msg)
-            return f"❌ {error_msg}"
+            logger.error(f"Error executing action: {e}")
+            return f"❌ Error executing action: {str(e)}"
 
     def execute_instruction(self, instruction: str) -> str:
-        """
-        Alias for act() method for clearer action-oriented interface.
-
-        Args:
-            instruction: Natural language instruction to execute
-
-        Returns:
-            Result of the instruction execution
-        """
+        """Execute an instruction and return the result."""
         return self.act(instruction)
 
     def interactive_action_session(self):
-        """
-        Start an interactive action execution session.
-        Allow users to give instructions and see results.
-        """
-        console.print(Panel(
-            f"🚀 Interactive Action Session Started\n\n"
-            f"Agent: {self.agent_name or 'Unnamed'}\n"
-            f"Provider: {self.model_provider.__class__.__name__}\n"
-            f"Model: {self.model_provider.model_id}\n\n"
-            "Give me instructions to execute on your infrastructure.\n"
-            "Type 'help' for available actions, 'quit' to exit.",
-            title="🤖 Anvyl AI Agent - Action Mode",
+        """Start an interactive session for executing actions."""
+        console.print(Panel.fit(
+            "[bold blue]Anvyl AI Agent - Interactive Action Session[/bold blue]\n"
+            "Type 'help' for available commands, 'quit' to exit.",
             border_style="blue"
         ))
 
         while True:
             try:
-                # Get user instruction
-                instruction = console.input("\n[bold cyan]Instruction:[/bold cyan] ")
+                instruction = console.input("\n[bold green]Action:[/bold green] ").strip()
 
                 if instruction.lower() in ['quit', 'exit', 'q']:
-                    console.print("[yellow]Ending interactive session. Goodbye![/yellow]")
+                    console.print("👋 Goodbye!")
                     break
-                elif instruction.lower() in ['help', 'h']:
+                elif instruction.lower() == 'help':
                     self._show_help()
-                    continue
-                elif instruction.lower() in ['actions', 'a']:
+                elif instruction.lower() == 'actions':
                     self._show_available_actions()
+                elif instruction:
+                    console.print(f"\n[bold yellow]Executing:[/bold yellow] {instruction}")
+                    result = self.act(instruction)
+                    console.print(f"\n[bold cyan]Result:[/bold cyan]\n{result}")
+                else:
                     continue
-                elif not instruction.strip():
-                    continue
-
-                # Execute the instruction
-                console.print(f"\n🔄 [bold blue]Executing:[/bold blue] {instruction}")
-                console.print("⏳ Processing...")
-
-                result = self.act(instruction)
-
-                console.print(f"✅ [bold green]Result:[/bold green]")
-                console.print(result)
 
             except KeyboardInterrupt:
-                console.print("\n[yellow]Session interrupted. Type 'quit' to exit.[/yellow]")
+                console.print("\n👋 Goodbye!")
+                break
             except Exception as e:
-                console.print(f"\n❌ [red]Error: {e}[/red]")
+                console.print(f"\n❌ Error: {e}")
 
     def _show_help(self):
         """Show help information."""
-        console.print(Panel(
-            "🔧 Available Commands:\n\n"
-            "• Type any natural language instruction\n"
-            "• 'help' or 'h' - Show this help\n"
-            "• 'actions' or 'a' - Show available actions\n"
-            "• 'quit' or 'q' - Exit session\n\n"
-            "Example Instructions:\n"
-            "• 'Show me all hosts'\n"
-            "• 'Create a nginx container'\n"
-            "• 'List running containers'\n"
-            "• 'Get system status'\n"
-            "• 'Launch a new agent on host-1'",
-            title="Help",
-            border_style="yellow"
-        ))
+        help_text = """
+[bold]Available Commands:[/bold]
+• help - Show this help message
+• actions - Show available actions
+• quit/exit/q - Exit the session
+• [any instruction] - Execute an action
+
+[bold]Example Instructions:[/bold]
+• "List all hosts"
+• "Show running containers"
+• "Get system status"
+• "Launch a new agent"
+        """
+        console.print(Panel(help_text, title="Help", border_style="green"))
 
     def _show_available_actions(self):
         """Show available actions."""
+        actions = self.get_available_actions()
+
         table = Table(title="Available Actions")
         table.add_column("Action", style="cyan")
         table.add_column("Description", style="white")
 
-        for action in self.available_actions:
-            action_name = action.__name__.replace('_', ' ').title()
-            description = action.__doc__ or "No description available"
-            # Get first line of docstring
-            description = description.split('\n')[0].strip()
-            table.add_row(action_name, description)
+        for action in actions:
+            table.add_row(action, f"Execute {action.lower()}")
 
         console.print(table)
 
-    # Legacy method for backward compatibility
+    def _parse_action_response(self, response: str, original_instruction: str) -> tuple:
+        """Parse the model response to determine action and arguments."""
+        # Simple parsing - in a real implementation, you'd want more sophisticated parsing
+        response_lower = response.lower()
+
+        # Map common instructions to actions
+        action_mapping = {
+            "list hosts": "List Hosts",
+            "show hosts": "List Hosts",
+            "get hosts": "List Hosts",
+            "add host": "Add Host",
+            "create host": "Add Host",
+            "host metrics": "Get Host Metrics",
+            "list containers": "List Containers",
+            "show containers": "List Containers",
+            "get containers": "List Containers",
+            "create container": "Create Container",
+            "add container": "Create Container",
+            "stop container": "Stop Container",
+            "container logs": "Get Container Logs",
+            "exec container": "Exec Container Command",
+            "list agents": "List Agents",
+            "show agents": "List Agents",
+            "get agents": "List Agents",
+            "launch agent": "Launch Agent",
+            "start agent": "Launch Agent",
+            "stop agent": "Stop Agent",
+            "system status": "Get System Status",
+            "status": "Get System Status",
+            "ui status": "Get Ui Status",
+            "discover agents": "Discover Agents",
+            "route to agent": "Route To Agent"
+        }
+
+        for instruction_pattern, action_name in action_mapping.items():
+            if instruction_pattern in response_lower or instruction_pattern in original_instruction.lower():
+                return action_name, {}
+
+        return None, {}
+
+    def _format_action_result(self, result: Dict[str, Any]) -> str:
+        """Format action result for display."""
+        if not result.get("success", False):
+            return f"❌ Error: {result.get('error', 'Unknown error')}"
+
+        # Format based on action type
+        if "hosts" in result:
+            return self._format_hosts_result(result["hosts"])
+        elif "containers" in result:
+            return self._format_containers_result(result["containers"])
+        elif "agents" in result:
+            return self._format_agents_result(result["agents"])
+        elif "status" in result:
+            return self._format_status_result(result["status"])
+        elif "message" in result:
+            return f"✅ {result['message']}"
+        else:
+            return f"✅ Action completed successfully: {result}"
+
+    def _format_hosts_result(self, hosts: List[Dict[str, Any]]) -> str:
+        """Format hosts result."""
+        if not hosts:
+            return "📋 No hosts found"
+
+        result = "📋 Hosts:\n"
+        for host in hosts:
+            status_emoji = "🟢" if host.get("status") == "online" else "🔴"
+            result += f"  {status_emoji} {host.get('name', 'Unknown')} ({host.get('ip', 'Unknown')}) - {host.get('status', 'Unknown')}\n"
+        return result
+
+    def _format_containers_result(self, containers: List[Dict[str, Any]]) -> str:
+        """Format containers result."""
+        if not containers:
+            return "📦 No containers found"
+
+        result = "📦 Containers:\n"
+        for container in containers:
+            status_emoji = "🟢" if container.get("status") == "running" else "🔴"
+            result += f"  {status_emoji} {container.get('name', 'Unknown')} ({container.get('image', 'Unknown')}) - {container.get('status', 'Unknown')}\n"
+        return result
+
+    def _format_agents_result(self, agents: List[Dict[str, Any]]) -> str:
+        """Format agents result."""
+        if not agents:
+            return "🤖 No agents found"
+
+        result = "🤖 Agents:\n"
+        for agent in agents:
+            status_emoji = "🟢" if agent.get("status") == "running" else "🔴"
+            result += f"  {status_emoji} {agent.get('name', 'Unknown')} - {agent.get('status', 'Unknown')}\n"
+        return result
+
+    def _format_status_result(self, status: Dict[str, Any]) -> str:
+        """Format status result."""
+        result = "📊 System Status:\n"
+
+        if "hosts" in status:
+            hosts = status["hosts"]
+            result += f"  🖥️  Hosts: {hosts['total']} total, {hosts['online']} online, {hosts['offline']} offline\n"
+
+        if "containers" in status:
+            containers = status["containers"]
+            result += f"  📦 Containers: {containers['total']} total, {containers['running']} running, {containers['stopped']} stopped\n"
+
+        if "agents" in status:
+            agents = status["agents"]
+            result += f"  🤖 Agents: {agents['total']} total, {agents['running']} running, {agents['stopped']} stopped\n"
+
+        return result
+
     def chat(self, message: str) -> str:
-        """
-        Legacy chat method - redirects to act() for backward compatibility.
-
-        Args:
-            message: Natural language message/instruction
-
-        Returns:
-            Result of the action execution
-        """
-        console.print("[yellow]Note: chat() is deprecated. Use act() or execute_instruction() instead.[/yellow]")
+        """Chat with the AI agent."""
         return self.act(message)
 
     def interactive_chat(self):
-        """
-        Legacy interactive chat method - redirects to interactive_action_session().
-        """
-        console.print("[yellow]Note: interactive_chat() is deprecated. Use interactive_action_session() instead.[/yellow]")
-        return self.interactive_action_session()
+        """Start an interactive chat session."""
+        console.print(Panel.fit(
+            "[bold blue]Anvyl AI Agent - Interactive Chat[/bold blue]\n"
+            "Type 'quit' to exit.",
+            border_style="blue"
+        ))
+
+        while True:
+            try:
+                message = console.input("\n[bold green]You:[/bold green] ").strip()
+
+                if message.lower() in ['quit', 'exit', 'q']:
+                    console.print("👋 Goodbye!")
+                    break
+                elif message:
+                    response = self.chat(message)
+                    console.print(f"\n[bold cyan]Agent:[/bold cyan] {response}")
+                else:
+                    continue
+
+            except KeyboardInterrupt:
+                console.print("\n👋 Goodbye!")
+                break
+            except Exception as e:
+                console.print(f"\n❌ Error: {e}")
 
 
 def create_ai_agent(model_provider: Union[str, ModelProvider] = "lmstudio",
@@ -543,36 +614,26 @@ def create_ai_agent(model_provider: Union[str, ModelProvider] = "lmstudio",
                    agent_name: Optional[str] = None,
                    **provider_kwargs) -> AnvylAIAgent:
     """
-    Create an Anvyl AI agent instance for executing infrastructure actions.
+    Create an AI agent instance.
 
     Args:
-        model_provider: Model provider to use ("lmstudio", "ollama", "openai", "anthropic")
-                       or a ModelProvider instance
-        model_id: Model identifier to use
-        host: Anvyl gRPC server host
-        port: Anvyl gRPC server port
+        model_provider: Model provider to use
+        model_id: Model identifier
+        host: Infrastructure service host
+        port: Infrastructure service port
         verbose: Enable verbose logging
         agent_name: Name of the AI agent
         **provider_kwargs: Additional provider-specific configuration
 
     Returns:
-        Configured AnvylAIAgent instance ready to execute actions
-
-    Examples:
-        # LM Studio (default)
-        agent = create_ai_agent()
-
-        # Ollama
-        agent = create_ai_agent("ollama", "llama3.2", host="localhost", port=11434)
-
-        # OpenAI
-        agent = create_ai_agent("openai", "gpt-4o-mini", api_key="your-key")
-
-        # Anthropic
-        agent = create_ai_agent("anthropic", "claude-3-haiku-20240307", api_key="your-key")
-
-        # Execute actions
-        result = agent.act("Show me all hosts")
-        result = agent.execute_instruction("Create a nginx container")
+        AnvylAIAgent instance
     """
-    return AnvylAIAgent(model_provider, model_id, host, port, verbose, agent_name, **provider_kwargs)
+    return AnvylAIAgent(
+        model_provider=model_provider,
+        model_id=model_id,
+        host=host,
+        port=port,
+        verbose=verbose,
+        agent_name=agent_name,
+        **provider_kwargs
+    )

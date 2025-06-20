@@ -1,45 +1,31 @@
 #!/bin/bash
-
-# Anvyl UI Stop Script
-# Stops the UI stack and optionally the gRPC server
+# Stops the UI stack
 
 set -e
 
-echo "🛑 Stopping Anvyl Infrastructure"
-echo "================================"
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
 
-# Get the project root
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+# Get the project root directory
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-echo "📁 Project root: $PROJECT_ROOT"
+echo -e "${BLUE}🛑 Stopping Anvyl UI Stack${NC}"
 
-# Stop the UI stack
-echo "🏗️  Stopping UI stack..."
-cd "$PROJECT_ROOT/ui"
-docker-compose down
-
-echo "✅ UI stack stopped"
-
-# Check if user wants to stop gRPC server
-read -p "Do you want to stop the gRPC server as well? (y/N): " -n 1 -r
-echo
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-    echo "🔧 Stopping gRPC server..."
-
-    # Find and kill gRPC server processes
-    PIDS=$(pgrep -f "python -m anvyl.grpc_server" || true)
-    if [[ -n "$PIDS" ]]; then
-        echo "Found gRPC server processes: $PIDS"
-        kill $PIDS
-        echo "✅ gRPC server stopped"
-    else
-        echo "⚠️  No gRPC server processes found"
-    fi
-else
-    echo "ℹ️  gRPC server left running"
+# Check if UI directory exists
+if [[ ! -d "$PROJECT_ROOT/ui" ]]; then
+    echo -e "${RED}❌ UI directory not found at $PROJECT_ROOT/ui${NC}"
+    exit 1
 fi
 
-echo ""
-echo "✅ Anvyl infrastructure stopped successfully!"
-echo ""
+# Change to UI directory
+cd "$PROJECT_ROOT/ui"
+
+# Stop the UI stack
+echo -e "${YELLOW}🛑 Stopping UI services...${NC}"
+docker-compose down
+
+echo -e "${GREEN}✅ Anvyl UI stack stopped successfully!${NC}"

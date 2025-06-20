@@ -23,12 +23,12 @@ def check_docker():
     except Exception:
         return False
 
-def check_anvyl_server():
-    """Check if Anvyl gRPC server is running."""
+def check_infrastructure_service():
+    """Check if Anvyl infrastructure service is available."""
     try:
-        from anvyl.grpc_client import AnvylClient
-        client = AnvylClient("localhost", 50051)
-        return client.connect()
+        from anvyl.infrastructure_service import get_infrastructure_service
+        service = get_infrastructure_service()
+        return True
     except Exception:
         return False
 
@@ -48,11 +48,11 @@ def main():
 
     console.print("✅ [green]Docker is available[/green]")
 
-    if not check_anvyl_server():
-        console.print("❌ [red]Anvyl gRPC server is not running. Please start it with 'anvyl up'[/red]")
+    if not check_infrastructure_service():
+        console.print("❌ [red]Anvyl infrastructure service is not available. Please start it with 'anvyl up'[/red]")
         return
 
-    console.print("✅ [green]Anvyl gRPC server is running[/green]")
+    console.print("✅ [green]Anvyl infrastructure service is available[/green]")
 
     # Example workflow
     console.print("\n🚀 [bold]Containerized Agent Workflow[/bold]")
@@ -68,7 +68,7 @@ def main():
     console.print("   This will:")
     console.print("   • Create a Docker image with the agent")
     console.print("   • Start a container running the agent")
-    console.print("   • Connect to the gRPC server")
+    console.print("   • Connect to the infrastructure service")
     console.print("   • Keep the agent running persistently")
 
     # Step 3: Execute instructions
@@ -77,7 +77,7 @@ def main():
     console.print("   This will:")
     console.print("   • Send the instruction to the containerized agent")
     console.print("   • Execute the instruction using the AI model")
-    console.print("   • Return the result via gRPC")
+    console.print("   • Return the result via infrastructure service")
 
     # Step 4: View logs
     console.print("\n4️⃣ [bold cyan]Viewing Agent Logs...[/bold cyan]")

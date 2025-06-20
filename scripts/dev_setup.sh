@@ -1,11 +1,8 @@
 #!/bin/bash
 
-# Anvyl Development Environment Setup Script
-# This script sets up the complete development environment for Anvyl
+# Anvyl Development Setup Script
 
 set -e
-
-echo "🔧 Setting up Anvyl development environment..."
 
 # Colors for output
 RED='\033[0;31m'
@@ -14,114 +11,107 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Function to print colored output
-print_status() {
-    echo -e "${BLUE}[INFO]${NC} $1"
-}
+echo -e "${BLUE}🔧 Anvyl Development Setup${NC}"
+echo "================================"
 
-print_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
-}
+# Get the project root directory
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+echo -e "${BLUE}📁 Project root: $PROJECT_ROOT${NC}"
 
-print_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
-}
-
-print_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
-
-# Check if we're on macOS
-if [[ "$(uname)" != "Darwin" ]]; then
-    echo "❌ This script is designed for macOS. Please set up manually."
+# Check if we're in the right directory
+if [[ ! -f "$PROJECT_ROOT/pyproject.toml" ]]; then
+    echo -e "${RED}❌ This doesn't appear to be the Anvyl project root.${NC}"
+    echo -e "${RED}   Please run this script from the Anvyl project directory.${NC}"
     exit 1
 fi
 
-# Check if Homebrew is installed
-if ! command -v brew >/dev/null 2>&1; then
-    echo "❌ Homebrew is not installed. Please install it first: https://brew.sh"
+# Check Python version
+echo -e "${YELLOW}🐍 Checking Python version...${NC}"
+python_version=$(python3 --version 2>&1 | cut -d' ' -f2)
+required_version="3.12"
+
+if [[ "$(printf '%s\n' "$required_version" "$python_version" | sort -V | head -n1)" != "$required_version" ]]; then
+    echo -e "${RED}❌ Python $required_version or higher is required. Found: $python_version${NC}"
     exit 1
 fi
 
-# Install protobuf compiler if not present
-echo "📦 Installing/updating protobuf compiler..."
-brew install protobuf
+echo -e "${GREEN}✅ Python $python_version is compatible${NC}"
 
-# Check for Python 3.12
-if ! command -v python3.12 >/dev/null 2>&1; then
-    echo "📦 Installing Python 3.12..."
-    brew install python@3.12
+# Check if Docker is available
+echo -e "${YELLOW}🐳 Checking Docker...${NC}"
+if command -v docker &> /dev/null; then
+    if docker info > /dev/null 2>&1; then
+        echo -e "${GREEN}✅ Docker is available and running${NC}"
+    else
+        echo -e "${YELLOW}⚠️  Docker is installed but not running${NC}"
+        echo -e "${YELLOW}   Please start Docker and run this script again${NC}"
+    fi
+else
+    echo -e "${YELLOW}⚠️  Docker not found${NC}"
+    echo -e "${YELLOW}   Please install Docker to use containerized features${NC}"
 fi
 
 # Create virtual environment
-echo "🐍 Creating Python virtual environment..."
-if [[ ! -d "venv" ]]; then
-    python3.12 -m venv venv
-    echo "✅ Virtual environment created"
-else
-    echo "✅ Virtual environment already exists"
+echo -e "${YELLOW}🐍 Creating Python virtual environment...${NC}"
+if [[ -d "$PROJECT_ROOT/venv" ]]; then
+    echo -e "${YELLOW}⚠️  Virtual environment already exists. Removing...${NC}"
+    rm -rf "$PROJECT_ROOT/venv"
 fi
+
+python3 -m venv "$PROJECT_ROOT/venv"
+echo -e "${GREEN}✅ Virtual environment created${NC}"
 
 # Activate virtual environment
-echo "🔄 Activating virtual environment..."
-source venv/bin/activate
+echo -e "${YELLOW}🔧 Activating virtual environment...${NC}"
+source "$PROJECT_ROOT/venv/bin/activate"
 
 # Upgrade pip
-echo "⬆️ Upgrading pip..."
+echo -e "${YELLOW}📦 Upgrading pip...${NC}"
 pip install --upgrade pip
 
-# Install Python dependencies
-echo "📦 Installing Python dependencies..."
-pip install -r requirements.txt
+# Install dependencies
+echo -e "${YELLOW}📦 Installing Python dependencies...${NC}"
+pip install -e .
 
-# Generate gRPC code from proto files
-echo "🔧 Generating gRPC code..."
-if [[ ! -d "generated" ]]; then
-    mkdir generated
-    touch generated/__init__.py
-fi
+echo -e "${GREEN}✅ Dependencies installed successfully${NC}"
 
-python -m grpc_tools.protoc \
-    --python_out=generated \
-    --grpc_python_out=generated \
-    --proto_path=protos \
-    protos/anvyl.proto
+# Create necessary directories
+echo -e "${YELLOW}📁 Creating necessary directories...${NC}"
+mkdir -p "$PROJECT_ROOT/anvyl/agents"
+mkdir -p ~/.anvyl/agents
 
-echo "✅ gRPC code generated"
+echo -e "${GREEN}✅ Directories created${NC}"
 
-# Check Docker installation
-echo "🐳 Checking Docker installation..."
-if ! command -v docker >/dev/null 2>&1; then
-    echo "⚠️ Docker is not installed. Please install Docker Desktop from: https://docker.com"
-    echo "   Docker is required for container management."
+# Install CLI
+echo -e "${YELLOW}🔧 Installing CLI...${NC}"
+pip install -e .
+
+echo -e "${GREEN}✅ CLI installed successfully${NC}"
+
+# Test installation
+echo -e "${YELLOW}🧪 Testing installation...${NC}"
+if command -v anvyl &> /dev/null; then
+    echo -e "${GREEN}✅ CLI is available${NC}"
+    anvyl --version
 else
-    echo "✅ Docker is installed"
-    
-    # Check if Docker is running
-    if docker info >/dev/null 2>&1; then
-        echo "✅ Docker is running"
-    else
-        echo "⚠️ Docker is installed but not running. Please start Docker Desktop."
-    fi
-fi
-
-# Create configuration directory
-echo "📁 Creating configuration directories..."
-mkdir -p logs
-mkdir -p data
-
-# Set up git hooks (if in a git repository)
-if [[ -d ".git" ]]; then
-    echo "🔗 Setting up git hooks..."
-    # Future: Add pre-commit hooks for code formatting
+    echo -e "${RED}❌ CLI installation failed${NC}"
+    exit 1
 fi
 
 echo ""
-echo "🎉 Development environment setup complete!"
+echo -e "${GREEN}🎉 Anvyl development setup completed successfully!${NC}"
 echo ""
-echo "Next steps:"
-echo "1. Activate the virtual environment: source venv/bin/activate"
-echo "2. Start the gRPC server: python anvyl_grpc_server.py"
-echo "3. Or start the full UI stack: anvyl up"
+echo -e "${BLUE}📋 Next Steps:${NC}"
+echo -e "1. Start the UI stack: ${YELLOW}./scripts/start_anvyl_ui.sh${NC}"
+echo -e "2. Create an AI agent: ${YELLOW}anvyl agent create my-agent --provider lmstudio --auto-start${NC}"
+echo -e "3. Execute instructions: ${YELLOW}anvyl agent act my-agent \"Show me all hosts\"${NC}"
 echo ""
-echo "📖 For more information, see README.md"
+echo -e "${BLUE}📚 Useful Commands:${NC}"
+echo -e "• ${YELLOW}anvyl --help${NC} - Show CLI help"
+echo -e "• ${YELLOW}anvyl agent --help${NC} - Show agent commands"
+echo -e "• ${YELLOW}anvyl status${NC} - Show system status"
+echo ""
+echo -e "${BLUE}🔧 Development:${NC}"
+echo -e "• Activate venv: ${YELLOW}source venv/bin/activate${NC}"
+echo -e "• Run tests: ${YELLOW}python -m pytest${NC}"
+echo -e "• Stop UI: ${YELLOW}./scripts/stop_anvyl_ui.sh${NC}"

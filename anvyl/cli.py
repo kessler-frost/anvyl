@@ -556,6 +556,10 @@ def exec_command(
 agent_app = typer.Typer(help="Agent management commands.")
 app.add_typer(agent_app, name="agent")
 
+# MCP (Model Context Protocol) commands  
+from .mcp_cli import mcp_app
+app.add_typer(mcp_app, name="mcp")
+
 @agent_app.command("list")
 def list_agents(
     host_id: Optional[str] = typer.Option(None, "--host-id", help="Filter by host ID"),

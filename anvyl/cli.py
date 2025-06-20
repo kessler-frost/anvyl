@@ -663,6 +663,120 @@ def stop_agent(
         console.print(f"[red]✗[/red] Failed to stop agent: {agent_id}")
         raise typer.Exit(1)
 
+@agent_app.command("chat")
+def agent_chat(
+    agent_name: str = typer.Argument(..., help="Name of the AI agent to use"),
+    message: str = typer.Argument(..., help="Natural language message for the AI agent"),
+    model_id: str = typer.Option("llama-3.2-1b-instruct-mlx", "--model", "-m", help="LMStudio model to use"),
+    host: str = typer.Option("localhost", "--host", "-h", help="Anvyl server host"),
+    port: int = typer.Option(50051, "--port", "-p", help="Anvyl server port"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output")
+):
+    """Send a message to the AI agent and get a response."""
+    try:
+        from .ai_agent import create_ai_agent
+        
+        console.print(f"🤖 [bold blue]Initializing AI Agent '{agent_name}'...[/bold blue]")
+        
+        # Create AI agent
+        agent = create_ai_agent(model_id, host, port, verbose, agent_name=agent_name)
+        
+        console.print(f"✅ Connected to Anvyl server at {host}:{port}")
+        console.print(f"✅ Using LMStudio model: {model_id}")
+        
+        # Send message and get response
+        console.print(f"\n💬 [bold cyan]You:[/bold cyan] {message}")
+        console.print("\n[bold blue]AI:[/bold blue] Thinking...")
+        
+        response = agent.chat(message)
+        console.print(f"\n[bold blue]AI:[/bold blue] {response}")
+        
+    except ImportError:
+        console.print("[red]LMStudio not available. Install with: pip install lmstudio[/red]")
+        raise typer.Exit(1)
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
+
+@agent_app.command("interactive")
+def agent_interactive(
+    agent_name: str = typer.Argument(..., help="Name of the AI agent to use"),
+    model_id: str = typer.Option("llama-3.2-1b-instruct-mlx", "--model", "-m", help="LMStudio model to use"),
+    host: str = typer.Option("localhost", "--host", "-h", help="Anvyl server host"),
+    port: int = typer.Option(50051, "--port", "-p", help="Anvyl server port"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output")
+):
+    """Start an interactive chat session with the AI agent."""
+    try:
+        from .ai_agent import create_ai_agent
+        
+        console.print(f"🤖 [bold blue]Initializing AI Agent '{agent_name}'...[/bold blue]")
+        
+        # Create AI agent
+        agent = create_ai_agent(model_id, host, port, verbose, agent_name=agent_name)
+        
+        console.print(f"✅ Connected to Anvyl server at {host}:{port}")
+        console.print(f"✅ Using LMStudio model: {model_id}")
+        
+        # Start interactive session
+        agent.interactive_chat()
+        
+    except ImportError:
+        console.print("[red]LMStudio not available. Install with: pip install lmstudio[/red]")
+        raise typer.Exit(1)
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
+
+@agent_app.command("demo")
+def agent_demo(
+    agent_name: str = typer.Argument(..., help="Name of the AI agent to use"),
+    model_id: str = typer.Option("llama-3.2-1b-instruct-mlx", "--model", "-m", help="LMStudio model to use"),
+    host: str = typer.Option("localhost", "--host", "-h", help="Anvyl server host"),
+    port: int = typer.Option(50051, "--port", "-p", help="Anvyl server port")
+):
+    """Run a demo of AI agent capabilities."""
+    try:
+        from .ai_agent import create_ai_agent
+        
+        console.print(f"🎬 [bold blue]Anvyl AI Agent Demo for '{agent_name}'[/bold blue]")
+        console.print("This demo will show various AI agent capabilities.\n")
+        
+        # Create AI agent
+        agent = create_ai_agent(model_id, host, port, verbose=False, agent_name=agent_name)
+        
+        # Demo messages
+        demo_messages = [
+            "What's the current system status?",
+            "Show me all hosts",
+            "List all containers",
+            "Create a simple nginx container",
+            "What agents are running?"
+        ]
+        
+        for i, message in enumerate(demo_messages, 1):
+            console.print(f"\n[bold yellow]Demo {i}/{len(demo_messages)}:[/bold yellow] {message}")
+            console.print("[bold blue]AI:[/bold blue] Processing...")
+            
+            try:
+                response = agent.chat(message)
+                console.print(f"[bold blue]AI:[/bold blue] {response}")
+            except Exception as e:
+                console.print(f"[red]Error: {e}[/red]")
+            
+            if i < len(demo_messages):
+                console.print("\n" + "─" * 50)
+        
+        console.print("\n✅ [bold green]Demo completed![/bold green]")
+        console.print("💡 Try 'anvyl agent interactive <agent_name>' for a full interactive session.")
+        
+    except ImportError:
+        console.print("[red]LMStudio not available. Install with: pip install lmstudio[/red]")
+        raise typer.Exit(1)
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
+
 # Status and overview commands
 @app.command("status")
 def status(

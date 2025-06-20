@@ -36,6 +36,9 @@ dependencies = [
     # Container management
     "docker>=6.1.0",
     
+    # AI Agent support with LMStudio
+    "lmstudio>=1.3.0",
+    
     # Database and API
     "sqlmodel>=0.0.14",
     "fastapi>=0.104.0",

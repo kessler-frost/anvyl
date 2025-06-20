@@ -16,9 +16,11 @@ console = Console()
 def check_docker():
     """Check if Docker is available."""
     try:
-        result = subprocess.run(['docker', 'info'], capture_output=True, text=True)
-        return result.returncode == 0
-    except FileNotFoundError:
+        import docker
+        client = docker.from_env()
+        client.ping()
+        return True
+    except Exception:
         return False
 
 def check_anvyl_server():

@@ -17,6 +17,7 @@ from rich.panel import Panel
 from rich.tree import Tree
 import sys
 import logging
+import docker
 
 from .grpc_client import AnvylClient
 from .database.models import DatabaseManager
@@ -226,7 +227,6 @@ def show_logs(
 ):
     """Show logs from Anvyl infrastructure containers and processes."""
     try:
-        import subprocess
         project_root = get_project_root()
         ui_dir = os.path.join(project_root, "ui")
 
@@ -237,6 +237,9 @@ def show_logs(
             console.print("[yellow]To see gRPC server logs, start it manually with: python -m anvyl.grpc_server[/yellow]")
             return
 
+        # Use Docker SDK to get container logs
+        client = docker.from_env()
+
         if service:
             service_map = {
                 "frontend": "anvyl-ui-frontend",
@@ -244,28 +247,53 @@ def show_logs(
             }
 
             container_name = service_map.get(service, service)
-            cmd = ["docker-compose", "-f", "docker-compose.yml", "logs"]
 
-            if follow:
-                cmd.append("-f")
-            if tail:
-                cmd.extend(["--tail", str(tail)])
+            try:
+                # Find container by name
+                containers = client.containers.list(filters={"name": container_name})
+                if not containers:
+                    console.print(f"[red]Container '{container_name}' not found[/red]")
+                    return
 
-            cmd.append(container_name)
+                container = containers[0]
+                console.print(f"📋 [bold]Logs for {service}:[/bold]")
 
-            console.print(f"📋 [bold]Logs for {service}:[/bold]")
-            subprocess.run(cmd, cwd=ui_dir)
+                if follow:
+                    for log in container.logs(stream=True, tail=tail):
+                        console.print(log.decode('utf-8'), end='')
+                else:
+                    logs = container.logs(tail=tail).decode('utf-8')
+                    console.print(logs)
+
+            except Exception as e:
+                console.print(f"[red]Error getting logs for {service}: {e}[/red]")
+                return
         else:
             # Show logs for all Docker services
-            cmd = ["docker-compose", "-f", "docker-compose.yml", "logs"]
+            try:
+                # Find all anvyl containers
+                containers = client.containers.list(filters={"label": "anvyl.component"})
 
-            if follow:
-                cmd.append("-f")
-            if tail:
-                cmd.extend(["--tail", str(tail)])
+                if not containers:
+                    console.print("[yellow]No Anvyl containers found[/yellow]")
+                    return
 
-            console.print("📋 [bold]Logs for all Docker services:[/bold]")
-            subprocess.run(cmd, cwd=ui_dir)
+                console.print("📋 [bold]Logs for all Docker services:[/bold]")
+
+                for container in containers:
+                    service_name = container.labels.get("anvyl.service", "unknown")
+                    console.print(f"\n[bold cyan]=== {service_name} ===[/bold cyan]")
+
+                    if follow:
+                        for log in container.logs(stream=True, tail=tail):
+                            console.print(log.decode('utf-8'), end='')
+                    else:
+                        logs = container.logs(tail=tail).decode('utf-8')
+                        console.print(logs)
+
+            except Exception as e:
+                console.print(f"[red]Error getting container logs: {e}[/red]")
+                return
 
             # Add note about gRPC server
             console.print("\n[yellow]Note: gRPC server runs as a Python process, not a Docker container[/yellow]")
@@ -977,7 +1005,7 @@ def agent_remove(
             console.print(f"  Model: {config.model_id}")
             console.print(f"  Created: {config.created_at}")
 
-            confirm = typer.confirm("Remove this agent?")
+            confirm = typer.confirm("Remove this agent?", default=True)
             if not confirm:
                 console.print("[yellow]Removal cancelled.[/yellow]")
                 return

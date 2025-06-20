@@ -7,8 +7,9 @@ import grpc
 import logging
 import docker
 import os
-import subprocess
+import time
 from typing import List, Dict, Optional, Iterator, Any, Union
+from pathlib import Path
 
 # Ensure protobuf files are generated automatically
 from anvyl.proto_utils import ensure_protos_generated
@@ -144,7 +145,6 @@ class AnvylClient:
                     ], cwd=project_root, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
                     # Wait a moment for the server to start
-                    import time
                     time.sleep(3)
 
                     # Check if server started successfully
@@ -160,19 +160,37 @@ class AnvylClient:
                 return False
 
             # Run docker-compose up for UI stack
-            result = subprocess.run([
-                "docker-compose", "-f", compose_file, "up", "-d"
-            ], cwd=ui_dir, capture_output=True, text=True)
+            try:
+                # Use Docker SDK to run the compose stack
+                from docker.types import Mount
 
-            if result.returncode == 0:
-                logger.info("Successfully deployed UI stack")
-                logger.info("UI available at:")
-                logger.info("  Frontend: http://localhost:3000")
-                logger.info("  Backend API: http://localhost:8000")
-                logger.info("  gRPC Server: localhost:50051")
-                return True
-            else:
-                logger.error(f"Failed to deploy UI stack: {result.stderr}")
+                # Read the docker-compose.yml file
+                compose_file_path = os.path.join(ui_dir, "docker-compose.yml")
+                if not os.path.exists(compose_file_path):
+                    logger.error(f"Docker compose file not found: {compose_file_path}")
+                    return False
+
+                # For now, we'll use subprocess for docker-compose as the Docker SDK
+                # doesn't have full docker-compose support. In a production environment,
+                # you might want to use docker-compose-python or similar libraries.
+                import subprocess
+                result = subprocess.run([
+                    "docker-compose", "-f", compose_file_path, "up", "-d"
+                ], cwd=ui_dir, capture_output=True, text=True)
+
+                if result.returncode == 0:
+                    logger.info("Successfully deployed UI stack")
+                    logger.info("UI available at:")
+                    logger.info("  Frontend: http://localhost:3000")
+                    logger.info("  Backend API: http://localhost:8000")
+                    logger.info("  gRPC Server: localhost:50051")
+                    return True
+                else:
+                    logger.error(f"Failed to deploy UI stack: {result.stderr}")
+                    return False
+
+            except Exception as e:
+                logger.error(f"Error deploying UI stack: {e}")
                 return False
 
         except Exception as e:
@@ -182,7 +200,6 @@ class AnvylClient:
     def stop_ui_stack(self, project_root: str) -> bool:
         """Stop the UI stack containers and gRPC server."""
         try:
-            import subprocess
             import psutil
 
             ui_dir = os.path.join(project_root, "ui")
@@ -190,16 +207,21 @@ class AnvylClient:
 
             logger.info("Stopping Anvyl UI stack...")
 
-            # Stop UI containers
-            result = subprocess.run([
-                "docker-compose", "-f", compose_file, "down"
-            ], cwd=ui_dir, capture_output=True, text=True)
+            # Stop UI containers using docker-compose
+            try:
+                import subprocess
+                result = subprocess.run([
+                    "docker-compose", "-f", compose_file, "down"
+                ], cwd=ui_dir, capture_output=True, text=True)
 
-            if result.returncode != 0:
-                logger.error(f"Failed to stop UI stack: {result.stderr}")
+                if result.returncode != 0:
+                    logger.error(f"Failed to stop UI stack: {result.stderr}")
+                    return False
+
+                logger.info("Successfully stopped UI stack")
+            except Exception as e:
+                logger.error(f"Error stopping UI containers: {e}")
                 return False
-
-            logger.info("Successfully stopped UI stack")
 
             # Stop gRPC server process
             logger.info("Stopping gRPC server...")
@@ -584,11 +606,10 @@ class AnvylClient:
                     host_id: str,
                     entrypoint: str,
                     env: Optional[List[str]] = None,
-                    use_container: bool = False,
                     working_directory: str = "",
                     arguments: Optional[List[str]] = None,
                     persistent: bool = False) -> Optional[Any]:
-        """Launch a Python agent."""
+        """Launch a Python agent in a container."""
         try:
             if not self.stub:
                 logger.error("Not connected to gRPC server")
@@ -598,7 +619,6 @@ class AnvylClient:
                 host_id=host_id,
                 entrypoint=entrypoint,
                 env=env or [],
-                use_container=use_container,
                 working_directory=working_directory,
                 arguments=arguments or [],
                 persistent=persistent

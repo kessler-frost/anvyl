@@ -221,10 +221,9 @@ message LaunchAgentRequest {
   string host_id = 2;
   string entrypoint = 3;
   repeated string env = 4;
-  bool use_container = 5;  // Whether to run in container or as native process
-  string working_directory = 6;
-  repeated string arguments = 7;
-  bool persistent = 8;
+  string working_directory = 5;
+  repeated string arguments = 6;
+  bool persistent = 7;
 }
 
 message LaunchAgentResponse {

@@ -208,7 +208,7 @@ The AI agent has access to the following infrastructure functions:
 
 ### Agent Functions
 - `list_agents(host_id)`: List all agents
-- `launch_agent(name, host_id, entrypoint, use_container, environment)`: Launch an agent
+- `launch_agent(name, host_id, entrypoint, environment)`: Launch an agent in a container
 - `stop_agent(agent_id)`: Stop an agent
 
 ### System Functions
@@ -347,10 +347,10 @@ from anvyl.ai_agent import AnvylAIAgent
 class CustomAIAgent(AnvylAIAgent):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        
+
         # Add custom functions to the functions list
         self.functions.append(self._custom_function)
-    
+
     def _custom_function(self, param1: str, **kwargs):
         """Custom function description"""
         # Your custom logic here

@@ -258,6 +258,11 @@ class DatabaseManager:
         with self.get_session() as session:
             return session.get(Host, host_id)
 
+    def get_host_by_ip(self, ip: str) -> Optional[Host]:
+        """Get a host by IP address."""
+        with self.get_session() as session:
+            return session.exec(select(Host).where(Host.ip == ip)).first()
+
     def list_hosts(self) -> List[Host]:
         """List all hosts."""
         with self.get_session() as session:
@@ -293,6 +298,33 @@ class DatabaseManager:
                 session.commit()
                 return True
             return False
+
+    def cleanup_duplicate_hosts(self) -> int:
+        """Clean up duplicate hosts by IP address, keeping the most recent one."""
+        with self.get_session() as session:
+            # Get all hosts grouped by IP
+            hosts = session.exec(select(Host)).all()
+            ip_groups = {}
+
+            for host in hosts:
+                if host.ip not in ip_groups:
+                    ip_groups[host.ip] = []
+                ip_groups[host.ip].append(host)
+
+            # For each IP with multiple hosts, keep the most recent one
+            deleted_count = 0
+            for ip, host_list in ip_groups.items():
+                if len(host_list) > 1:
+                    # Sort by last_seen (most recent first), then by created_at
+                    host_list.sort(key=lambda h: (h.last_seen or h.created_at), reverse=True)
+
+                    # Keep the first (most recent) one, delete the rest
+                    for host in host_list[1:]:
+                        session.delete(host)
+                        deleted_count += 1
+
+            session.commit()
+            return deleted_count
 
     # Container management methods
     def add_container(self, container: Container) -> Container:

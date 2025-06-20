@@ -9,7 +9,6 @@ and persistence.
 import logging
 import json
 import os
-import subprocess
 import time
 from typing import Dict, List, Any, Optional, Union
 from pathlib import Path
@@ -17,6 +16,7 @@ from dataclasses import dataclass, asdict, field
 from datetime import datetime
 import platform
 import socket
+import docker
 
 from .ai_agent import AnvylAIAgent, create_ai_agent
 from .model_providers import ModelProvider
@@ -92,9 +92,10 @@ class AgentManager:
     def _check_docker(self) -> bool:
         """Check if Docker is available and running."""
         try:
-            result = subprocess.run(['docker', 'info'], capture_output=True, text=True)
-            return result.returncode == 0
-        except FileNotFoundError:
+            client = docker.from_env()
+            client.ping()
+            return True
+        except Exception:
             return False
 
     def _create_agent_script(self, config: AgentConfig) -> str:
@@ -198,16 +199,14 @@ def main():
         # Keep the container running
         while True:
             time.sleep(60)  # Sleep for 1 minute
-            # Optional: Add health check or keepalive logic here
 
     except Exception as e:
-        print(f"❌ Error initializing agent: {{e}}")
+        print(f"❌ Error running agent: {{e}}")
         sys.exit(1)
 
 if __name__ == "__main__":
     main()
 '''
-
         return script_content
 
     def create_agent(self,
@@ -219,16 +218,16 @@ if __name__ == "__main__":
                     verbose: bool = False,
                     **provider_kwargs) -> AgentConfig:
         """
-        Create a new agent configuration.
+        Create a new AI agent configuration.
 
         Args:
             name: Unique name for the agent
-            provider: Model provider type
+            provider: Model provider (lmstudio, ollama, openai, anthropic)
             model_id: Model identifier
-            host: Anvyl server host
-            port: Anvyl server port
+            host: Anvyl gRPC server host
+            port: Anvyl gRPC server port
             verbose: Enable verbose logging
-            **provider_kwargs: Provider-specific configuration
+            **provider_kwargs: Additional provider-specific arguments
 
         Returns:
             AgentConfig: The created agent configuration
@@ -280,9 +279,9 @@ if __name__ == "__main__":
         # Check if agent is already running
         if config.container_id:
             try:
-                result = subprocess.run(['docker', 'inspect', config.container_id],
-                                      capture_output=True, text=True)
-                if result.returncode == 0:
+                client = docker.from_env()
+                container = client.containers.get(config.container_id)
+                if container.status == "running":
                     raise ValueError(f"Agent '{name}' is already running in container {config.container_id}")
             except Exception:
                 pass  # Container doesn't exist, we can start a new one
@@ -346,34 +345,39 @@ CMD ["python", "/app/agent.py"]
 
         # Build the Docker image
         image_name = f"anvyl-agent-{config.name}"
-        build_cmd = [
-            'docker', 'build',
-            '-f', str(dockerfile_path),
-            '-t', image_name,
-            str(project_root)
-        ]
+        client = docker.from_env()
         logger.info(f"Building Docker image for agent {config.name}...")
-        result = subprocess.run(build_cmd, capture_output=True, text=True)
-        if result.returncode != 0:
-            raise RuntimeError(f"Failed to build Docker image: {result.stderr}")
+
+        try:
+            image, logs = client.images.build(
+                path=str(project_root),
+                dockerfile=str(dockerfile_path),
+                tag=image_name,
+                rm=True
+            )
+            logger.info(f"Successfully built image: {image_name}")
+        except Exception as e:
+            raise RuntimeError(f"Failed to build Docker image: {e}")
 
         # Run the container
         container_name = f"anvyl-agent-{config.name}"
-        run_cmd = [
-            'docker', 'run',
-            '-d',
-            '--name', container_name,
-            # Default bridge networking (no --network or -p)
-            '-e', f'ANVYL_HOST={config.host}',
-            '-e', f'ANVYL_PORT={config.port}',
-            image_name
-        ]
         logger.info(f"Starting container for agent {config.name}...")
-        result = subprocess.run(run_cmd, capture_output=True, text=True)
-        if result.returncode != 0:
-            raise RuntimeError(f"Failed to start container: {result.stderr}")
 
-        container_id = result.stdout.strip()
+        try:
+            container = client.containers.run(
+                image_name,
+                name=container_name,
+                detach=True,
+                environment={
+                    'ANVYL_HOST': config.host,
+                    'ANVYL_PORT': str(config.port)
+                }
+            )
+            logger.info(f"Successfully started container: {container.id}")
+        except Exception as e:
+            raise RuntimeError(f"Failed to start container: {e}")
+
+        container_id = container.id
         config.container_id = container_id
         config.status = "running"
         self._save_configurations()
@@ -398,24 +402,21 @@ CMD ["python", "/app/agent.py"]
             return False
 
         try:
+            client = docker.from_env()
+            container = client.containers.get(config.container_id)
+
             # Stop the container
-            stop_cmd = ['docker', 'stop', config.container_id]
-            result = subprocess.run(stop_cmd, capture_output=True, text=True)
+            container.stop()
 
-            if result.returncode == 0:
-                # Remove the container
-                rm_cmd = ['docker', 'rm', config.container_id]
-                subprocess.run(rm_cmd, capture_output=True, text=True)
+            # Remove the container
+            container.remove()
 
-                config.container_id = None
-                config.status = "stopped"
-                self._save_configurations()
+            config.container_id = None
+            config.status = "stopped"
+            self._save_configurations()
 
-                logger.info(f"Stopped agent {name}")
-                return True
-            else:
-                logger.warning(f"Failed to stop container {config.container_id}: {result.stderr}")
-                return False
+            logger.info(f"Stopped agent {name}")
+            return True
 
         except Exception as e:
             logger.error(f"Error stopping agent {name}: {e}")
@@ -443,38 +444,30 @@ CMD ["python", "/app/agent.py"]
             }
 
         try:
-            # Get container status
-            inspect_cmd = ['docker', 'inspect', config.container_id]
-            result = subprocess.run(inspect_cmd, capture_output=True, text=True)
+            client = docker.from_env()
+            container = client.containers.get(config.container_id)
+            state = container.attrs['State']
 
-            if result.returncode == 0:
-                import json
-                container_info = json.loads(result.stdout)[0]
-                state = container_info['State']
-
-                return {
-                    "name": name,
-                    "status": state['Status'],
-                    "container_id": config.container_id,
-                    "running": state['Running'],
-                    "started_at": state.get('StartedAt'),
-                    "finished_at": state.get('FinishedAt')
-                }
-            else:
-                # Container doesn't exist
-                config.container_id = None
-                config.status = "stopped"
-                self._save_configurations()
-
-                return {
-                    "name": name,
-                    "status": "stopped",
-                    "container_id": None
-                }
+            return {
+                "name": name,
+                "status": state['Status'],
+                "container_id": config.container_id,
+                "running": state['Running'],
+                "started_at": state.get('StartedAt'),
+                "finished_at": state.get('FinishedAt')
+            }
 
         except Exception as e:
-            logger.error(f"Error getting status for agent {name}: {e}")
-            return None
+            # Container doesn't exist
+            config.container_id = None
+            config.status = "stopped"
+            self._save_configurations()
+
+            return {
+                "name": name,
+                "status": "stopped",
+                "container_id": None
+            }
 
     def get_agent_logs(self, name: str, tail: int = 100, follow: bool = False) -> Optional[str]:
         """
@@ -496,13 +489,13 @@ CMD ["python", "/app/agent.py"]
             return "Agent is not running"
 
         try:
-            cmd = ['docker', 'logs']
-            if follow:
-                cmd.append('-f')
-            cmd.extend(['--tail', str(tail), config.container_id])
+            client = docker.from_env()
+            container = client.containers.get(config.container_id)
 
-            result = subprocess.run(cmd, capture_output=True, text=True)
-            return result.stdout if result.returncode == 0 else result.stderr
+            if follow:
+                return container.logs(stream=True, tail=tail)
+            else:
+                return container.logs(tail=tail).decode('utf-8')
 
         except Exception as e:
             logger.error(f"Error getting logs for agent {name}: {e}")
@@ -569,9 +562,20 @@ CMD ["python", "/app/agent.py"]
 
             # Clean up Docker resources
             try:
-                # Remove Docker image
+                # Remove Docker image with force if needed
                 image_name = f"anvyl-agent-{name}"
-                subprocess.run(['docker', 'rmi', image_name], capture_output=True)
+                client = docker.from_env()
+
+                try:
+                    image = client.images.get(image_name)
+                    client.images.remove(image.id, force=True)
+                    logger.info(f"Removed Docker image: {image_name}")
+                except Exception as e:
+                    logger.info(f"Image {image_name} not found or already removed: {e}")
+
+                # Also try to remove any dangling images that might be related
+                # This handles cases where the image might have been re-tagged or have multiple tags
+                client.images.prune()
 
                 # Remove script and Dockerfile
                 script_path = self.config_dir / f"{name}_agent.py"
@@ -581,6 +585,16 @@ CMD ["python", "/app/agent.py"]
                     script_path.unlink()
                 if dockerfile_path.exists():
                     dockerfile_path.unlink()
+
+                # Also clean up files in the agents directory
+                agents_dir = Path(__file__).parent / "agents"
+                agents_script_path = agents_dir / f"{name}_agent.py"
+                agents_dockerfile_path = agents_dir / f"{name}_Dockerfile"
+
+                if agents_script_path.exists():
+                    agents_script_path.unlink()
+                if agents_dockerfile_path.exists():
+                    agents_dockerfile_path.unlink()
 
             except Exception as e:
                 logger.warning(f"Error cleaning up Docker resources for {name}: {e}")

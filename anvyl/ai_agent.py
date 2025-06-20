@@ -262,14 +262,13 @@ class AnvylAIAgent:
             return {"success": False, "error": str(e)}
 
     def _launch_agent(self, name: str, host_id: str, entrypoint: str,
-                     use_container: bool = False, environment: Optional[List[str]] = None, **kwargs) -> Dict[str, Any]:
-        """Launch an agent."""
+                     environment: Optional[List[str]] = None, **kwargs) -> Dict[str, Any]:
+        """Launch an agent in a container."""
         try:
             agent = self.client.launch_agent(
                 name=name,
                 host_id=host_id,
                 entrypoint=entrypoint,
-                use_container=use_container,
                 env=environment or []
             )
             if agent:

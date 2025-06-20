@@ -698,8 +698,8 @@ def list_models(
 
         if output == "json":
             models_data = {
-                "downloaded": [model.id for model in downloaded_models],
-                "loaded": [model.identifier for model in loaded_models]
+                "downloaded": [getattr(model, 'id', '') for model in downloaded_models],
+                "loaded": [getattr(model, 'identifier', '') for model in loaded_models]
             }
             console.print(json.dumps(models_data, indent=2))
         else:
@@ -716,7 +716,7 @@ def list_models(
                         size = getattr(model, 'size_bytes', 0)
                         size_mb = f"{size / (1024*1024):.1f} MB" if size > 0 else "Unknown"
                         downloaded_table.add_row(
-                            model.id,
+                            getattr(model, 'id', ''),
                             getattr(model, 'architecture', 'Unknown'),
                             size_mb
                         )

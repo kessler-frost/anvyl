@@ -21,8 +21,8 @@ from anvyl.proto_utils import ensure_protos_generated
 ensure_protos_generated()
 
 # Import generated gRPC code
-from anvyl.generated import anvyl_pb2
-from anvyl.generated import anvyl_pb2_grpc
+from anvyl.generated import anvyl_pb2  # type: ignore
+from anvyl.generated import anvyl_pb2_grpc  # type: ignore
 
 # Import database models
 from anvyl.database.models import DatabaseManager, Host, Container, Agent
@@ -36,8 +36,8 @@ class AnvylService(anvyl_pb2_grpc.AnvylServiceServicer):
 
     def __init__(self):
         """Initialize the service with Docker client and database."""
-        self.docker_client = None
-        self.db = DatabaseManager()
+        self.docker_client: Optional[docker.DockerClient] = None
+        self.db: DatabaseManager = DatabaseManager()
         
         # Initialize Docker client
         try:
@@ -109,14 +109,14 @@ class AnvylService(anvyl_pb2_grpc.AnvylServiceServicer):
             self.db.update_host_heartbeat(self.host_id)
             logger.info(f"Updated heartbeat for existing host: {hostname} ({local_ip})")
 
-    def _get_host_resources(self) -> anvyl_pb2.HostResources:
+    def _get_host_resources(self) -> anvyl_pb2.HostResources:  # type: ignore
         """Get current host resource information."""
         try:
             cpu_percent = psutil.cpu_percent(interval=1)
             memory = psutil.virtual_memory()
             disk = psutil.disk_usage('/')
             
-            return anvyl_pb2.HostResources(
+            return anvyl_pb2.HostResources(  # type: ignore
                 cpu_usage_percent=cpu_percent,
                 memory_total_bytes=memory.total,
                 memory_used_bytes=memory.used,
@@ -127,25 +127,25 @@ class AnvylService(anvyl_pb2_grpc.AnvylServiceServicer):
             )
         except Exception as e:
             logger.error(f"Error getting host resources: {e}")
-            return anvyl_pb2.HostResources()
+            return anvyl_pb2.HostResources()  # type: ignore
 
-    def _host_to_proto(self, host: Host) -> anvyl_pb2.Host:
+    def _host_to_proto(self, host: Host) -> anvyl_pb2.Host:  # type: ignore
         """Convert database Host to protobuf Host."""
-        return anvyl_pb2.Host(
+        return anvyl_pb2.Host(  # type: ignore
             id=host.id,
             name=host.name,
             ip=host.ip,
             agents_installed=host.agents_installed,
             os=host.os or "",
             last_seen=host.last_seen.isoformat() if host.last_seen else "",
-            resources=anvyl_pb2.HostResources(),  # Would need to fetch current resources
+            resources=anvyl_pb2.HostResources(),  # type: ignore  # Would need to fetch current resources
             tags=host.get_tags(),
             status=host.status
         )
 
-    def _container_to_proto(self, container: Container) -> anvyl_pb2.Container:
+    def _container_to_proto(self, container: Container) -> anvyl_pb2.Container:  # type: ignore
         """Convert database Container to protobuf Container."""
-        return anvyl_pb2.Container(
+        return anvyl_pb2.Container(  # type: ignore
             id=container.id,
             name=container.name,
             image=container.image,
@@ -156,9 +156,9 @@ class AnvylService(anvyl_pb2_grpc.AnvylServiceServicer):
             launched_by_agent_id=container.launched_by_agent_id or ""
         )
 
-    def _agent_to_proto(self, agent: Agent) -> anvyl_pb2.Agent:
+    def _agent_to_proto(self, agent: Agent) -> anvyl_pb2.Agent:  # type: ignore
         """Convert database Agent to protobuf Agent."""
-        return anvyl_pb2.Agent(
+        return anvyl_pb2.Agent(  # type: ignore
             id=agent.id,
             name=agent.name,
             host_id=agent.host_id,
@@ -179,7 +179,7 @@ class AnvylService(anvyl_pb2_grpc.AnvylServiceServicer):
         logger.info("ListHosts called")
         hosts = self.db.list_hosts()
         proto_hosts = [self._host_to_proto(host) for host in hosts]
-        return anvyl_pb2.ListHostsResponse(hosts=proto_hosts)
+        return anvyl_pb2.ListHostsResponse(hosts=proto_hosts)  # type: ignore
 
     def AddHost(self, request, context):
         """Add a new host to the system."""
@@ -199,14 +199,14 @@ class AnvylService(anvyl_pb2_grpc.AnvylServiceServicer):
 
         try:
             self.db.add_host(host)
-            return anvyl_pb2.AddHostResponse(
+            return anvyl_pb2.AddHostResponse(  # type: ignore
                 host=self._host_to_proto(host),
                 success=True,
                 error_message=""
             )
         except Exception as e:
             logger.error(f"Error adding host: {e}")
-            return anvyl_pb2.AddHostResponse(
+            return anvyl_pb2.AddHostResponse(  # type: ignore
                 host=None,
                 success=False,
                 error_message=str(e)
@@ -218,7 +218,7 @@ class AnvylService(anvyl_pb2_grpc.AnvylServiceServicer):
 
         host = self.db.get_host(request.host_id)
         if not host:
-            return anvyl_pb2.UpdateHostResponse(
+            return anvyl_pb2.UpdateHostResponse(  # type: ignore
                 host=None,
                 success=False,
                 error_message="Host not found"
@@ -244,14 +244,14 @@ class AnvylService(anvyl_pb2_grpc.AnvylServiceServicer):
                 host.set_resources(resources_dict)
 
             self.db.update_host(host)
-            return anvyl_pb2.UpdateHostResponse(
+            return anvyl_pb2.UpdateHostResponse(  # type: ignore
                 host=self._host_to_proto(host),
                 success=True,
                 error_message=""
             )
         except Exception as e:
             logger.error(f"Error updating host: {e}")
-            return anvyl_pb2.UpdateHostResponse(
+            return anvyl_pb2.UpdateHostResponse(  # type: ignore
                 host=None,
                 success=False,
                 error_message=str(e)
@@ -260,76 +260,37 @@ class AnvylService(anvyl_pb2_grpc.AnvylServiceServicer):
     def GetHostMetrics(self, request, context):
         """Get current host metrics."""
         logger.info(f"GetHostMetrics called: {request.host_id}")
-
-        if request.host_id == self.host_id:
-            # Return live metrics for local host
-            try:
-                resources = self._get_host_resources()
-                return anvyl_pb2.GetHostMetricsResponse(
-                    resources=resources,
-                    success=True,
-                    error_message=""
-                )
-            except Exception as e:
-                logger.error(f"Error getting host metrics: {e}")
-                return anvyl_pb2.GetHostMetricsResponse(
-                    resources=anvyl_pb2.HostResources(),
-                    success=False,
-                    error_message=str(e)
-                )
-        else:
-            # For remote hosts, we'd need to make a remote call
-            return anvyl_pb2.GetHostMetricsResponse(
-                resources=anvyl_pb2.HostResources(),
-                success=False,
-                error_message="Remote host metrics not implemented yet"
-            )
+        try:
+            host = self.db.get_host(request.host_id)
+            if not host:
+                return anvyl_pb2.GetHostMetricsResponse(resources=None, success=False, error_message="Host not found")  # type: ignore
+            resources = self._get_host_resources()
+            return anvyl_pb2.GetHostMetricsResponse(resources=resources, success=True, error_message="")  # type: ignore
+        except Exception as e:
+            logger.error(f"Error getting host metrics: {e}")
+            return anvyl_pb2.GetHostMetricsResponse(resources=None, success=False, error_message=str(e))  # type: ignore
 
     def HostHeartbeat(self, request, context):
         """Update host heartbeat."""
         logger.info(f"HostHeartbeat called: {request.host_id}")
 
         try:
-            success = self.db.update_host_heartbeat(request.host_id)
-            if success:
-                return anvyl_pb2.HostHeartbeatResponse(
-                    success=True,
-                    error_message=""
-                )
-            else:
-                return anvyl_pb2.HostHeartbeatResponse(
-                    success=False,
-                    error_message="Host not found"
-                )
+            host = self.db.get_host(request.host_id)
+            if not host:
+                return anvyl_pb2.HostHeartbeatResponse(success=False, error_message="Host not found")  # type: ignore
+            self.db.update_host_heartbeat(request.host_id)
+            return anvyl_pb2.HostHeartbeatResponse(success=True, error_message="")  # type: ignore
         except Exception as e:
-            logger.error(f"Error updating heartbeat: {e}")
-            return anvyl_pb2.HostHeartbeatResponse(
-                success=False,
-                error_message=str(e)
-            )
+            logger.error(f"Error updating host heartbeat: {e}")
+            return anvyl_pb2.HostHeartbeatResponse(success=False, error_message=str(e))  # type: ignore
 
     # Container management methods
     def ListContainers(self, request, context):
-        """List containers using Docker SDK and database."""
-        logger.info("ListContainers called")
-
-        try:
-            # Get containers from database
-            containers = self.db.list_containers(request.host_id if request.host_id else None)
-            
-            # If we have Docker client, sync with live containers
-            if self.docker_client and (not request.host_id or request.host_id == self.host_id):
-                self._sync_containers_with_docker()
-                # Refresh from database
-                containers = self.db.list_containers(request.host_id if request.host_id else None)
-
-            proto_containers = [self._container_to_proto(container) for container in containers]
-            logger.info(f"Found {len(proto_containers)} containers")
-            return anvyl_pb2.ListContainersResponse(containers=proto_containers)
-
-        except Exception as e:
-            logger.error(f"Error listing containers: {e}")
-            return anvyl_pb2.ListContainersResponse(containers=[])
+        """List containers, optionally filtered by host."""
+        logger.info(f"ListContainers called: host_id={request.host_id}")
+        containers = self.db.list_containers(host_id=request.host_id)
+        proto_containers = [self._container_to_proto(c) for c in containers]
+        return anvyl_pb2.ListContainersResponse(containers=proto_containers)  # type: ignore
 
     def _sync_containers_with_docker(self):
         """Sync database containers with live Docker containers."""
@@ -374,7 +335,7 @@ class AnvylService(anvyl_pb2_grpc.AnvylServiceServicer):
         logger.info(f"AddContainer called: {request.name} ({request.image})")
 
         if not self.docker_client:
-            return anvyl_pb2.AddContainerResponse(
+            return anvyl_pb2.AddContainerResponse(  # type: ignore
                 container=None,
                 success=False,
                 error_message="Docker client not available"
@@ -523,7 +484,7 @@ except Exception as e:
             self.db.add_container(container)
 
             logger.info(f"Successfully created container: {docker_container.name}")
-            return anvyl_pb2.AddContainerResponse(
+            return anvyl_pb2.AddContainerResponse(  # type: ignore
                 container=self._container_to_proto(container),
                 success=True,
                 error_message=""
@@ -531,7 +492,7 @@ except Exception as e:
 
         except Exception as e:
             logger.error(f"Error creating container: {e}")
-            return anvyl_pb2.AddContainerResponse(
+            return anvyl_pb2.AddContainerResponse(  # type: ignore
                 container=None,
                 success=False,
                 error_message=str(e)
@@ -542,7 +503,7 @@ except Exception as e:
         logger.info(f"StopContainer called: {request.container_id}")
 
         if not self.docker_client:
-            return anvyl_pb2.StopContainerResponse(
+            return anvyl_pb2.StopContainerResponse(  # type: ignore
                 success=False,
                 error_message="Docker client not available"
             )
@@ -559,14 +520,14 @@ except Exception as e:
                 self.db.update_container(db_container)
 
             logger.info(f"Successfully stopped container: {request.container_id}")
-            return anvyl_pb2.StopContainerResponse(
+            return anvyl_pb2.StopContainerResponse(  # type: ignore
                 success=True,
                 error_message=""
             )
 
         except Exception as e:
             logger.error(f"Error stopping container: {e}")
-            return anvyl_pb2.StopContainerResponse(
+            return anvyl_pb2.StopContainerResponse(  # type: ignore
                 success=False,
                 error_message=str(e)
             )
@@ -576,7 +537,7 @@ except Exception as e:
         logger.info(f"GetLogs called: {request.container_id}")
 
         if not self.docker_client:
-            return anvyl_pb2.GetLogsResponse(
+            return anvyl_pb2.GetLogsResponse(  # type: ignore
                 logs="",
                 success=False,
                 error_message="Docker client not available"
@@ -592,7 +553,7 @@ except Exception as e:
             if isinstance(logs, bytes):
                 logs = logs.decode('utf-8')
             
-            return anvyl_pb2.GetLogsResponse(
+            return anvyl_pb2.GetLogsResponse(  # type: ignore
                 logs=logs,
                 success=True,
                 error_message=""
@@ -600,7 +561,7 @@ except Exception as e:
 
         except Exception as e:
             logger.error(f"Error getting logs: {e}")
-            return anvyl_pb2.GetLogsResponse(
+            return anvyl_pb2.GetLogsResponse(  # type: ignore
                 logs="",
                 success=False,
                 error_message=str(e)
@@ -611,7 +572,7 @@ except Exception as e:
         logger.info(f"StreamLogs called: {request.container_id}")
 
         if not self.docker_client:
-            yield anvyl_pb2.StreamLogsResponse(
+            yield anvyl_pb2.StreamLogsResponse(  # type: ignore
                 log_line="",
                 timestamp="",
                 success=False,
@@ -625,7 +586,7 @@ except Exception as e:
                 if isinstance(log_line, bytes):
                     log_line = log_line.decode('utf-8').strip()
                 
-                yield anvyl_pb2.StreamLogsResponse(
+                yield anvyl_pb2.StreamLogsResponse(  # type: ignore
                     log_line=log_line,
                     timestamp=datetime.now(UTC).isoformat(),
                     success=True,
@@ -634,7 +595,7 @@ except Exception as e:
 
         except Exception as e:
             logger.error(f"Error streaming logs: {e}")
-            yield anvyl_pb2.StreamLogsResponse(
+            yield anvyl_pb2.StreamLogsResponse(  # type: ignore
                 log_line="",
                 timestamp="",
                 success=False,
@@ -646,7 +607,7 @@ except Exception as e:
         logger.info(f"ExecCommand called: {request.container_id}")
 
         if not self.docker_client:
-            return anvyl_pb2.ExecCommandResponse(
+            return anvyl_pb2.ExecCommandResponse(  # type: ignore
                 output="",
                 exit_code=1,
                 success=False,
@@ -662,7 +623,7 @@ except Exception as e:
             
             output = result.output.decode('utf-8') if isinstance(result.output, bytes) else result.output
             
-            return anvyl_pb2.ExecCommandResponse(
+            return anvyl_pb2.ExecCommandResponse(  # type: ignore
                 output=output,
                 exit_code=result.exit_code,
                 success=True,
@@ -671,7 +632,7 @@ except Exception as e:
 
         except Exception as e:
             logger.error(f"Error executing command: {e}")
-            return anvyl_pb2.ExecCommandResponse(
+            return anvyl_pb2.ExecCommandResponse(  # type: ignore
                 output="",
                 exit_code=1,
                 success=False,
@@ -686,11 +647,11 @@ except Exception as e:
         try:
             agents = self.db.list_agents(request.host_id if request.host_id else None)
             proto_agents = [self._agent_to_proto(agent) for agent in agents]
-            return anvyl_pb2.ListAgentsResponse(agents=proto_agents)
+            return anvyl_pb2.ListAgentsResponse(agents=proto_agents)  # type: ignore
 
         except Exception as e:
             logger.error(f"Error listing agents: {e}")
-            return anvyl_pb2.ListAgentsResponse(agents=[])
+            return anvyl_pb2.ListAgentsResponse(agents=[])  # type: ignore
 
     def LaunchAgent(self, request, context):
         """Launch a Python agent."""
@@ -721,7 +682,7 @@ except Exception as e:
 
         except Exception as e:
             logger.error(f"Error launching agent: {e}")
-            return anvyl_pb2.LaunchAgentResponse(
+            return anvyl_pb2.LaunchAgentResponse(  # type: ignore
                 agent=None,
                 success=False,
                 error_message=str(e)
@@ -730,7 +691,7 @@ except Exception as e:
     def _launch_agent_in_container(self, agent: Agent, request, context):
         """Launch agent in a Docker container."""
         if not self.docker_client:
-            return anvyl_pb2.LaunchAgentResponse(
+            return anvyl_pb2.LaunchAgentResponse(  # type: ignore
                 agent=None,
                 success=False,
                 error_message="Docker client not available"
@@ -762,7 +723,7 @@ except Exception as e:
             self.db.add_agent(agent)
 
             logger.info(f"Successfully launched agent {agent.name} in container {docker_container.id}")
-            return anvyl_pb2.LaunchAgentResponse(
+            return anvyl_pb2.LaunchAgentResponse(  # type: ignore
                 agent=self._agent_to_proto(agent),
                 success=True,
                 error_message=""
@@ -770,7 +731,7 @@ except Exception as e:
 
         except Exception as e:
             logger.error(f"Error launching agent in container: {e}")
-            return anvyl_pb2.LaunchAgentResponse(
+            return anvyl_pb2.LaunchAgentResponse(  # type: ignore
                 agent=None,
                 success=False,
                 error_message=str(e)
@@ -804,7 +765,7 @@ except Exception as e:
             self.db.add_agent(agent)
 
             logger.info(f"Successfully launched agent {agent.name} as process {process.pid}")
-            return anvyl_pb2.LaunchAgentResponse(
+            return anvyl_pb2.LaunchAgentResponse(  # type: ignore
                 agent=self._agent_to_proto(agent),
                 success=True,
                 error_message=""
@@ -812,7 +773,7 @@ except Exception as e:
 
         except Exception as e:
             logger.error(f"Error launching agent as process: {e}")
-            return anvyl_pb2.LaunchAgentResponse(
+            return anvyl_pb2.LaunchAgentResponse(  # type: ignore
                 agent=None,
                 success=False,
                 error_message=str(e)
@@ -825,7 +786,7 @@ except Exception as e:
         try:
             agent = self.db.get_agent(request.agent_id)
             if not agent:
-                return anvyl_pb2.StopAgentResponse(
+                return anvyl_pb2.StopAgentResponse(  # type: ignore
                     success=False,
                     error_message="Agent not found"
                 )
@@ -851,14 +812,14 @@ except Exception as e:
             agent.stopped_at = datetime.now(UTC)
             self.db.update_agent(agent)
 
-            return anvyl_pb2.StopAgentResponse(
+            return anvyl_pb2.StopAgentResponse(  # type: ignore
                 success=True,
                 error_message=""
             )
 
         except Exception as e:
             logger.error(f"Error stopping agent: {e}")
-            return anvyl_pb2.StopAgentResponse(
+            return anvyl_pb2.StopAgentResponse(  # type: ignore
                 success=False,
                 error_message=str(e)
             )
@@ -870,7 +831,7 @@ except Exception as e:
         try:
             agent = self.db.get_agent(request.agent_id)
             if not agent:
-                return anvyl_pb2.GetAgentStatusResponse(
+                return anvyl_pb2.GetAgentStatusResponse(  # type: ignore
                     agent=None,
                     success=False,
                     error_message="Agent not found"
@@ -887,7 +848,7 @@ except Exception as e:
                     self.db.update_agent(agent)
                     del self.running_agents[agent.id]
 
-            return anvyl_pb2.GetAgentStatusResponse(
+            return anvyl_pb2.GetAgentStatusResponse(  # type: ignore
                 agent=self._agent_to_proto(agent),
                 success=True,
                 error_message=""
@@ -895,7 +856,7 @@ except Exception as e:
 
         except Exception as e:
             logger.error(f"Error getting agent status: {e}")
-            return anvyl_pb2.GetAgentStatusResponse(
+            return anvyl_pb2.GetAgentStatusResponse(  # type: ignore
                 agent=None,
                 success=False,
                 error_message=str(e)
@@ -907,7 +868,7 @@ except Exception as e:
         logger.info(f"ExecCommandOnHost called: {request.host_id}")
 
         if request.host_id != self.host_id:
-            return anvyl_pb2.ExecCommandOnHostResponse(
+            return anvyl_pb2.ExecCommandOnHostResponse(  # type: ignore
                 output="",
                 stderr="",
                 exit_code=1,
@@ -929,7 +890,7 @@ except Exception as e:
                 timeout=request.timeout if request.timeout > 0 else None
             )
 
-            return anvyl_pb2.ExecCommandOnHostResponse(
+            return anvyl_pb2.ExecCommandOnHostResponse(  # type: ignore
                 output=result.stdout,
                 stderr=result.stderr,
                 exit_code=result.returncode,
@@ -938,7 +899,7 @@ except Exception as e:
             )
 
         except subprocess.TimeoutExpired:
-            return anvyl_pb2.ExecCommandOnHostResponse(
+            return anvyl_pb2.ExecCommandOnHostResponse(  # type: ignore
                 output="",
                 stderr="",
                 exit_code=124,  # Standard timeout exit code
@@ -947,7 +908,7 @@ except Exception as e:
             )
         except Exception as e:
             logger.error(f"Error executing command on host: {e}")
-            return anvyl_pb2.ExecCommandOnHostResponse(
+            return anvyl_pb2.ExecCommandOnHostResponse(  # type: ignore
                 output="",
                 stderr="",
                 exit_code=1,

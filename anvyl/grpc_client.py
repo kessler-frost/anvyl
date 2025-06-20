@@ -8,15 +8,15 @@ import logging
 import docker
 import os
 import subprocess
-from typing import List, Dict, Optional, Iterator, Any
+from typing import List, Dict, Optional, Iterator, Any, Union
 
 # Ensure protobuf files are generated automatically
 from anvyl.proto_utils import ensure_protos_generated
 ensure_protos_generated()
 
 # Import generated gRPC code
-from anvyl.generated import anvyl_pb2
-from anvyl.generated import anvyl_pb2_grpc
+from anvyl.generated import anvyl_pb2  # type: ignore
+from anvyl.generated import anvyl_pb2_grpc  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -28,8 +28,8 @@ class AnvylClient:
         self.host = host
         self.port = port
         self.address = f"{host}:{port}"
-        self.channel = None
-        self.stub = None
+        self.channel: Optional[grpc.Channel] = None
+        self.stub: Optional[Any] = None  # type: ignore
         self._docker_client = None
 
     @property
@@ -50,7 +50,8 @@ class AnvylClient:
             self.stub = anvyl_pb2_grpc.AnvylServiceStub(self.channel)
 
             # Test connection with a simple call
-            self.stub.ListHosts(anvyl_pb2.ListHostsRequest())
+            if self.stub:
+                self.stub.ListHosts(anvyl_pb2.ListHostsRequest())  # type: ignore
             logger.info(f"Connected to Anvyl server at {self.address}")
             return True
 
@@ -306,7 +307,10 @@ class AnvylClient:
     def list_hosts(self) -> List[Any]:
         """List all registered hosts."""
         try:
-            response = self.stub.ListHosts(anvyl_pb2.ListHostsRequest())
+            if not self.stub:
+                logger.error("Not connected to gRPC server")
+                return []
+            response = self.stub.ListHosts(anvyl_pb2.ListHostsRequest())  # type: ignore
             return list(response.hosts)
         except Exception as e:
             logger.error(f"Error listing hosts: {e}")
@@ -315,13 +319,16 @@ class AnvylClient:
     def add_host(self, name: str, ip: str, os: str = "", tags: Optional[List[str]] = None) -> Optional[Any]:
         """Add a new host to the system."""
         try:
-            request = anvyl_pb2.AddHostRequest(
+            if not self.stub:
+                logger.error("Not connected to gRPC server")
+                return None
+            request = anvyl_pb2.AddHostRequest(  # type: ignore
                 name=name,
                 ip=ip,
                 os=os,
                 tags=tags or []
             )
-            response = self.stub.AddHost(request)
+            response = self.stub.AddHost(request)  # type: ignore
 
             if response.success:
                 logger.info(f"Successfully added host: {name} ({ip})")
@@ -338,7 +345,10 @@ class AnvylClient:
                    status: str = "", tags: Optional[List[str]] = None) -> Optional[Any]:
         """Update host information."""
         try:
-            request = anvyl_pb2.UpdateHostRequest(
+            if not self.stub:
+                logger.error("Not connected to gRPC server")
+                return None
+            request = anvyl_pb2.UpdateHostRequest(  # type: ignore
                 host_id=host_id,
                 status=status,
                 tags=tags or []
@@ -346,7 +356,7 @@ class AnvylClient:
             if resources:
                 request.resources.CopyFrom(resources)
 
-            response = self.stub.UpdateHost(request)
+            response = self.stub.UpdateHost(request)  # type: ignore
 
             if response.success:
                 logger.info(f"Successfully updated host: {host_id}")
@@ -362,8 +372,11 @@ class AnvylClient:
     def get_host_metrics(self, host_id: str) -> Optional[Any]:
         """Get current host metrics."""
         try:
-            request = anvyl_pb2.GetHostMetricsRequest(host_id=host_id)
-            response = self.stub.GetHostMetrics(request)
+            if not self.stub:
+                logger.error("Not connected to gRPC server")
+                return None
+            request = anvyl_pb2.GetHostMetricsRequest(host_id=host_id)  # type: ignore
+            response = self.stub.GetHostMetrics(request)  # type: ignore
 
             if response.success:
                 return response.resources
@@ -378,8 +391,11 @@ class AnvylClient:
     def host_heartbeat(self, host_id: str) -> bool:
         """Update host heartbeat."""
         try:
-            request = anvyl_pb2.HostHeartbeatRequest(host_id=host_id)
-            response = self.stub.HostHeartbeat(request)
+            if not self.stub:
+                logger.error("Not connected to gRPC server")
+                return False
+            request = anvyl_pb2.HostHeartbeatRequest(host_id=host_id)  # type: ignore
+            response = self.stub.HostHeartbeat(request)  # type: ignore
 
             if response.success:
                 logger.info(f"Successfully updated heartbeat for host: {host_id}")
@@ -396,11 +412,14 @@ class AnvylClient:
     def list_containers(self, host_id: Optional[str] = None) -> List[Any]:
         """List containers, optionally filtered by host."""
         try:
-            request = anvyl_pb2.ListContainersRequest()
+            if not self.stub:
+                logger.error("Not connected to gRPC server")
+                return []
+            request = anvyl_pb2.ListContainersRequest()  # type: ignore
             if host_id:
                 request.host_id = host_id
 
-            response = self.stub.ListContainers(request)
+            response = self.stub.ListContainers(request)  # type: ignore
             return list(response.containers)
 
         except Exception as e:
@@ -418,7 +437,10 @@ class AnvylClient:
                      launched_by_agent_id: Optional[str] = None) -> Optional[Any]:
         """Add a new container."""
         try:
-            request = anvyl_pb2.AddContainerRequest(
+            if not self.stub:
+                logger.error("Not connected to gRPC server")
+                return None
+            request = anvyl_pb2.AddContainerRequest(  # type: ignore
                 name=name,
                 image=image,
                 host_id=host_id or "",
@@ -429,7 +451,7 @@ class AnvylClient:
                 launched_by_agent_id=launched_by_agent_id or ""
             )
 
-            response = self.stub.AddContainer(request)
+            response = self.stub.AddContainer(request)  # type: ignore
 
             if response.success:
                 logger.info(f"Successfully created container: {name} ({image})")
@@ -445,12 +467,15 @@ class AnvylClient:
     def stop_container(self, container_id: str, timeout: int = 10) -> bool:
         """Stop a container."""
         try:
-            request = anvyl_pb2.StopContainerRequest(
+            if not self.stub:
+                logger.error("Not connected to gRPC server")
+                return False
+            request = anvyl_pb2.StopContainerRequest(  # type: ignore
                 container_id=container_id,
                 timeout=timeout
             )
 
-            response = self.stub.StopContainer(request)
+            response = self.stub.StopContainer(request)  # type: ignore
 
             if response.success:
                 logger.info(f"Successfully stopped container: {container_id}")
@@ -466,13 +491,16 @@ class AnvylClient:
     def get_logs(self, container_id: str, follow: bool = False, tail: int = 100) -> Optional[str]:
         """Get container logs."""
         try:
-            request = anvyl_pb2.GetLogsRequest(
+            if not self.stub:
+                logger.error("Not connected to gRPC server")
+                return None
+            request = anvyl_pb2.GetLogsRequest(  # type: ignore
                 container_id=container_id,
                 follow=follow,
                 tail=tail
             )
 
-            response = self.stub.GetLogs(request)
+            response = self.stub.GetLogs(request)  # type: ignore
 
             if response.success:
                 return response.logs
@@ -487,18 +515,27 @@ class AnvylClient:
     def stream_logs(self, container_id: str, follow: bool = True) -> Iterator[Any]:
         """Stream container logs (streaming RPC)."""
         try:
-            request = anvyl_pb2.StreamLogsRequest(
+            if not self.stub:
+                logger.error("Not connected to gRPC server")
+                yield anvyl_pb2.StreamLogsResponse(  # type: ignore
+                    log_line="",
+                    timestamp="",
+                    success=False,
+                    error_message="Not connected to gRPC server"
+                )
+                return
+            request = anvyl_pb2.StreamLogsRequest(  # type: ignore
                 container_id=container_id,
                 follow=follow
             )
 
-            for response in self.stub.StreamLogs(request):
+            for response in self.stub.StreamLogs(request):  # type: ignore
                 yield response
 
         except Exception as e:
             logger.error(f"Error streaming logs: {e}")
             # Yield error response
-            yield anvyl_pb2.StreamLogsResponse(
+            yield anvyl_pb2.StreamLogsResponse(  # type: ignore
                 log_line="",
                 timestamp="",
                 success=False,
@@ -508,13 +545,16 @@ class AnvylClient:
     def exec_command(self, container_id: str, command: List[str], tty: bool = False) -> Optional[Any]:
         """Execute command in container."""
         try:
-            request = anvyl_pb2.ExecCommandRequest(
+            if not self.stub:
+                logger.error("Not connected to gRPC server")
+                return None
+            request = anvyl_pb2.ExecCommandRequest(  # type: ignore
                 container_id=container_id,
                 command=command,
                 tty=tty
             )
 
-            response = self.stub.ExecCommand(request)
+            response = self.stub.ExecCommand(request)  # type: ignore
             return response
 
         except Exception as e:
@@ -525,11 +565,14 @@ class AnvylClient:
     def list_agents(self, host_id: Optional[str] = None) -> List[Any]:
         """List agents, optionally filtered by host."""
         try:
-            request = anvyl_pb2.ListAgentsRequest()
+            if not self.stub:
+                logger.error("Not connected to gRPC server")
+                return []
+            request = anvyl_pb2.ListAgentsRequest()  # type: ignore
             if host_id:
                 request.host_id = host_id
 
-            response = self.stub.ListAgents(request)
+            response = self.stub.ListAgents(request)  # type: ignore
             return list(response.agents)
 
         except Exception as e:
@@ -547,7 +590,10 @@ class AnvylClient:
                     persistent: bool = False) -> Optional[Any]:
         """Launch a Python agent."""
         try:
-            request = anvyl_pb2.LaunchAgentRequest(
+            if not self.stub:
+                logger.error("Not connected to gRPC server")
+                return None
+            request = anvyl_pb2.LaunchAgentRequest(  # type: ignore
                 name=name,
                 host_id=host_id,
                 entrypoint=entrypoint,
@@ -558,7 +604,7 @@ class AnvylClient:
                 persistent=persistent
             )
 
-            response = self.stub.LaunchAgent(request)
+            response = self.stub.LaunchAgent(request)  # type: ignore
 
             if response.success:
                 logger.info(f"Successfully launched agent: {name}")
@@ -574,8 +620,11 @@ class AnvylClient:
     def stop_agent(self, agent_id: str) -> bool:
         """Stop an agent."""
         try:
-            request = anvyl_pb2.StopAgentRequest(agent_id=agent_id)
-            response = self.stub.StopAgent(request)
+            if not self.stub:
+                logger.error("Not connected to gRPC server")
+                return False
+            request = anvyl_pb2.StopAgentRequest(agent_id=agent_id)  # type: ignore
+            response = self.stub.StopAgent(request)  # type: ignore
 
             if response.success:
                 logger.info(f"Successfully stopped agent: {agent_id}")
@@ -591,8 +640,11 @@ class AnvylClient:
     def get_agent_status(self, agent_id: str) -> Optional[Any]:
         """Get agent status."""
         try:
-            request = anvyl_pb2.GetAgentStatusRequest(agent_id=agent_id)
-            response = self.stub.GetAgentStatus(request)
+            if not self.stub:
+                logger.error("Not connected to gRPC server")
+                return None
+            request = anvyl_pb2.GetAgentStatusRequest(agent_id=agent_id)  # type: ignore
+            response = self.stub.GetAgentStatus(request)  # type: ignore
 
             if response.success:
                 return response.agent
@@ -613,7 +665,10 @@ class AnvylClient:
                            timeout: int = 0) -> Optional[Any]:
         """Execute command on host (Beszel agent functionality)."""
         try:
-            request = anvyl_pb2.ExecCommandOnHostRequest(
+            if not self.stub:
+                logger.error("Not connected to gRPC server")
+                return None
+            request = anvyl_pb2.ExecCommandOnHostRequest(  # type: ignore
                 host_id=host_id,
                 command=command,
                 working_directory=working_directory,
@@ -621,7 +676,7 @@ class AnvylClient:
                 timeout=timeout
             )
 
-            response = self.stub.ExecCommandOnHost(request)
+            response = self.stub.ExecCommandOnHost(request)  # type: ignore
             return response
 
         except Exception as e:

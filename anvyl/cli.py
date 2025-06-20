@@ -691,9 +691,6 @@ def agent_chat(
         response = agent.chat(message)
         console.print(f"\n[bold blue]AI:[/bold blue] {response}")
         
-    except ImportError:
-        console.print("[red]LMStudio not available. Install with: pip install lmstudio[/red]")
-        raise typer.Exit(1)
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
         raise typer.Exit(1)
@@ -721,9 +718,6 @@ def agent_interactive(
         # Start interactive session
         agent.interactive_chat()
         
-    except ImportError:
-        console.print("[red]LMStudio not available. Install with: pip install lmstudio[/red]")
-        raise typer.Exit(1)
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
         raise typer.Exit(1)
@@ -770,9 +764,6 @@ def agent_demo(
         console.print("\n✅ [bold green]Demo completed![/bold green]")
         console.print("💡 Try 'anvyl agent interactive <agent_name>' for a full interactive session.")
         
-    except ImportError:
-        console.print("[red]LMStudio not available. Install with: pip install lmstudio[/red]")
-        raise typer.Exit(1)
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
         raise typer.Exit(1)

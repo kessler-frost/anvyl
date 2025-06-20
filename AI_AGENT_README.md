@@ -24,20 +24,22 @@ The Anvyl AI Agent uses LMStudio's Python SDK to provide AI-powered natural lang
 ## Prerequisites
 
 1. **LMStudio**: Must be installed and running with MLX models
-2. **Anvyl Infrastructure**: gRPC server must be running
-3. **Python Dependencies**: LMStudio SDK and Anvyl package installed
+2. **Anvyl Infrastructure**: gRPC server must be running (`anvyl up`)
+3. **Python Dependencies**: Anvyl package installed
 
 ## Installation
 
-The AI agent functionality is included with Anvyl:
+1. **Install Anvyl** (includes LMStudio dependency):
+   ```bash
+   pip install anvyl
+   ```
 
-```bash
-# Install Anvyl with AI agent support
-pip install anvyl
+2. **Start Anvyl Infrastructure**:
+   ```bash
+   anvyl up
+   ```
 
-# Ensure LMStudio is running and has models available
-# Download a model if needed: lms get llama-3.2-1b-instruct-mlx
-```
+3. **Ensure LMStudio is running** and has models available
 
 ## Quick Start
 
@@ -230,25 +232,19 @@ Choose from available LMStudio models:
 
 ### Common Issues
 
-1. **LMStudio Not Available**
-   ```
-   Error: LMStudio is not available. Please ensure LMStudio is running.
-   ```
-   **Solution**: Start LMStudio and ensure it's accessible
-
-2. **Model Not Found**
+1. **Model Not Found**
    ```
    Error: Model 'llama-3.2-1b-instruct-mlx' not available
    ```
    **Solution**: Download the model in LMStudio: `lms get llama-3.2-1b-instruct-mlx`
 
-3. **Anvyl Server Not Running**
+2. **Anvyl Server Not Running**
    ```
    Error: Failed to connect to Anvyl server at localhost:50051
    ```
    **Solution**: Start the Anvyl infrastructure: `anvyl up`
 
-4. **Function Call Errors**
+3. **Function Call Errors**
    ```
    Error: Function call failed
    ```

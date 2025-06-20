@@ -20,13 +20,7 @@ from .grpc_client import AnvylClient
 logger = logging.getLogger(__name__)
 console = Console()
 
-# Conditional LMStudio import
-try:
-    import lmstudio as lms
-    LMSTUDIO_AVAILABLE = True
-except ImportError:
-    LMSTUDIO_AVAILABLE = False
-    lms = None
+import lmstudio as lms
 
 
 class AnvylAIAgent:
@@ -68,12 +62,6 @@ class AnvylAIAgent:
             raise ConnectionError(f"Failed to connect to Anvyl server at {host}:{port}")
         
         # Initialize LMStudio model
-        if not LMSTUDIO_AVAILABLE:
-            raise ImportError("LMStudio is not available. Install with: pip install lmstudio")
-        
-        # Type assertion for the type checker
-        assert lms is not None
-        
         try:
             self.model = lms.llm(model_id)
             logger.info(f"Connected to LMStudio with model: {model_id}")
@@ -326,9 +314,6 @@ class AnvylAIAgent:
             AI response with action results
         """
         try:
-            # Type assertion for the type checker
-            assert lms is not None
-
             # Use LMStudio's act() function with the model instance
             response = self.model.act(
                 message,

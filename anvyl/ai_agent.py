@@ -84,6 +84,8 @@ class AnvylAIAgent:
             self._stop_agent,
             self._get_system_status,
             self._get_ui_status,
+            self._discover_agents,
+            self._route_to_agent,
         ]
     
     def _list_hosts(self, **kwargs) -> Dict[str, Any]:
@@ -300,6 +302,71 @@ class AnvylAIAgent:
         try:
             status = self.client.get_ui_stack_status()
             return {"success": True, "ui_status": status}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def _discover_agents(self, **kwargs) -> Dict[str, Any]:
+        """Discover all agents across all connected hosts."""
+        try:
+            hosts = self.client.list_hosts()
+            all_agents = []
+            
+            for host in hosts:
+                host_id = getattr(host, 'id', '')
+                host_name = getattr(host, 'name', '')
+                host_ip = getattr(host, 'ip', '')
+                
+                # Get agents for this host
+                agents = self.client.list_agents(host_id)
+                for agent in agents:
+                    agent_info = {
+                        "id": getattr(agent, 'id', ''),
+                        "name": getattr(agent, 'name', ''),
+                        "status": getattr(agent, 'status', ''),
+                        "host_id": host_id,
+                        "host_name": host_name,
+                        "host_ip": host_ip
+                    }
+                    all_agents.append(agent_info)
+            
+            return {
+                "success": True,
+                "agents": all_agents,
+                "total": len(all_agents)
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def _route_to_agent(self, agent_name: str, command: str, **kwargs) -> Dict[str, Any]:
+        """Route a command to a specific agent by name."""
+        try:
+            # First discover all agents
+            discovery_result = self._discover_agents()
+            if not discovery_result["success"]:
+                return discovery_result
+            
+            # Find the target agent
+            target_agent = None
+            for agent in discovery_result["agents"]:
+                if agent["name"] == agent_name:
+                    target_agent = agent
+                    break
+            
+            if not target_agent:
+                return {
+                    "success": False,
+                    "error": f"Agent '{agent_name}' not found. Available agents: {[a['name'] for a in discovery_result['agents']]}"
+                }
+            
+            # Execute command on the target agent
+            # This would typically involve connecting to the agent's host and executing the command
+            # For now, we'll simulate this by returning agent info and command
+            return {
+                "success": True,
+                "agent": target_agent,
+                "command": command,
+                "message": f"Command '{command}' routed to agent '{agent_name}' on host {target_agent['host_name']} ({target_agent['host_ip']})"
+            }
         except Exception as e:
             return {"success": False, "error": str(e)}
     

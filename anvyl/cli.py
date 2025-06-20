@@ -684,6 +684,29 @@ def agent_chat(
         console.print(f"✅ Connected to Anvyl server at {host}:{port}")
         console.print(f"✅ Using LMStudio model: {model_id}")
         
+        # Discover agents and route command
+        console.print(f"🔍 [bold yellow]Discovering agents...[/bold yellow]")
+        discovery_result = agent._discover_agents()
+        
+        if not discovery_result["success"]:
+            console.print(f"[red]Error discovering agents: {discovery_result['error']}[/red]")
+            raise typer.Exit(1)
+        
+        # Find the target agent
+        target_agent = None
+        for agent_info in discovery_result["agents"]:
+            if agent_info["name"] == agent_name:
+                target_agent = agent_info
+                break
+        
+        if not target_agent:
+            available_agents = [a["name"] for a in discovery_result["agents"]]
+            console.print(f"[red]Agent '{agent_name}' not found.[/red]")
+            console.print(f"[yellow]Available agents: {available_agents}[/yellow]")
+            raise typer.Exit(1)
+        
+        console.print(f"✅ [bold green]Found agent '{agent_name}' on host {target_agent['host_name']} ({target_agent['host_ip']})[/bold green]")
+        
         # Send message and get response
         console.print(f"\n💬 [bold cyan]You:[/bold cyan] {message}")
         console.print("\n[bold blue]AI:[/bold blue] Thinking...")
@@ -715,6 +738,29 @@ def agent_interactive(
         console.print(f"✅ Connected to Anvyl server at {host}:{port}")
         console.print(f"✅ Using LMStudio model: {model_id}")
         
+        # Discover agents and verify target agent exists
+        console.print(f"🔍 [bold yellow]Discovering agents...[/bold yellow]")
+        discovery_result = agent._discover_agents()
+        
+        if not discovery_result["success"]:
+            console.print(f"[red]Error discovering agents: {discovery_result['error']}[/red]")
+            raise typer.Exit(1)
+        
+        # Find the target agent
+        target_agent = None
+        for agent_info in discovery_result["agents"]:
+            if agent_info["name"] == agent_name:
+                target_agent = agent_info
+                break
+        
+        if not target_agent:
+            available_agents = [a["name"] for a in discovery_result["agents"]]
+            console.print(f"[red]Agent '{agent_name}' not found.[/red]")
+            console.print(f"[yellow]Available agents: {available_agents}[/yellow]")
+            raise typer.Exit(1)
+        
+        console.print(f"✅ [bold green]Found agent '{agent_name}' on host {target_agent['host_name']} ({target_agent['host_ip']})[/bold green]")
+        
         # Start interactive session
         agent.interactive_chat()
         
@@ -738,6 +784,29 @@ def agent_demo(
         
         # Create AI agent
         agent = create_ai_agent(model_id, host, port, verbose=False, agent_name=agent_name)
+        
+        # Discover agents and verify target agent exists
+        console.print(f"🔍 [bold yellow]Discovering agents...[/bold yellow]")
+        discovery_result = agent._discover_agents()
+        
+        if not discovery_result["success"]:
+            console.print(f"[red]Error discovering agents: {discovery_result['error']}[/red]")
+            raise typer.Exit(1)
+        
+        # Find the target agent
+        target_agent = None
+        for agent_info in discovery_result["agents"]:
+            if agent_info["name"] == agent_name:
+                target_agent = agent_info
+                break
+        
+        if not target_agent:
+            available_agents = [a["name"] for a in discovery_result["agents"]]
+            console.print(f"[red]Agent '{agent_name}' not found.[/red]")
+            console.print(f"[yellow]Available agents: {available_agents}[/yellow]")
+            raise typer.Exit(1)
+        
+        console.print(f"✅ [bold green]Found agent '{agent_name}' on host {target_agent['host_name']} ({target_agent['host_ip']})[/bold green]")
         
         # Demo messages
         demo_messages = [
@@ -763,6 +832,62 @@ def agent_demo(
         
         console.print("\n✅ [bold green]Demo completed![/bold green]")
         console.print("💡 Try 'anvyl agent interactive <agent_name>' for a full interactive session.")
+        
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
+
+@agent_app.command("list")
+def list_agents_discovery(
+    host: str = typer.Option("localhost", "--host", "-h", help="Anvyl server host"),
+    port: int = typer.Option(50051, "--port", "-p", help="Anvyl server port"),
+    output: str = typer.Option("table", "--output", "-o", help="Output format: table, json")
+):
+    """List all available agents across all hosts."""
+    try:
+        from .ai_agent import create_ai_agent
+        
+        console.print(f"🔍 [bold blue]Discovering agents across all hosts...[/bold blue]")
+        
+        # Create AI agent for discovery
+        agent = create_ai_agent(host=host, port=port, verbose=False)
+        
+        # Discover all agents
+        discovery_result = agent._discover_agents()
+        
+        if not discovery_result["success"]:
+            console.print(f"[red]Error discovering agents: {discovery_result['error']}[/red]")
+            raise typer.Exit(1)
+        
+        agents = discovery_result["agents"]
+        
+        if output == "json":
+            console.print(json.dumps(discovery_result, indent=2))
+        else:
+            if not agents:
+                console.print("[yellow]No agents found across all hosts.[/yellow]")
+                return
+            
+            # Create table
+            table = Table(title="🤖 Available Agents")
+            table.add_column("Name", style="cyan", no_wrap=True)
+            table.add_column("Status", style="green")
+            table.add_column("Host", style="blue")
+            table.add_column("Host IP", style="magenta")
+            table.add_column("Agent ID", style="dim")
+            
+            for agent_info in agents:
+                status_color = "green" if agent_info["status"] == "running" else "red"
+                table.add_row(
+                    agent_info["name"],
+                    f"[{status_color}]{agent_info['status']}[/{status_color}]",
+                    agent_info["host_name"],
+                    agent_info["host_ip"],
+                    agent_info["id"]
+                )
+            
+            console.print(table)
+            console.print(f"\n[bold]Total agents found: {len(agents)}[/bold]")
         
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")

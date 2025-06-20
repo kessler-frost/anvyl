@@ -38,6 +38,7 @@ def main():
     try:
         # Create AI agent
         console.print(f"🔧 [bold blue]Creating AI Agent '{agent_name}'...[/bold blue]")
+        
         agent = create_ai_agent(
             model_id="llama-3.2-1b-instruct-mlx",
             host="localhost",
@@ -47,6 +48,30 @@ def main():
         )
         
         console.print(f"✅ [bold green]AI Agent '{agent_name}' created successfully![/bold green]")
+        
+        # Discover agents to verify the target agent exists
+        console.print(f"🔍 [bold yellow]Discovering agents...[/bold yellow]")
+        discovery_result = agent._discover_agents()
+        
+        if not discovery_result["success"]:
+            console.print(f"[red]Error discovering agents: {discovery_result['error']}[/red]")
+            return False
+        
+        # Find the target agent
+        target_agent = None
+        for agent_info in discovery_result["agents"]:
+            if agent_info["name"] == agent_name:
+                target_agent = agent_info
+                break
+        
+        if not target_agent:
+            available_agents = [a["name"] for a in discovery_result["agents"]]
+            console.print(f"[red]Agent '{agent_name}' not found.[/red]")
+            console.print(f"[yellow]Available agents: {available_agents}[/yellow]")
+            console.print(f"[yellow]Use 'anvyl agent list' to see all available agents[/yellow]")
+            return False
+        
+        console.print(f"✅ [bold green]Found agent '{agent_name}' on host {target_agent['host_name']} ({target_agent['host_ip']})[/bold green]")
         
         # Example interactions
         examples = [
@@ -77,6 +102,7 @@ def main():
         console.print(f"  • Try the interactive mode: anvyl agent interactive {agent_name}")
         console.print(f"  • Use single commands: anvyl agent chat {agent_name} 'your message'")
         console.print(f"  • Run the demo: anvyl agent demo {agent_name}")
+        console.print(f"  • List all available agents: anvyl agent list")
         
     except ImportError as e:
         console.print(f"[red]❌ Import Error: {e}[/red]")

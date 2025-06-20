@@ -83,10 +83,26 @@ anvyl agent chat my-ai "List all containers" --model llama-3.2-3b-instruct-mlx
 anvyl agent demo my-ai
 ```
 
-## CLI Commands
+## CLI Usage
 
-### `anvyl agent chat <agent_name> <message>`
-Send a natural language message to the AI agent.
+The AI agent is accessible through the `anvyl agent` command group:
+
+### List Available Agents
+Discover all agents across all connected hosts:
+```bash
+anvyl agent list
+```
+
+**Options:**
+- `--host, -h`: Anvyl server host (default: localhost)
+- `--port, -p`: Anvyl server port (default: 50051)
+- `--output, -o`: Output format: table, json (default: table)
+
+### Chat Mode
+Send a single message to the AI agent:
+```bash
+anvyl agent chat <agent_name> "your message"
+```
 
 **Options:**
 - `--model, -m`: LMStudio model to use (default: llama-3.2-1b-instruct-mlx)
@@ -96,13 +112,25 @@ Send a natural language message to the AI agent.
 
 **Examples:**
 ```bash
+# Basic usage
 anvyl agent chat my-ai "Show me all hosts"
-anvyl agent chat my-ai "Create a web server container" --model llama-3.2-3b-instruct-mlx
-anvyl agent chat my-ai "What's the system status?" --verbose
+
+# With custom model
+anvyl agent chat my-ai "Create a container" --model llama-3.2-7b-instruct-mlx
+
+# Verbose mode
+anvyl agent chat my-ai "List containers" --verbose
+
+# List available agents first
+anvyl agent list
+anvyl agent chat my-ai "What's the status?"
 ```
 
-### `anvyl agent interactive <agent_name>`
-Start an interactive chat session with the AI agent.
+### Interactive Mode
+Start an interactive chat session:
+```bash
+anvyl agent interactive <agent_name>
+```
 
 **Options:**
 - `--model, -m`: LMStudio model to use
@@ -110,14 +138,11 @@ Start an interactive chat session with the AI agent.
 - `--port, -p`: Anvyl server port
 - `--verbose, -v`: Enable verbose output
 
-**Usage:**
+### Demo Mode
+Run a demonstration of AI agent capabilities:
 ```bash
-anvyl agent interactive my-ai
-# Then type your commands interactively
+anvyl agent demo <agent_name>
 ```
-
-### `anvyl agent demo <agent_name>`
-Run a demonstration of AI agent capabilities.
 
 **Options:**
 - `--model, -m`: LMStudio model to use
@@ -197,7 +222,7 @@ You can also use the AI agent programmatically:
 ```python
 from anvyl.ai_agent import create_ai_agent
 
-# Create an AI agent
+# Create an AI agent with default settings
 agent = create_ai_agent(
     model_id="llama-3.2-1b-instruct-mlx",
     host="localhost",
@@ -205,6 +230,13 @@ agent = create_ai_agent(
     verbose=True,
     agent_name="my-ai"
 )
+
+# Discover all available agents
+discovery_result = agent._discover_agents()
+if discovery_result["success"]:
+    print(f"Found {discovery_result['total']} agents:")
+    for agent_info in discovery_result["agents"]:
+        print(f"  - {agent_info['name']} on {agent_info['host_name']} ({agent_info['host_ip']})")
 
 # Send a message
 response = agent.chat("Show me all hosts")
@@ -223,10 +255,34 @@ Choose from available LMStudio models:
 - `llama-3.2-7b-instruct-mlx` (high quality)
 - Any other MLX model available in LMStudio
 
-### Server Configuration
-- **Host**: Default is `localhost`
-- **Port**: Default is `50051` (Anvyl gRPC server)
-- **Verbose Mode**: Enable detailed logging and function call visibility
+### Agent Discovery
+The AI agent system automatically discovers all agents across all connected hosts:
+
+**CLI Usage:**
+```bash
+# List all available agents
+anvyl agent list
+
+# The system will automatically find and route to the specified agent
+anvyl agent chat my-ai "hello"
+```
+
+**Python API:**
+```python
+# Discover all agents
+discovery_result = agent._discover_agents()
+for agent_info in discovery_result["agents"]:
+    print(f"Agent: {agent_info['name']} on {agent_info['host_name']}")
+
+# Route command to specific agent
+routing_result = agent._route_to_agent("my-ai", "your command")
+```
+
+**Discovery Features:**
+- Automatically scans all connected hosts
+- Shows agent status, host, and location
+- Routes commands to the correct agent
+- Handles agent not found scenarios gracefully
 
 ## Troubleshooting
 
@@ -249,6 +305,18 @@ Choose from available LMStudio models:
    Error: Function call failed
    ```
    **Solution**: Check that the gRPC server is running and accessible
+
+4. **Agent Not Found**
+   ```
+   Error: Agent 'my-ai' not found
+   ```
+   **Solution**: Use `anvyl agent list` to see available agents, or launch the agent first
+
+5. **Agent Discovery Issues**
+   ```
+   Error: Error discovering agents
+   ```
+   **Solution**: Check host connectivity and ensure agents are running on the hosts
 
 ### Debug Mode
 
@@ -315,6 +383,7 @@ for cmd in commands:
 2. **Model Security**: Use trusted LMStudio models only
 3. **Network Security**: Ensure gRPC server is properly secured in production
 4. **Function Validation**: AI agent validates function parameters before execution
+5. **Agent Discovery Security**: Agent discovery reveals host information - secure your network
 
 ## Performance Tips
 
@@ -322,6 +391,7 @@ for cmd in commands:
 2. **Connection Pooling**: Reuse AI agent instances for multiple commands
 3. **Batch Operations**: Group related commands for efficiency
 4. **Caching**: Cache frequently requested information
+5. **Agent Discovery**: Discovery is cached during session - restart for fresh discovery
 
 ## Future Enhancements
 
@@ -332,6 +402,7 @@ Planned features include:
 - **Integration APIs**: REST API for AI agent access
 - **Custom Prompts**: User-defined system prompts
 - **Workflow Automation**: Complex multi-step operations
+- **Agent Discovery Enhancements**: Real-time agent status updates and health checks
 
 ## Support
 
@@ -343,4 +414,4 @@ For issues and questions:
 
 ## License
 
-This AI agent functionality is part of the Anvyl project and is licensed under the MIT License. 
+This AI agent functionality is part of the Anvyl project and is licensed under the MIT License.

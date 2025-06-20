@@ -1,0 +1,35 @@
+FROM python:3.12-slim
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /app
+
+# Copy agent script
+COPY anvyl/agents/deepseek-agent_agent.py /app/agent.py
+
+# Install Python dependencies
+RUN pip install --no-cache-dir \
+    rich \
+    typer \
+    grpcio \
+    grpcio-tools \
+    protobuf
+
+# Copy the anvyl package and build files from the host
+COPY anvyl /app/anvyl
+COPY pyproject.toml /app/pyproject.toml
+
+# Install anvyl in development mode
+RUN pip install -e /app
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
+
+# Run the agent
+CMD ["python", "/app/agent.py"]

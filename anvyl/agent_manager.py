@@ -15,6 +15,8 @@ from typing import Dict, List, Any, Optional, Union
 from pathlib import Path
 from dataclasses import dataclass, asdict, field
 from datetime import datetime
+import platform
+import socket
 
 from .ai_agent import AnvylAIAgent, create_ai_agent
 from .model_providers import ModelProvider
@@ -51,12 +53,19 @@ class AgentManager:
         Args:
             config_dir: Directory to store agent configurations
         """
-        self.config_dir = Path(config_dir or os.path.expanduser("~/.anvyl/agents"))
+        if config_dir is None:
+            config_dir = os.path.expanduser("~/.anvyl/agents")
+
+        self.config_dir = Path(config_dir)
         self.config_dir.mkdir(parents=True, exist_ok=True)
         self.config_file = self.config_dir / "agents.json"
 
         # Load existing configurations
         self.configurations = self._load_configurations()
+
+        # Update existing configs to use host.docker.internal on macOS
+        if platform.system() == "Darwin":
+            self._update_macos_configs()
 
     def _load_configurations(self) -> Dict[str, AgentConfig]:
         """Load agent configurations from file."""
@@ -90,6 +99,11 @@ class AgentManager:
 
     def _create_agent_script(self, config: AgentConfig) -> str:
         """Create a Python script for the agent to run in container."""
+        # Always use host.docker.internal for gRPC host on macOS
+        grpc_host = "host.docker.internal" if platform.system() == "Darwin" else config.host
+        # Use host.docker.internal for LM Studio on macOS
+        lmstudio_host = "host.docker.internal" if platform.system() == "Darwin" else "localhost"
+
         script_content = f'''#!/usr/bin/env python3
 """
 Anvyl AI Agent Container Script
@@ -133,10 +147,10 @@ def main():
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
 
-    print(f"🚀 Starting Anvyl AI Agent: {{config.name}}")
-    print(f"   Provider: {{config.provider}}")
-    print(f"   Model: {{config.model_id}}")
-    print(f"   gRPC Server: {{config.host}}:{{config.port}}")
+    print(f"🚀 Starting Anvyl AI Agent: {config.name}")
+    print(f"   Provider: {config.provider}")
+    print(f"   Model: {config.model_id}")
+    print(f"   gRPC Server: {grpc_host}:{config.port}")
 
     # Wait for gRPC server to be available
     print("⏳ Waiting for gRPC server to be available...")
@@ -145,7 +159,7 @@ def main():
 
     while retry_count < max_retries:
         try:
-            client = AnvylClient("{config.host}", {config.port})
+            client = AnvylClient("{grpc_host}", {config.port})
             if client.connect():
                 print("✅ Connected to gRPC server")
                 break
@@ -166,10 +180,11 @@ def main():
         agent = create_ai_agent(
             model_provider="{config.provider}",
             model_id="{config.model_id}",
-            host="{config.host}",
+            host="{grpc_host}",
             port={config.port},
             verbose={config.verbose},
             agent_name="{config.name}",
+            lmstudio_host="{lmstudio_host}",
             {', '.join([f'{k}={repr(v)}' for k, v in config.provider_kwargs.items()])}
         )
 
@@ -190,13 +205,7 @@ if __name__ == "__main__":
     main()
 '''
 
-        script_path = self.config_dir / f"{config.name}_agent.py"
-        with open(script_path, 'w') as f:
-            f.write(script_content)
-
-        # Make script executable
-        os.chmod(script_path, 0o755)
-        return str(script_path)
+        return script_content
 
     def create_agent(self,
                     name: str,
@@ -276,7 +285,7 @@ if __name__ == "__main__":
                 pass  # Container doesn't exist, we can start a new one
 
         # Create the agent script
-        script_path = self._create_agent_script(config)
+        script_content = self._create_agent_script(config)
 
         # Determine the container image based on provider
         if config.provider == "lmstudio":
@@ -288,25 +297,51 @@ if __name__ == "__main__":
         else:
             base_image = "python:3.12-slim"
 
-        # Create Dockerfile for the agent
+        # Set Docker build context to the directory containing pyproject.toml
+        project_root = Path(__file__).parent.parent.resolve()
+
+        # Write agent script and Dockerfile into anvyl/agents/ (inside build context)
+        agents_dir = Path(__file__).parent / "agents"
+        agents_dir.mkdir(parents=True, exist_ok=True)
+        script_path = agents_dir / f"{config.name}_agent.py"
+        with open(script_path, 'w') as f:
+            f.write(script_content)
+        os.chmod(script_path, 0o755)
+
+        # Prepare Dockerfile content
         dockerfile_content = f'''FROM {base_image}
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \\
     curl \\
+    git \\
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /app
 
 # Copy agent script
-COPY {os.path.basename(script_path)} /app/agent.py
+COPY anvyl/agents/{config.name}_agent.py /app/agent.py
 
 # Install Python dependencies
 RUN pip install --no-cache-dir \\
-    anvyl \\
     rich \\
-    typer
+    typer \\
+    grpcio \\
+    grpcio-tools \\
+    protobuf
+
+# Copy the anvyl package and build files from the host
+COPY anvyl /app/anvyl
+COPY pyproject.toml /app/pyproject.toml
+'''
+        # Only copy setup.py if it exists
+        setup_py_path = project_root / 'setup.py'
+        if setup_py_path.exists():
+            dockerfile_content += 'COPY setup.py /app/setup.py\n'
+        dockerfile_content += '''
+# Install anvyl in development mode
+RUN pip install -e /app
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
@@ -315,38 +350,36 @@ ENV PYTHONPATH=/app
 # Run the agent
 CMD ["python", "/app/agent.py"]
 '''
-
-        dockerfile_path = self.config_dir / f"{name}_Dockerfile"
+        dockerfile_path = Path(__file__).parent / "agents" / f"{config.name}_Dockerfile"
         with open(dockerfile_path, 'w') as f:
             f.write(dockerfile_content)
 
         # Build the Docker image
-        image_name = f"anvyl-agent-{name}"
+        image_name = f"anvyl-agent-{config.name}"
         build_cmd = [
             'docker', 'build',
             '-f', str(dockerfile_path),
             '-t', image_name,
-            str(self.config_dir)
+            str(project_root)
         ]
-
-        logger.info(f"Building Docker image for agent {name}...")
+        logger.info(f"Building Docker image for agent {config.name}...")
         result = subprocess.run(build_cmd, capture_output=True, text=True)
         if result.returncode != 0:
             raise RuntimeError(f"Failed to build Docker image: {result.stderr}")
 
         # Run the container
-        container_name = f"anvyl-agent-{name}"
+        container_name = f"anvyl-agent-{config.name}"
         run_cmd = [
             'docker', 'run',
-            '-d',  # Detached mode
+            '--rm',  # Auto-remove container on exit
+            '-d',
             '--name', container_name,
-            '--network', 'host',  # Use host network to access gRPC server
+            # Default bridge networking (no --network or -p)
             '-e', f'ANVYL_HOST={config.host}',
             '-e', f'ANVYL_PORT={config.port}',
             image_name
         ]
-
-        logger.info(f"Starting container for agent {name}...")
+        logger.info(f"Starting container for agent {config.name}...")
         result = subprocess.run(run_cmd, capture_output=True, text=True)
         if result.returncode != 0:
             raise RuntimeError(f"Failed to start container: {result.stderr}")
@@ -355,8 +388,7 @@ CMD ["python", "/app/agent.py"]
         config.container_id = container_id
         config.status = "running"
         self._save_configurations()
-
-        logger.info(f"Started agent {name} in container {container_id}")
+        logger.info(f"Started agent {config.name} in container {container_id}")
         return True
 
     def stop_agent(self, name: str) -> bool:
@@ -599,6 +631,18 @@ CMD ["python", "/app/agent.py"]
             logger.warning(f"Agent '{name}' is running. Restart to apply changes.")
 
         return True
+
+    def _update_macos_configs(self):
+        """Update all existing agent configs to use host.docker.internal for gRPC host on macOS."""
+        updated = False
+        for config in self.configurations.values():
+            if config.host in ["localhost", "127.0.0.1"]:
+                config.host = "host.docker.internal"
+                updated = True
+
+        if updated:
+            self._save_configurations()
+            logger.info("Updated existing agent configs to use host.docker.internal for macOS")
 
 
 # Global agent manager instance

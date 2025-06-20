@@ -956,7 +956,8 @@ def agent_list(
 @agent_app.command("remove")
 def agent_remove(
     name: str = typer.Argument(..., help="Name of the AI agent to remove"),
-    force: bool = typer.Option(False, "--force", "-f", help="Force removal without confirmation")
+    force: bool = typer.Option(False, "--force", "-f", help="Force removal without confirmation"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Auto-accept all prompts")
 ):
     """Remove an AI agent configuration."""
     try:
@@ -969,8 +970,8 @@ def agent_remove(
             console.print(f"[red]Agent '{name}' not found.[/red]")
             raise typer.Exit(1)
 
-        # Confirm removal unless forced
-        if not force:
+        # Confirm removal unless forced or auto-accept is enabled
+        if not force and not yes:
             console.print(f"[yellow]Are you sure you want to remove agent '{name}'?[/yellow]")
             console.print(f"  Provider: {config.provider}")
             console.print(f"  Model: {config.model_id}")

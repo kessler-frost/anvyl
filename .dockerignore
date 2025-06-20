@@ -1,0 +1,7 @@
+*
+!anvyl/
+!anvyl/agents/
+!anvyl/agents/*_agent.py
+!anvyl/agents/*_Dockerfile
+!pyproject.toml
+!setup.py

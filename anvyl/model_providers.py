@@ -78,29 +78,34 @@ class ModelProvider(ABC):
 class LMStudioProvider(ModelProvider):
     """LM Studio provider for local MLX models."""
 
-    def __init__(self, model_id: str = "deepseek/deepseek-r1-0528-qwen3-8b", **kwargs):
+    def __init__(self, model_id: str = "deepseek/deepseek-r1-0528-qwen3-8b", host: str = "localhost", **kwargs):
         """
         Initialize LM Studio provider.
 
         Args:
             model_id: LM Studio model identifier
+            host: LM Studio server host
             **kwargs: Additional LM Studio specific configuration
         """
-        super().__init__(model_id, **kwargs)
+        super().__init__(model_id, host=host, **kwargs)
+        self.host = host
         self.model = None
 
     def initialize(self) -> bool:
         """Initialize connection to LM Studio."""
         try:
             import lmstudio as lms
-            self.model = lms.llm(self.model_id)
-            logger.info(f"Connected to LMStudio with model: {self.model_id}")
+            # Create a client with the specified host (without http:// prefix)
+            client = lms.Client(api_host=f"{self.host}:1234")
+            # Get the LLM using the client
+            self.model = client.llm.model(self.model_id)
+            logger.info(f"Connected to LMStudio at {self.host} with model: {self.model_id}")
             return True
         except ImportError:
             logger.error("LMStudio package not available. Please install: pip install lmstudio")
             return False
         except Exception as e:
-            logger.error(f"Failed to connect to LMStudio: {e}")
+            logger.error(f"Failed to connect to LMStudio at {self.host}: {e}")
             return False
 
     def act(self, instruction: str, available_actions: Optional[List[Callable]] = None, **kwargs) -> str:

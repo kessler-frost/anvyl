@@ -316,21 +316,81 @@ CMD ["python", "/app/agent_script.py"]
             except Exception as e:
                 logger.warning(f"Error removing container by name {container_name}: {e}")
 
+            # Clean up intermediate build containers (created during failed builds)
+            try:
+                # Find containers that were created during the build process
+                # These often have random names and are from recent builds
+                import time
+                recent_containers = client.containers.list(
+                    all=True,
+                    filters={
+                        "status": "exited",
+                        "ancestor": "python:3.12-alpine"  # Base image we use
+                    }
+                )
+
+                # Remove containers created in the last 5 minutes (likely from our failed build)
+                current_time = time.time()
+                for cont in recent_containers:
+                    try:
+                        # Check if container was created recently (within 5 minutes)
+                        created_time = cont.attrs['Created']
+                        created_timestamp = time.mktime(time.strptime(created_time.split('.')[0], '%Y-%m-%dT%H:%M:%S'))
+
+                        if current_time - created_timestamp < 300:  # 5 minutes
+                            cont.remove(force=True)
+                            logger.info(f"Removed intermediate build container: {cont.name} ({cont.id[:12]})")
+                    except Exception as e:
+                        logger.warning(f"Error removing intermediate container {cont.id}: {e}")
+            except Exception as e:
+                logger.warning(f"Error cleaning up intermediate containers: {e}")
+
             # Clean up Docker image if it exists
             if image_name:
                 try:
+                    # Try to get image by name
                     image = client.images.get(image_name)
                     client.images.remove(image.id, force=True)
                     logger.info(f"Removed Docker image: {image_name}")
                 except docker.errors.ImageNotFound:
-                    logger.info(f"Docker image {image_name} not found")
+                    # Try to find image by pattern
+                    try:
+                        images = client.images.list(filters={"reference": f"anvyl-agent-{name}*"})
+                        for img in images:
+                            client.images.remove(img.id, force=True)
+                            logger.info(f"Removed Docker image: {img.tags[0] if img.tags else img.id}")
+                    except Exception as e:
+                        logger.warning(f"Error removing Docker images by pattern: {e}")
                 except Exception as e:
                     logger.warning(f"Error removing Docker image {image_name}: {e}")
 
+            # Clean up dangling images (images with <none> tag) that might be from failed builds
+            try:
+                # Find dangling images created recently
+                dangling_images = client.images.list(filters={"dangling": True})
+                current_time = time.time()
+
+                for img in dangling_images:
+                    try:
+                        # Check if image was created recently (within 5 minutes)
+                        created_time = img.attrs['Created']
+                        created_timestamp = time.mktime(time.strptime(created_time.split('.')[0], '%Y-%m-%dT%H:%M:%S'))
+
+                        if current_time - created_timestamp < 300:  # 5 minutes
+                            client.images.remove(img.id, force=True)
+                            logger.info(f"Removed dangling image: {img.id[:12]}")
+                    except Exception as e:
+                        logger.warning(f"Error removing dangling image {img.id}: {e}")
+            except Exception as e:
+                logger.warning(f"Error cleaning up dangling images: {e}")
+
             # Clean up temporary build directory
             if temp_build_dir and temp_build_dir.exists():
-                shutil.rmtree(temp_build_dir)
-                logger.info(f"Removed temporary build directory: {temp_build_dir}")
+                try:
+                    shutil.rmtree(temp_build_dir)
+                    logger.info(f"Removed temporary build directory: {temp_build_dir}")
+                except Exception as e:
+                    logger.warning(f"Error removing temporary build directory: {e}")
 
             # Reset agent configuration status
             config = self.configurations.get(name)
@@ -366,6 +426,7 @@ CMD ["python", "/app/agent_script.py"]
         container = None
         image_name = f"anvyl-agent-{name}"
         temp_build_dir = None
+        image = None
 
         try:
             # Check if agent is already running
@@ -415,12 +476,18 @@ CMD ["python", "/app/agent_script.py"]
             client = docker.from_env()
 
             logger.info(f"Building Docker image for agent '{name}'...")
-            image, build_logs = client.images.build(
-                path=str(temp_build_dir),  # Use temp build directory as build context
-                dockerfile="Dockerfile",  # Dockerfile is in the temp directory
-                tag=image_name,
-                rm=True
-            )
+            try:
+                image, build_logs = client.images.build(
+                    path=str(temp_build_dir),  # Use temp build directory as build context
+                    dockerfile="Dockerfile",  # Dockerfile is in the temp directory
+                    tag=image_name,
+                    rm=True
+                )
+            except Exception as build_error:
+                logger.error(f"Failed to build Docker image for agent '{name}': {build_error}")
+                # Clean up any partial images that might have been created
+                self._cleanup_failed_startup(name, None, image_name, temp_build_dir)
+                return False
 
             # Run container
             container_name = f"anvyl-agent-{name}"
@@ -476,24 +543,30 @@ CMD ["python", "/app/agent_script.py"]
                 else:
                     logger.error(f"Failed to register agent '{name}' with infrastructure service")
                     # Clean up on infrastructure service failure
+                    logger.info(f"🛑 Starting cleanup due to infrastructure service registration failure")
                     self._cleanup_failed_startup(name, container, image_name, temp_build_dir)
                     return False
             else:
                 logger.error("No hosts available for agent")
                 # Clean up on no hosts available
+                logger.info(f"🛑 Starting cleanup due to no hosts available")
                 self._cleanup_failed_startup(name, container, image_name, temp_build_dir)
                 return False
 
         except Exception as e:
             logger.error(f"Error starting agent '{name}': {e}")
             # Clean up on any exception
+            logger.info(f"🛑 Starting cleanup due to exception: {e}")
             self._cleanup_failed_startup(name, container, image_name, temp_build_dir)
             return False
 
         finally:
             # Clean up temporary build directory (always)
             if temp_build_dir and temp_build_dir.exists():
-                shutil.rmtree(temp_build_dir)
+                try:
+                    shutil.rmtree(temp_build_dir)
+                except Exception as e:
+                    logger.warning(f"Error cleaning up temp build directory: {e}")
 
     def stop_agent(self, name: str) -> bool:
         """
@@ -793,6 +866,53 @@ CMD ["python", "/app/agent_script.py"]
                         cleaned_count += 1
                     except Exception as e:
                         logger.warning(f"Error removing image {image.id}: {e}")
+
+                # Clean up intermediate build containers (created during failed builds)
+                try:
+                    import time
+                    recent_containers = client.containers.list(
+                        all=True,
+                        filters={
+                            "status": "exited",
+                            "ancestor": "python:3.12-alpine"  # Base image we use
+                        }
+                    )
+
+                    current_time = time.time()
+                    for cont in recent_containers:
+                        try:
+                            # Check if container was created recently (within 10 minutes)
+                            created_time = cont.attrs['Created']
+                            created_timestamp = time.mktime(time.strptime(created_time.split('.')[0], '%Y-%m-%dT%H:%M:%S'))
+
+                            if current_time - created_timestamp < 600:  # 10 minutes
+                                cont.remove(force=True)
+                                logger.info(f"Removed intermediate build container: {cont.name} ({cont.id[:12]})")
+                                cleaned_count += 1
+                        except Exception as e:
+                            logger.warning(f"Error removing intermediate container {cont.id}: {e}")
+                except Exception as e:
+                    logger.warning(f"Error cleaning up intermediate containers: {e}")
+
+                # Clean up dangling images (images with <none> tag) that might be from failed builds
+                try:
+                    dangling_images = client.images.list(filters={"dangling": True})
+                    current_time = time.time()
+
+                    for img in dangling_images:
+                        try:
+                            # Check if image was created recently (within 10 minutes)
+                            created_time = img.attrs['Created']
+                            created_timestamp = time.mktime(time.strptime(created_time.split('.')[0], '%Y-%m-%dT%H:%M:%S'))
+
+                            if current_time - created_timestamp < 600:  # 10 minutes
+                                client.images.remove(img.id, force=True)
+                                logger.info(f"Removed dangling image: {img.id[:12]}")
+                                cleaned_count += 1
+                        except Exception as e:
+                            logger.warning(f"Error removing dangling image {img.id}: {e}")
+                except Exception as e:
+                    logger.warning(f"Error cleaning up dangling images: {e}")
 
             if cleaned_count > 0:
                 logger.info(f"🧹 Cleaned up {cleaned_count} orphaned resources")

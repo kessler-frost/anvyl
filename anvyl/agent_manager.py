@@ -194,7 +194,7 @@ def main():
 
         print("✅ Agent initialized successfully")
         print("🔄 Agent is running and ready to receive instructions")
-        print('💡 Use \'anvyl agent act {config.name} \"<instruction>\"\' to execute actions')
+        print("💡 Use 'anvyl agent act {config.name} <instruction>' to execute actions")
 
         # Keep the container running
         while True:

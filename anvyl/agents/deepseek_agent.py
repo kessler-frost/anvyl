@@ -82,15 +82,14 @@ def main():
 
         print("✅ Agent initialized successfully")
         print("🔄 Agent is running and ready to receive instructions")
-        print('💡 Use 'anvyl agent act deepseek "<instruction>"' to execute actions')
+        print("💡 Use 'anvyl agent act deepseek <instruction>' to execute actions")
 
         # Keep the container running
         while True:
             time.sleep(60)  # Sleep for 1 minute
-            # Optional: Add health check or keepalive logic here
 
     except Exception as e:
-        print(f"❌ Error initializing agent: {e}")
+        print(f"❌ Error running agent: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":

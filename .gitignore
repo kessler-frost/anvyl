@@ -112,3 +112,6 @@ dmypy.json
 
 # Generated files
 generated/
+
+# Agent generated files
+anvyl/agents/

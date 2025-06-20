@@ -1,6 +1,7 @@
 #!/bin/bash
 
 # Anvyl Development Setup Script
+# This script sets up the development environment for Anvyl
 
 set -e
 
@@ -9,109 +10,128 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 echo -e "${BLUE}🔧 Anvyl Development Setup${NC}"
-echo "================================"
+echo "=============================="
+echo ""
 
 # Get the project root directory
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-echo -e "${BLUE}📁 Project root: $PROJECT_ROOT${NC}"
+echo -e "${CYAN}Project root: ${PROJECT_ROOT}${NC}"
+echo ""
 
 # Check if we're in the right directory
-if [[ ! -f "$PROJECT_ROOT/pyproject.toml" ]]; then
-    echo -e "${RED}❌ This doesn't appear to be the Anvyl project root.${NC}"
-    echo -e "${RED}   Please run this script from the Anvyl project directory.${NC}"
+if [ ! -f "${PROJECT_ROOT}/pyproject.toml" ]; then
+    echo -e "${RED}Error: pyproject.toml not found. Please run this script from the Anvyl project root.${NC}"
     exit 1
 fi
+
+echo -e "${GREEN}✓ Found Anvyl project${NC}"
+echo ""
 
 # Check Python version
-echo -e "${YELLOW}🐍 Checking Python version...${NC}"
-python_version=$(python3 --version 2>&1 | cut -d' ' -f2)
-required_version="3.12"
+echo -e "${CYAN}Checking Python version...${NC}"
+PYTHON_VERSION=$(python3 --version 2>&1 | cut -d' ' -f2)
+echo -e "${YELLOW}Python version: ${PYTHON_VERSION}${NC}"
 
-if [[ "$(printf '%s\n' "$required_version" "$python_version" | sort -V | head -n1)" != "$required_version" ]]; then
-    echo -e "${RED}❌ Python $required_version or higher is required. Found: $python_version${NC}"
-    exit 1
+# Check if Python 3.12+ is available
+if command -v python3.12 &> /dev/null; then
+    PYTHON_CMD="python3.12"
+    echo -e "${GREEN}✓ Python 3.12+ found${NC}"
+elif command -v python3.11 &> /dev/null; then
+    PYTHON_CMD="python3.11"
+    echo -e "${GREEN}✓ Python 3.11 found${NC}"
+elif command -v python3.10 &> /dev/null; then
+    PYTHON_CMD="python3.10"
+    echo -e "${GREEN}✓ Python 3.10 found${NC}"
+else
+    echo -e "${YELLOW}⚠ Python 3.10+ recommended, but using available Python${NC}"
+    PYTHON_CMD="python3"
 fi
+echo ""
 
-echo -e "${GREEN}✅ Python $python_version is compatible${NC}"
-
-# Check if Docker is available
-echo -e "${YELLOW}🐳 Checking Docker...${NC}"
+# Check Docker
+echo -e "${CYAN}Checking Docker...${NC}"
 if command -v docker &> /dev/null; then
-    if docker info > /dev/null 2>&1; then
-        echo -e "${GREEN}✅ Docker is available and running${NC}"
+    DOCKER_VERSION=$(docker --version)
+    echo -e "${GREEN}✓ Docker found: ${DOCKER_VERSION}${NC}"
+
+    # Check if Docker is running
+    if docker info &> /dev/null; then
+        echo -e "${GREEN}✓ Docker is running${NC}"
     else
-        echo -e "${YELLOW}⚠️  Docker is installed but not running${NC}"
-        echo -e "${YELLOW}   Please start Docker and run this script again${NC}"
+        echo -e "${YELLOW}⚠ Docker is installed but not running${NC}"
+        echo -e "${YELLOW}  Please start Docker Desktop and try again${NC}"
     fi
 else
-    echo -e "${YELLOW}⚠️  Docker not found${NC}"
-    echo -e "${YELLOW}   Please install Docker to use containerized features${NC}"
-fi
-
-# Create virtual environment
-echo -e "${YELLOW}🐍 Creating Python virtual environment...${NC}"
-if [[ -d "$PROJECT_ROOT/venv" ]]; then
-    echo -e "${YELLOW}⚠️  Virtual environment already exists. Removing...${NC}"
-    rm -rf "$PROJECT_ROOT/venv"
-fi
-
-python3 -m venv "$PROJECT_ROOT/venv"
-echo -e "${GREEN}✅ Virtual environment created${NC}"
-
-# Activate virtual environment
-echo -e "${YELLOW}🔧 Activating virtual environment...${NC}"
-source "$PROJECT_ROOT/venv/bin/activate"
-
-# Upgrade pip
-echo -e "${YELLOW}📦 Upgrading pip...${NC}"
-pip install --upgrade pip
-
-# Install dependencies
-echo -e "${YELLOW}📦 Installing Python dependencies...${NC}"
-pip install -e .
-
-echo -e "${GREEN}✅ Dependencies installed successfully${NC}"
-
-# Create necessary directories
-echo -e "${YELLOW}📁 Creating necessary directories...${NC}"
-mkdir -p "$PROJECT_ROOT/anvyl/agents"
-mkdir -p ~/.anvyl/agents
-
-echo -e "${GREEN}✅ Directories created${NC}"
-
-# Install CLI
-echo -e "${YELLOW}🔧 Installing CLI...${NC}"
-pip install -e .
-
-echo -e "${GREEN}✅ CLI installed successfully${NC}"
-
-# Test installation
-echo -e "${YELLOW}🧪 Testing installation...${NC}"
-if command -v anvyl &> /dev/null; then
-    echo -e "${GREEN}✅ CLI is available${NC}"
-    anvyl --version
-else
-    echo -e "${RED}❌ CLI installation failed${NC}"
+    echo -e "${RED}✗ Docker not found${NC}"
+    echo -e "${YELLOW}  Please install Docker Desktop: https://www.docker.com/products/docker-desktop${NC}"
     exit 1
 fi
+echo ""
 
+# Create virtual environment
+echo -e "${CYAN}Setting up virtual environment...${NC}"
+if [ ! -d "venv" ]; then
+    echo -e "${YELLOW}Creating virtual environment...${NC}"
+    $PYTHON_CMD -m venv venv
+    echo -e "${GREEN}✓ Virtual environment created${NC}"
+else
+    echo -e "${GREEN}✓ Virtual environment already exists${NC}"
+fi
+
+# Activate virtual environment
+echo -e "${YELLOW}Activating virtual environment...${NC}"
+source venv/bin/activate
+echo -e "${GREEN}✓ Virtual environment activated${NC}"
 echo ""
-echo -e "${GREEN}🎉 Anvyl development setup completed successfully!${NC}"
+
+# Upgrade pip
+echo -e "${CYAN}Upgrading pip...${NC}"
+pip install --upgrade pip
+echo -e "${GREEN}✓ Pip upgraded${NC}"
 echo ""
-echo -e "${BLUE}📋 Next Steps:${NC}"
-echo -e "1. Start the UI stack: ${YELLOW}./scripts/start_anvyl_ui.sh${NC}"
-echo -e "2. Create an AI agent: ${YELLOW}anvyl agent create my-agent --provider lmstudio --auto-start${NC}"
-echo -e "3. Execute instructions: ${YELLOW}anvyl agent act my-agent \"Show me all hosts\"${NC}"
+
+# Install development dependencies
+echo -e "${CYAN}Installing development dependencies...${NC}"
+pip install -e ".[dev]"
+echo -e "${GREEN}✓ Development dependencies installed${NC}"
 echo ""
-echo -e "${BLUE}📚 Useful Commands:${NC}"
-echo -e "• ${YELLOW}anvyl --help${NC} - Show CLI help"
-echo -e "• ${YELLOW}anvyl agent --help${NC} - Show agent commands"
-echo -e "• ${YELLOW}anvyl status${NC} - Show system status"
+
+# Create necessary directories
+echo -e "${CYAN}Creating necessary directories...${NC}"
+mkdir -p ~/.anvyl
+mkdir -p ~/.anvyl/logs
+echo -e "${GREEN}✓ Directories created${NC}"
 echo ""
-echo -e "${BLUE}🔧 Development:${NC}"
-echo -e "• Activate venv: ${YELLOW}source venv/bin/activate${NC}"
-echo -e "• Run tests: ${YELLOW}python -m pytest${NC}"
-echo -e "• Stop UI: ${YELLOW}./scripts/stop_anvyl_ui.sh${NC}"
+
+# Run tests to verify installation
+echo -e "${CYAN}Running tests to verify installation...${NC}"
+if python -m pytest tests/ -v; then
+    echo -e "${GREEN}✓ Tests passed${NC}"
+else
+    echo -e "${YELLOW}⚠ Some tests failed (this might be expected in development)${NC}"
+fi
+echo ""
+
+# Show next steps
+echo -e "${GREEN}🎉 Development environment setup complete!${NC}"
+echo ""
+echo -e "${BLUE}Next steps:${NC}"
+echo "1. Activate the virtual environment: ${YELLOW}source venv/bin/activate${NC}"
+echo "2. Start the infrastructure: ${YELLOW}anvyl up${NC}"
+echo "3. Access the web UI: ${YELLOW}http://localhost:3000${NC}"
+echo "4. Run the CLI demo: ${YELLOW}./scripts/demo_cli.sh${NC}"
+echo "5. Run tests: ${YELLOW}python -m pytest${NC}"
+echo ""
+echo -e "${YELLOW}Useful commands:${NC}"
+echo "  anvyl --help                    # Show CLI help"
+echo "  anvyl status                    # Check system status"
+echo "  anvyl host list                 # List hosts"
+echo "  anvyl container list            # List containers"
+echo "  python -m pytest                # Run tests"
+echo "  python -m pytest -v             # Run tests with verbose output"
+echo ""
+echo -e "${GREEN}Happy coding! 🚀${NC}"

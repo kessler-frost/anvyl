@@ -1,19 +1,19 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   LayoutDashboard,
   Server,
   Container,
-  Bot,
   Settings,
   Menu,
   X,
+  Search,
   Activity,
-  Users,
-  Database,
-  Network,
-  BarChart3,
   Plus,
-  Search
+  MoreHorizontal,
+  Play,
+  Square,
+  Trash2,
+  Edit
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -27,7 +27,6 @@ const navigation = [
   { name: 'Dashboard', icon: LayoutDashboard, id: 'dashboard' },
   { name: 'Hosts', icon: Server, id: 'hosts' },
   { name: 'Containers', icon: Container, id: 'containers' },
-  { name: 'Agents', icon: Bot, id: 'agents' },
   { name: 'Settings', icon: Settings, id: 'settings' },
 ]
 
@@ -49,14 +48,6 @@ const stats = [
     color: 'text-gray-900'
   },
   {
-    name: 'Agents',
-    value: '5',
-    change: '+2',
-    trend: 'up',
-    icon: Bot,
-    color: 'text-gray-900'
-  },
-  {
     name: 'System Load',
     value: '23%',
     change: '-5%',
@@ -69,7 +60,6 @@ const stats = [
 const recentActivity = [
   { type: 'container', action: 'Created container nginx-web', time: '2 minutes ago', status: 'success' },
   { type: 'host', action: 'Mac Studio came online', time: '5 minutes ago', status: 'success' },
-  { type: 'agent', action: 'Backup agent started on Mac Mini', time: '10 minutes ago', status: 'success' },
   { type: 'container', action: 'Container postgres-db stopped', time: '15 minutes ago', status: 'warning' }
 ]
 
@@ -90,8 +80,6 @@ function App() {
         return <HostsView />
       case 'containers':
         return <ContainersView />
-      case 'agents':
-        return <AgentsView />
       case 'settings':
         return <SettingsView />
       default:
@@ -222,20 +210,27 @@ function Dashboard() {
   return (
     <div className="space-y-8">
       {/* Stats Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {stats.map((stat, index) => {
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {stats.map((stat) => {
           const Icon = stat.icon
           return (
-            <Card key={stat.name} className="apple-card-dark apple-glass-hover-dark">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-                <CardTitle className="text-sm font-medium text-gray-400">{stat.name}</CardTitle>
-                <Icon className="w-5 h-5 text-gray-400" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold text-white">{stat.value}</div>
-                <p className={`text-sm ${stat.trend === 'up' ? 'text-green-400' : 'text-red-400'}`}>
-                  {stat.change} from last month
-                </p>
+            <Card key={stat.name} className="apple-card-dark">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-400">{stat.name}</p>
+                    <p className="text-2xl font-bold text-white">{stat.value}</p>
+                    <div className="flex items-center mt-2">
+                      <span className={`text-sm font-medium ${
+                        stat.trend === 'up' ? 'text-green-400' : 'text-red-400'
+                      }`}>
+                        {stat.change}
+                      </span>
+                      <span className="text-sm text-gray-400 ml-1">from last month</span>
+                    </div>
+                  </div>
+                  <Icon className={`w-8 h-8 ${stat.color}`} />
+                </div>
               </CardContent>
             </Card>
           )
@@ -245,20 +240,24 @@ function Dashboard() {
       {/* Recent Activity */}
       <Card className="apple-card-dark">
         <CardHeader>
-          <CardTitle className="text-xl font-semibold text-white">Recent Activity</CardTitle>
+          <CardTitle className="text-white">Recent Activity</CardTitle>
           <CardDescription className="text-gray-400">Latest system events and actions</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
             {recentActivity.map((activity, index) => (
-              <div key={index} className="flex items-center gap-4">
-                <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-white">{activity.action}</p>
-                  <p className="text-sm text-gray-400">{activity.time}</p>
+              <div key={index} className="flex items-center justify-between p-4 rounded-lg bg-gray-800/50">
+                <div className="flex items-center space-x-4">
+                  <div className={`w-2 h-2 rounded-full ${
+                    activity.status === 'success' ? 'bg-green-400' : 'bg-yellow-400'
+                  }`} />
+                  <div>
+                    <p className="text-sm font-medium text-white">{activity.action}</p>
+                    <p className="text-xs text-gray-400">{activity.time}</p>
+                  </div>
                 </div>
-                <Badge variant={activity.status === 'success' ? 'default' : 'secondary'} className="status-online-dark">
-                  {activity.status}
+                <Badge variant={activity.status === 'success' ? 'default' : 'secondary'}>
+                  {activity.type}
                 </Badge>
               </div>
             ))}
@@ -271,18 +270,22 @@ function Dashboard() {
 
 function HostsView() {
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-3xl font-bold tracking-tight text-white">Hosts</h2>
-        <Button className="btn-primary-dark">
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight text-white">Hosts</h2>
+          <p className="text-gray-400">Manage your infrastructure hosts</p>
+        </div>
+        <Button className="bg-blue-600 hover:bg-blue-700">
           <Plus className="w-4 h-4 mr-2" />
           Add Host
         </Button>
       </div>
+
       <Card className="apple-card-dark">
         <CardHeader>
           <CardTitle className="text-xl font-semibold text-white">System Hosts</CardTitle>
-          <CardDescription className="text-gray-400">Manage your infrastructure hosts</CardDescription>
+          <CardDescription className="text-gray-400">All registered hosts in your network</CardDescription>
         </CardHeader>
         <CardContent>
           <p className="text-gray-400">Host management interface coming soon...</p>
@@ -294,18 +297,22 @@ function HostsView() {
 
 function ContainersView() {
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-3xl font-bold tracking-tight text-white">Containers</h2>
-        <Button className="btn-primary-dark">
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight text-white">Containers</h2>
+          <p className="text-gray-400">Manage Docker containers</p>
+        </div>
+        <Button className="bg-blue-600 hover:bg-blue-700">
           <Plus className="w-4 h-4 mr-2" />
           Create Container
         </Button>
       </div>
+
       <Card className="apple-card-dark">
         <CardHeader>
-          <CardTitle className="text-xl font-semibold text-white">Docker Containers</CardTitle>
-          <CardDescription className="text-gray-400">Manage your containerized applications</CardDescription>
+          <CardTitle className="text-xl font-semibold text-white">Running Containers</CardTitle>
+          <CardDescription className="text-gray-400">All containers in your infrastructure</CardDescription>
         </CardHeader>
         <CardContent>
           <p className="text-gray-400">Container management interface coming soon...</p>
@@ -315,37 +322,18 @@ function ContainersView() {
   )
 }
 
-function AgentsView() {
-  return (
-    <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <h2 className="text-3xl font-bold tracking-tight text-white">Agents</h2>
-        <Button className="btn-primary-dark">
-          <Plus className="w-4 h-4 mr-2" />
-          Launch Agent
-        </Button>
-      </div>
-      <Card className="apple-card-dark">
-        <CardHeader>
-          <CardTitle className="text-xl font-semibold text-white">System Agents</CardTitle>
-          <CardDescription className="text-gray-400">Manage automated agents and tasks</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <p className="text-gray-400">Agent management interface coming soon...</p>
-        </CardContent>
-      </Card>
-    </div>
-  )
-}
-
 function SettingsView() {
   return (
-    <div className="space-y-8">
-      <h2 className="text-3xl font-bold tracking-tight text-white">Settings</h2>
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-3xl font-bold tracking-tight text-white">Settings</h2>
+        <p className="text-gray-400">Configure your Anvyl instance</p>
+      </div>
+
       <Card className="apple-card-dark">
         <CardHeader>
-          <CardTitle className="text-xl font-semibold text-white">System Configuration</CardTitle>
-          <CardDescription className="text-gray-400">Configure your Anvyl instance</CardDescription>
+          <CardTitle className="text-xl font-semibold text-white">System Settings</CardTitle>
+          <CardDescription className="text-gray-400">Configure system preferences and connections</CardDescription>
         </CardHeader>
         <CardContent>
           <p className="text-gray-400">Settings interface coming soon...</p>

@@ -1,37 +1,37 @@
-from fastapi import FastAPI, HTTPException, Depends
+"""
+Anvyl UI Backend API
+
+FastAPI backend that provides a REST API bridge to the Anvyl infrastructure orchestrator.
+This allows the React frontend to interact with the Anvyl system through HTTP requests.
+"""
+
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from typing import List, Optional, Dict, Any
-import sys
-import os
+from typing import List, Dict, Optional
+import logging
 
-# Add the parent directory to the path to import from anvyl
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-try:
-    from anvyl.grpc_client import AnvylClient
-except ImportError:
-    # Fallback for development - create a mock client
-    class AnvylClient:
-        def __init__(self, host="localhost", port=50051):
-            self.host = host
-            self.port = port
-            
-        def connect(self):
-            return True
-            
-        def disconnect(self):
-            pass
-            
-        def list_hosts(self):
-            return []
-            
-        def list_containers(self, host_id=None):
-            return []
-            
-        def list_agents(self, host_id=None):
-            return []
+# Mock Anvyl client for development (replace with actual gRPC client)
+class AnvylClient:
+    def __init__(self, host="localhost", port=50051):
+        self.host = host
+        self.port = port
+
+    def connect(self):
+        logger.info(f"Connecting to Anvyl at {self.host}:{self.port}")
+
+    def disconnect(self):
+        logger.info("Disconnecting from Anvyl")
+
+    def list_hosts(self):
+        return []
+
+    def list_containers(self, host_id=None):
+        return []
 
 app = FastAPI(
     title="Anvyl UI API",
@@ -79,17 +79,6 @@ class Container(BaseModel):
     environment: List[str] = []
     volumes: List[str] = []
 
-class Agent(BaseModel):
-    id: str
-    name: str
-    host_id: str
-    status: str
-    entrypoint: str
-    working_directory: str = ""
-    persistent: bool = False
-    arguments: List[str] = []
-    environment: List[str] = []
-
 class CreateHostRequest(BaseModel):
     name: str
     ip: str
@@ -104,15 +93,6 @@ class CreateContainerRequest(BaseModel):
     labels: Dict[str, str] = {}
     environment: List[str] = []
     volumes: List[str] = []
-
-class CreateAgentRequest(BaseModel):
-    name: str
-    host_id: str
-    entrypoint: str
-    working_directory: str = ""
-    persistent: bool = False
-    arguments: List[str] = []
-    environment: List[str] = []
 
 # API Routes
 
@@ -229,20 +209,22 @@ async def create_container(container_data: CreateContainerRequest):
             name=container_data.name,
             image=container_data.image,
             host_id=container_data.host_id,
-            labels=container_data.labels,
             ports=container_data.ports,
-            volumes=container_data.volumes,
-            environment=container_data.environment
+            labels=container_data.labels,
+            environment=container_data.environment,
+            volumes=container_data.volumes
         )
         if result:
             return Container(
                 id=getattr(result, 'id', ''),
                 name=container_data.name,
                 image=container_data.image,
-                status="creating",
+                status=getattr(result, 'status', 'unknown'),
                 host_id=container_data.host_id,
                 ports=container_data.ports,
-                labels=container_data.labels
+                labels=container_data.labels,
+                environment=container_data.environment,
+                volumes=container_data.volumes
             )
         else:
             raise HTTPException(status_code=400, detail="Failed to create container")
@@ -267,76 +249,15 @@ async def get_container_logs(container_id: str, tail: int = 100):
     """Get container logs"""
     try:
         client = get_anvyl_client()
-        logs = client.get_logs(container_id, follow=False, tail=tail)
-        return {"logs": logs or ""}
+        logs = client.get_logs(container_id, tail=tail)
+        if logs:
+            return {"logs": logs}
+        else:
+            return {"logs": ""}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get container logs: {str(e)}")
 
-# Agent endpoints
-@app.get("/api/agents", response_model=List[Agent])
-async def list_agents(host_id: Optional[str] = None):
-    """List agents, optionally filtered by host"""
-    try:
-        client = get_anvyl_client()
-        agents = client.list_agents(host_id)
-        return [
-            Agent(
-                id=getattr(agent, 'id', ''),
-                name=getattr(agent, 'name', ''),
-                host_id=getattr(agent, 'host_id', ''),
-                status=getattr(agent, 'status', 'unknown'),
-                entrypoint=getattr(agent, 'entrypoint', ''),
-                working_directory=getattr(agent, 'working_directory', ''),
-                persistent=getattr(agent, 'persistent', False)
-            )
-            for agent in agents
-        ]
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to list agents: {str(e)}")
-
-@app.post("/api/agents", response_model=Agent)
-async def launch_agent(agent_data: CreateAgentRequest):
-    """Launch a new agent"""
-    try:
-        client = get_anvyl_client()
-        result = client.launch_agent(
-            name=agent_data.name,
-            host_id=agent_data.host_id,
-            entrypoint=agent_data.entrypoint,
-            env=agent_data.environment,
-            working_directory=agent_data.working_directory,
-            arguments=agent_data.arguments,
-            persistent=agent_data.persistent
-        )
-        if result:
-            return Agent(
-                id=getattr(result, 'id', ''),
-                name=agent_data.name,
-                host_id=agent_data.host_id,
-                status="starting",
-                entrypoint=agent_data.entrypoint,
-                working_directory=agent_data.working_directory,
-                persistent=agent_data.persistent
-            )
-        else:
-            raise HTTPException(status_code=400, detail="Failed to launch agent")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to launch agent: {str(e)}")
-
-@app.post("/api/agents/{agent_id}/stop")
-async def stop_agent(agent_id: str):
-    """Stop an agent"""
-    try:
-        client = get_anvyl_client()
-        success = client.stop_agent(agent_id)
-        if success:
-            return {"status": "success", "message": f"Agent {agent_id} stopped"}
-        else:
-            raise HTTPException(status_code=400, detail="Failed to stop agent")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to stop agent: {str(e)}")
-
-# System endpoints
+# System status endpoint
 @app.get("/api/system/status")
 async def get_system_status():
     """Get overall system status"""
@@ -344,8 +265,7 @@ async def get_system_status():
         client = get_anvyl_client()
         hosts = client.list_hosts()
         containers = client.list_containers()
-        agents = client.list_agents()
-        
+
         return {
             "hosts": {
                 "total": len(hosts),
@@ -354,10 +274,6 @@ async def get_system_status():
             "containers": {
                 "total": len(containers),
                 "running": len([c for c in containers if getattr(c, 'status', '') == 'running'])
-            },
-            "agents": {
-                "total": len(agents),
-                "running": len([a for a in agents if getattr(a, 'status', '') == 'running'])
             }
         }
     except Exception as e:

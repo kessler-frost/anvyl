@@ -38,27 +38,27 @@ echo ""
 
 echo -e "${CYAN}Demo 2: Check system status${NC}"
 echo "============================"
-echo -e "${YELLOW}Note: This will fail if the gRPC server is not running${NC}"
-echo -e "${YELLOW}Start it with: python anvyl_grpc_server.py${NC}"
+echo -e "${YELLOW}Note: This will fail if the infrastructure is not running${NC}"
+echo -e "${YELLOW}Start it with: anvyl up${NC}"
 echo ""
 
 # Try to connect and show status (this might fail if server is not running)
 if anvyl status 2>/dev/null; then
-    echo -e "${GREEN}✓ Successfully connected to Anvyl server${NC}"
+    echo -e "${GREEN}✓ Successfully connected to Anvyl infrastructure${NC}"
 else
-    echo -e "${YELLOW}⚠ Could not connect to Anvyl server${NC}"
-    echo -e "${YELLOW}  This is expected if the server is not running${NC}"
-    echo -e "${YELLOW}  Start it with: python anvyl_grpc_server.py${NC}"
+    echo -e "${YELLOW}⚠ Could not connect to Anvyl infrastructure${NC}"
+    echo -e "${YELLOW}  This is expected if the infrastructure is not running${NC}"
+    echo -e "${YELLOW}  Start it with: anvyl up${NC}"
 fi
 echo ""
 
 echo -e "${CYAN}Demo 3: Show host management commands${NC}"
 echo "====================================="
-echo -e "${YELLOW}List hosts (will show empty if no server or no hosts):${NC}"
+echo -e "${YELLOW}List hosts (will show empty if no infrastructure or no hosts):${NC}"
 if anvyl host list 2>/dev/null; then
     echo -e "${GREEN}✓ Host list command successful${NC}"
 else
-    echo -e "${YELLOW}⚠ Could not list hosts (server not running)${NC}"
+    echo -e "${YELLOW}⚠ Could not list hosts (infrastructure not running)${NC}"
 fi
 echo ""
 
@@ -72,37 +72,35 @@ echo -e "${YELLOW}Container management help:${NC}"
 anvyl container --help
 echo ""
 
-echo -e "${YELLOW}Container creation example (would create if server running):${NC}"
+echo -e "${YELLOW}Container creation example (would create if infrastructure running):${NC}"
 echo "anvyl container create \"demo-web\" \"nginx:alpine\" --port \"8080:80\" --label \"demo=true\""
 echo ""
 
-echo -e "${CYAN}Demo 5: Show agent management commands${NC}"
-echo "======================================"
-echo -e "${YELLOW}Agent management help:${NC}"
-anvyl agent --help
-echo ""
-
-echo -e "${CYAN}Demo 6: JSON output example${NC}"
+echo -e "${CYAN}Demo 5: JSON output example${NC}"
 echo "========================="
 echo -e "${YELLOW}All commands support JSON output for scripting:${NC}"
 echo "anvyl host list --output json"
 echo "anvyl container list --output json"
-echo "anvyl agent list --output json"
 echo ""
 
-echo -e "${CYAN}Demo 7: Remote server connection example${NC}"
-echo "========================================"
-echo -e "${YELLOW}Connect to remote Anvyl server:${NC}"
-echo "anvyl --host 192.168.1.100 --port 50051 status"
-echo "anvyl --host 192.168.1.100 host list"
+echo -e "${CYAN}Demo 6: Infrastructure management${NC}"
+echo "=================================="
+echo -e "${YELLOW}Start infrastructure:${NC}"
+echo "anvyl up"
+echo ""
+echo -e "${YELLOW}Stop infrastructure:${NC}"
+echo "anvyl down"
+echo ""
+echo -e "${YELLOW}Show infrastructure status:${NC}"
+echo "anvyl ps"
 echo ""
 
 echo -e "${GREEN}🎉 Demo complete!${NC}"
 echo ""
 echo -e "${BLUE}Next steps:${NC}"
-echo "1. Start the gRPC server: ${YELLOW}python anvyl_grpc_server.py${NC}"
+echo "1. Start the infrastructure: ${YELLOW}anvyl up${NC}"
 echo "2. Try the commands shown above"
-echo "3. Read the full documentation: ${YELLOW}docs/cli_usage.md${NC}"
+echo "3. Access the web UI: ${YELLOW}http://localhost:3000${NC}"
 echo "4. Add your first host: ${YELLOW}anvyl host add \"my-mac\" \"192.168.1.100\"${NC}"
 echo "5. Create your first container: ${YELLOW}anvyl container create \"test\" \"nginx:alpine\"${NC}"
 echo ""

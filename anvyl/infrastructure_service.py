@@ -2,7 +2,7 @@
 Anvyl Infrastructure Service
 
 This module provides infrastructure management functionality that was previously
-handled by the gRPC server. It manages hosts, containers, and agents using
+handled by the gRPC server. It manages hosts and containers using
 direct Python calls instead of gRPC.
 """
 
@@ -15,7 +15,7 @@ import docker
 import psutil
 import socket
 
-from .database.models import DatabaseManager, Host, Container, Agent
+from .database.models import DatabaseManager, Host, Container
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +72,6 @@ class InfrastructureService:
                 id=self.host_id,
                 name=hostname,
                 ip=local_ip,
-                agents_installed=True,
                 os="macOS",  # Can be detected dynamically
                 last_seen=datetime.now(UTC),
                 status="online",
@@ -198,12 +197,11 @@ class InfrastructureService:
                 id=host_id,
                 name=name,
                 ip=ip,
-                agents_installed=False,
                 os=os,
                 last_seen=datetime.now(UTC),
-                status="offline"
+                status="online",
+                tags=tags or []
             )
-            host.set_tags(tags or [])
 
             self.db.add_host(host)
 
@@ -296,8 +294,7 @@ class InfrastructureService:
 
     def add_container(self, name: str, image: str, host_id: Optional[str] = None,
                      labels: Optional[Dict[str, str]] = None, ports: Optional[List[str]] = None,
-                     volumes: Optional[List[str]] = None, environment: Optional[List[str]] = None,
-                     launched_by_agent_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+                     volumes: Optional[List[str]] = None, environment: Optional[List[str]] = None) -> Optional[Dict[str, Any]]:
         """Add a new container."""
         if not self.docker_client:
             return None
@@ -340,8 +337,7 @@ class InfrastructureService:
                 name=name,
                 image=image,
                 host_id=host_id,
-                status=docker_container.status,
-                launched_by_agent_id=launched_by_agent_id
+                status=docker_container.status
             )
 
             if labels:
@@ -406,280 +402,21 @@ class InfrastructureService:
 
         try:
             container = self.docker_client.containers.get(container_id)
-            result = container.exec_run(command, tty=tty)
+            exec_result = container.exec_run(
+                cmd=command,
+                tty=tty,
+                stream=False
+            )
 
             return {
-                "output": result.output.decode('utf-8') if result.output else "",
-                "exit_code": result.exit_code,
-                "success": result.exit_code == 0
+                "output": exec_result.output.decode('utf-8') if isinstance(exec_result.output, bytes) else exec_result.output,
+                "exit_code": exec_result.exit_code,
+                "success": exec_result.exit_code == 0
             }
+
         except Exception as e:
             logger.error(f"Error executing command in container: {e}")
             return None
-
-    # Agent management methods
-    def list_agents(self, host_id: Optional[str] = None) -> List[Dict[str, Any]]:
-        """List agents, optionally filtered by host."""
-        agents = self.db.list_agents(host_id)
-        result = []
-
-        for agent in agents:
-            agent_dict = {
-                "id": agent.id,
-                "name": agent.name,
-                "host_id": agent.host_id,
-                "entrypoint": agent.entrypoint,
-                "working_directory": agent.working_directory,
-                "status": agent.status,
-                "container_id": agent.container_id,
-                "persistent": agent.persistent,
-                "started_at": agent.started_at.isoformat() if agent.started_at else "",
-                "stopped_at": agent.stopped_at.isoformat() if agent.stopped_at else "",
-                "exit_code": agent.exit_code or 0
-            }
-            result.append(agent_dict)
-
-        return result
-
-    def launch_agent(self, name: str, host_id: str, entrypoint: str,
-                    env: Optional[List[str]] = None, working_directory: str = "",
-                    arguments: Optional[List[str]] = None, persistent: bool = False) -> Optional[Dict[str, Any]]:
-        """Launch a Python agent in a container."""
-        if not self.docker_client:
-            return None
-
-        try:
-            agent_id = str(uuid.uuid4())
-
-            # Create agent record
-            agent = Agent(
-                id=agent_id,
-                name=name,
-                host_id=host_id,
-                entrypoint=entrypoint,
-                working_directory=working_directory,
-                persistent=persistent,
-                status="starting"
-            )
-            agent.set_env(env or [])
-            agent.set_arguments(arguments or [])
-
-            # Launch agent in container
-            return self._launch_agent_in_container(agent)
-
-        except Exception as e:
-            logger.error(f"Error launching agent: {e}")
-            return None
-
-    def _launch_agent_in_container(self, agent: Agent) -> Optional[Dict[str, Any]]:
-        """Launch agent in a Docker container."""
-        if not self.docker_client:
-            return None
-
-        try:
-            # Create container for agent
-            container_config = {
-                'image': 'python:3.12-alpine',  # Default Python image
-                'name': f"agent-{agent.name}-{agent.id[:8]}",
-                'command': ['python', '-c', f'exec(open("{agent.entrypoint}").read())'],
-                'environment': agent.get_env(),
-                'working_dir': agent.working_directory or '/app',
-                'detach': True,
-                'labels': {
-                    'anvyl.agent.id': agent.id,
-                    'anvyl.agent.name': agent.name,
-                    'anvyl.component': 'agent'
-                }
-            }
-
-            docker_container = self.docker_client.containers.run(**container_config)
-
-            # Update agent with container info
-            agent.container_id = docker_container.id
-            agent.status = "running"
-            agent.started_at = datetime.now(UTC)
-
-            self.db.add_agent(agent)
-
-            logger.info(f"Successfully launched agent {agent.name} in container {docker_container.id}")
-
-            return {
-                "id": agent.id,
-                "name": agent.name,
-                "host_id": agent.host_id,
-                "entrypoint": agent.entrypoint,
-                "working_directory": agent.working_directory,
-                "status": agent.status,
-                "container_id": agent.container_id,
-                "persistent": agent.persistent,
-                "started_at": agent.started_at.isoformat() if agent.started_at else "",
-                "stopped_at": agent.stopped_at.isoformat() if agent.stopped_at else "",
-                "exit_code": agent.exit_code or 0
-            }
-
-        except Exception as e:
-            logger.error(f"Error launching agent in container: {e}")
-            return None
-
-    def stop_agent(self, agent_id: str) -> bool:
-        """Stop an agent."""
-        try:
-            agent = self.db.get_agent(agent_id)
-            if not agent:
-                return False
-
-            # Stop containerized agent
-            if agent.container_id and self.docker_client:
-                try:
-                    container = self.docker_client.containers.get(agent.container_id)
-                    container.stop()
-                    container.remove()
-                except Exception as e:
-                    logger.warning(f"Error stopping container: {e}")
-
-            # Update agent status
-            agent.status = "stopped"
-            agent.stopped_at = datetime.now(UTC)
-            self.db.update_agent(agent)
-
-            return True
-
-        except Exception as e:
-            logger.error(f"Error stopping agent: {e}")
-            return False
-
-    def get_agent_status(self, agent_id: str) -> Optional[Dict[str, Any]]:
-        """Get agent status."""
-        try:
-            agent = self.db.get_agent(agent_id)
-            if not agent:
-                return None
-
-            # For containerized agents, check container status
-            if agent.container_id and self.docker_client:
-                try:
-                    container = self.docker_client.containers.get(agent.container_id)
-                    if container.status != "running":
-                        # Container has stopped
-                        agent.status = "stopped"
-                        agent.stopped_at = datetime.now(UTC)
-                        agent.exit_code = container.attrs.get('State', {}).get('ExitCode', 0)
-                        self.db.update_agent(agent)
-                except Exception as e:
-                    # Container doesn't exist
-                    agent.status = "stopped"
-                    agent.stopped_at = datetime.now(UTC)
-                    self.db.update_agent(agent)
-
-            return {
-                "id": agent.id,
-                "name": agent.name,
-                "host_id": agent.host_id,
-                "entrypoint": agent.entrypoint,
-                "working_directory": agent.working_directory,
-                "status": agent.status,
-                "container_id": agent.container_id,
-                "persistent": agent.persistent,
-                "started_at": agent.started_at.isoformat() if agent.started_at else "",
-                "stopped_at": agent.stopped_at.isoformat() if agent.stopped_at else "",
-                "exit_code": agent.exit_code or 0
-            }
-
-        except Exception as e:
-            logger.error(f"Error getting agent status: {e}")
-            return None
-
-    def execute_agent_instruction(self, agent_name: str, instruction: str) -> Optional[Dict[str, Any]]:
-        """Execute an instruction on an AI agent."""
-        try:
-            # Import agent manager here to avoid circular imports
-            from .agent_manager import get_agent_manager
-
-            manager = get_agent_manager()
-
-            # Check if agent exists and is running
-            config = manager.get_agent_config(agent_name)
-            if not config:
-                return {
-                    "success": False,
-                    "result": "",
-                    "error_message": f"Agent '{agent_name}' not found"
-                }
-
-            status_info = manager.get_agent_status(agent_name)
-            if not status_info or not status_info.get("running", False):
-                return {
-                    "success": False,
-                    "result": "",
-                    "error_message": f"Agent '{agent_name}' is not running"
-                }
-
-            # For containerized agents, we need to execute the instruction in the container
-            if config.container_id and self.docker_client:
-                try:
-                    container = self.docker_client.containers.get(config.container_id)
-
-                    # Prepare the Python code to execute
-                    python_code = f'''
-import sys
-sys.path.insert(0, "/app")
-from anvyl.ai_agent import create_ai_agent
-
-# Create agent instance
-agent = create_ai_agent(
-    model_provider="{config.provider}",
-    model_id="{config.model_id}",
-    host="{config.host}",
-    port={config.port},
-    verbose={config.verbose},
-    agent_name="{config.name}",
-    {', '.join([f'{k}={repr(v)}' for k, v in config.provider_kwargs.items()])}
-)
-
-# Execute instruction
-result = agent.act("{instruction}")
-print(result)
-'''
-
-                    # Execute the command in the container
-                    exec_result = container.exec_run(
-                        cmd=['python', '-c', python_code],
-                        timeout=300  # 5 minute timeout
-                    )
-
-                    if exec_result.exit_code == 0:
-                        return {
-                            "success": True,
-                            "result": exec_result.output.decode('utf-8').strip(),
-                            "error_message": ""
-                        }
-                    else:
-                        return {
-                            "success": False,
-                            "result": "",
-                            "error_message": f"Failed to execute instruction: {exec_result.output.decode('utf-8')}"
-                        }
-
-                except Exception as e:
-                    return {
-                        "success": False,
-                        "result": "",
-                        "error_message": f"Error executing instruction in container: {e}"
-                    }
-            else:
-                return {
-                    "success": False,
-                    "result": "",
-                    "error_message": "Non-containerized agents not supported for instruction execution"
-                }
-
-        except Exception as e:
-            logger.error(f"Error executing agent instruction: {e}")
-            return {
-                "success": False,
-                "result": "",
-                "error_message": str(e)
-            }
 
     def exec_command_on_host(self, host_id: str, command: List[str],
                            working_directory: str = "", env: Optional[List[str]] = None,

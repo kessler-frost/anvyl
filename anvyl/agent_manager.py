@@ -214,23 +214,21 @@ if __name__ == "__main__":
         dockerfile_content = f'''FROM python:3.12-alpine
 
 # Install system dependencies
-RUN apk add --no-cache \\
-    git \\
-    curl \\
+RUN apk add --no-cache \
+    git \
+    curl \
     && rm -rf /var/cache/apk/*
 
 # Set working directory
 WORKDIR /app
 
-# Copy the anvyl package
+# Copy Anvyl source and install dependencies
 COPY . /app/
+RUN pip install --no-cache-dir .
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -e .
-
-# Create agent script
-RUN echo '{self._create_agent_script(config)}' > /app/agent_script.py \\
-    && chmod +x /app/agent_script.py
+# Copy agent script
+COPY agent_script.py /app/agent_script.py
+RUN chmod +x /app/agent_script.py
 
 # Set environment variables
 ENV PYTHONPATH=/app
@@ -309,90 +307,113 @@ CMD ["python", "/app/agent_script.py"]
                 logger.info(f"Agent '{name}' is already running")
                 return True
 
-            # Create agent directory
+            # Create agent directory for configuration
             agent_dir = self.config_dir / name
             agent_dir.mkdir(exist_ok=True)
 
-            # Create Dockerfile
-            dockerfile_path = agent_dir / "Dockerfile"
-            with open(dockerfile_path, 'w') as f:
-                f.write(self._create_dockerfile(config))
+            # Create temporary build directory at project root level
+            import shutil
+            import tempfile
+            import os
+            from pathlib import Path
 
-            # Build Docker image
-            client = docker.from_env()
-            image_name = f"anvyl-agent-{name}"
+            # Get the actual project root (parent of anvyl package)
+            project_root = Path(__file__).parent.parent.resolve()
 
-            logger.info(f"Building Docker image for agent '{name}'...")
-            image, build_logs = client.images.build(
-                path=str(agent_dir),
-                dockerfile="Dockerfile",
-                tag=image_name,
-                rm=True
-            )
+            # Create temporary build directory at project root level
+            temp_build_dir = project_root / f"_temp_build_{name}"
+            if temp_build_dir.exists():
+                shutil.rmtree(temp_build_dir)
+            temp_build_dir.mkdir(exist_ok=True)
 
-            # Run container
-            container_name = f"anvyl-agent-{name}"
-
-            # Remove existing container if it exists
             try:
-                existing_container = client.containers.get(container_name)
-                existing_container.remove(force=True)
-            except docker.errors.NotFound:
-                pass
+                # Write agent script to temporary build directory
+                agent_script_path = temp_build_dir / "agent_script.py"
+                with open(agent_script_path, 'w') as f:
+                    f.write(self._create_agent_script(config))
 
-            # Create and start container
-            container = client.containers.run(
-                image_name,
-                name=container_name,
-                detach=True,
-                environment={
-                    'PYTHONPATH': '/app',
-                    'PYTHONUNBUFFERED': '1'
-                },
-                labels={
-                    'anvyl.agent.name': name,
-                    'anvyl.component': 'agent'
-                }
-            )
+                # Create Dockerfile in temporary build directory
+                dockerfile_path = temp_build_dir / "Dockerfile"
+                with open(dockerfile_path, 'w') as f:
+                    f.write(self._create_dockerfile(config))
 
-            # Update configuration
-            config.container_id = container.id
-            config.status = "running"
-            self._save_configurations()
+                # Build Docker image using project root as context
+                client = docker.from_env()
+                image_name = f"anvyl-agent-{name}"
 
-            # Register agent with infrastructure service
-            hosts = self.infrastructure_service.list_hosts()
-            if hosts:
-                host_id = hosts[0]["id"]  # Use first available host
-
-                # Create agent script path
-                agent_script_path = str(agent_dir / "agent_script.py")
-
-                # Launch agent through infrastructure service
-                agent_info = self.infrastructure_service.launch_agent(
-                    name=name,
-                    host_id=host_id,
-                    entrypoint=agent_script_path,
-                    env=[
-                        f"PYTHONPATH=/app",
-                        f"PYTHONUNBUFFERED=1"
-                    ],
-                    working_directory="/app",
-                    persistent=True
+                logger.info(f"Building Docker image for agent '{name}'...")
+                image, build_logs = client.images.build(
+                    path=str(project_root),  # Use actual project root as build context
+                    dockerfile=str(dockerfile_path.relative_to(project_root)),  # Relative path to Dockerfile
+                    tag=image_name,
+                    rm=True
                 )
 
-                if agent_info:
-                    logger.info(f"Successfully started agent '{name}' in container {container.id}")
-                    return True
+                # Run container
+                container_name = f"anvyl-agent-{name}"
+
+                # Remove existing container if it exists
+                try:
+                    existing_container = client.containers.get(container_name)
+                    existing_container.remove(force=True)
+                except docker.errors.NotFound:
+                    pass
+
+                # Create and start container
+                container = client.containers.run(
+                    image_name,
+                    name=container_name,
+                    detach=True,
+                    environment={
+                        'PYTHONPATH': '/app',
+                        'PYTHONUNBUFFERED': '1'
+                    },
+                    labels={
+                        'anvyl.agent.name': name,
+                        'anvyl.component': 'agent'
+                    }
+                )
+
+                # Update configuration
+                config.container_id = container.id
+                config.status = "running"
+                self._save_configurations()
+
+                # Register agent with infrastructure service
+                hosts = self.infrastructure_service.list_hosts()
+                if hosts:
+                    host_id = hosts[0]["id"]  # Use first available host
+
+                    # Launch agent through infrastructure service
+                    agent_info = self.infrastructure_service.launch_agent(
+                        name=name,
+                        host_id=host_id,
+                        entrypoint=str(agent_script_path),
+                        env=[
+                            f"PYTHONPATH=/app",
+                            f"PYTHONUNBUFFERED=1"
+                        ],
+                        working_directory="/app",
+                        persistent=True
+                    )
+
+                    if agent_info:
+                        logger.info(f"Successfully started agent '{name}' in container {container.id}")
+                        return True
+                    else:
+                        logger.error(f"Failed to register agent '{name}' with infrastructure service")
+                        # Clean up container
+                        container.remove(force=True)
+                        return False
                 else:
-                    logger.error(f"Failed to register agent '{name}' with infrastructure service")
-                    # Clean up container
+                    logger.error("No hosts available for agent")
                     container.remove(force=True)
                     return False
-            else:
-                logger.error("No hosts available for agent")
-                container.remove(force=True)
-                return False
+
+            finally:
+                # Clean up temporary build directory
+                if temp_build_dir.exists():
+                    shutil.rmtree(temp_build_dir)
 
         except Exception as e:
             logger.error(f"Error starting agent '{name}': {e}")

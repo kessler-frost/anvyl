@@ -26,20 +26,20 @@ The Anvyl AI Agent system now follows a **two-phase approach**:
 # Create an LM Studio agent (default, fast local inference)
 anvyl agent create my-local-agent \
   --provider lmstudio \
-  --model llama-3.2-1b-instruct-mlx \
+  --model deepseek/deepseek-r1-0528-qwen3-8b \
   --start
 
 # Create an Ollama agent (local open-source models)
 anvyl agent create my-ollama-agent \
   --provider ollama \
-  --model llama3.2 \
+  --model deepseek/deepseek-r1-0528-qwen3-8b \
   --ollama-host localhost \
   --ollama-port 11434
 
 # Create an OpenAI agent (cloud-based, high quality)
 anvyl agent create my-openai-agent \
   --provider openai \
-  --model gpt-4o-mini \
+  --model deepseek/deepseek-r1-0528-qwen3-8b \
   --api-key YOUR_OPENAI_KEY
 
 # Create an Anthropic agent (cloud-based, detailed responses)
@@ -57,7 +57,7 @@ export OPENAI_API_KEY="your-openai-key"
 export ANTHROPIC_API_KEY="your-anthropic-key"
 
 # Now create agents without --api-key
-anvyl agent create my-openai-agent --provider openai --model gpt-4o-mini
+anvyl agent create my-openai-agent --provider openai --model deepseek/deepseek-r1-0528-qwen3-8b
 anvyl agent create my-anthropic-agent --provider anthropic --model claude-3-haiku-20240307
 ```
 
@@ -71,9 +71,9 @@ anvyl agent list
 # ┌────────────────────┬──────────────┬──────────┬─────────────────────────────┬─────────────────┬────────────┐
 # │ Name               │ Status       │ Provider │ Model                       │ Host            │ Created    │
 # ├────────────────────┼──────────────┼──────────┼─────────────────────────────┼─────────────────┼────────────┤
-# │ my-local-agent     │ 🟢 Running   │ lmstudio │ llama-3.2-1b-instruct-mlx  │ localhost:50051 │ 2024-01-15 │
-# │ my-ollama-agent    │ 🔴 Stopped   │ ollama   │ llama3.2                   │ localhost:50051 │ 2024-01-15 │
-# │ my-openai-agent    │ 🔴 Stopped   │ openai   │ gpt-4o-mini                │ localhost:50051 │ 2024-01-15 │
+# │ my-local-agent     │ 🟢 Running   │ lmstudio │ deepseek/deepseek-r1-0528-qwen3-8b  │ localhost:50051 │ 2024-01-15 │
+# │ my-ollama-agent    │ 🔴 Stopped   │ ollama   │ deepseek/deepseek-r1-0528-qwen3-8b                   │ localhost:50051 │ 2024-01-15 │
+# │ my-openai-agent    │ 🔴 Stopped   │ openai   │ deepseek/deepseek-r1-0528-qwen3-8b                │ localhost:50051 │ 2024-01-15 │
 # │ my-anthropic-agent │ 🔴 Stopped   │ anthropic│ claude-3-haiku-20240307    │ localhost:50051 │ 2024-01-15 │
 # └────────────────────┴──────────────┴──────────┴─────────────────────────────┴─────────────────┴────────────┘
 
@@ -123,7 +123,7 @@ anvyl agent session my-local-agent
 #
 # Agent: my-local-agent
 # Provider: LMStudioProvider
-# Model: llama-3.2-1b-instruct-mlx
+# Model: deepseek/deepseek-r1-0528-qwen3-8b
 #
 # Give me instructions to execute on your infrastructure.
 # Type 'help' for available actions, 'quit' to exit.
@@ -201,8 +201,8 @@ anvyl agent session my-agent
 
 ```bash
 # 1. Create agents for different use cases
-anvyl agent create fast-local --provider lmstudio --model llama-3.2-1b-instruct-mlx --start
-anvyl agent create smart-cloud --provider openai --model gpt-4o-mini
+anvyl agent create fast-local --provider lmstudio --model deepseek/deepseek-r1-0528-qwen3-8b --start
+anvyl agent create smart-cloud --provider openai --model deepseek/deepseek-r1-0528-qwen3-8b
 anvyl agent create detailed-cloud --provider anthropic --model claude-3-sonnet-20240229
 
 # 2. Use different agents for different tasks
@@ -241,7 +241,7 @@ anvyl agent session dev-agent
 # 1. Create production-ready agents
 anvyl agent create prod-monitor \
   --provider openai \
-  --model gpt-4o-mini \
+  --model deepseek/deepseek-r1-0528-qwen3-8b \
   --host prod-server.company.com \
   --port 50051
 
@@ -261,7 +261,7 @@ anvyl agent act prod-monitor "investigate high CPU on web-server-01"
 # Had to specify provider/model/config every time
 anvyl agent chat my-agent "show hosts" \
   --provider ollama \
-  --model llama3.2 \
+  --model deepseek/deepseek-r1-0528-qwen3-8b \
   --ollama-host localhost \
   --ollama-port 11434 \
   --api-key "key-here"
@@ -272,7 +272,7 @@ anvyl agent chat my-agent "show hosts" \
 # Configure once
 anvyl agent create my-agent \
   --provider ollama \
-  --model llama3.2 \
+  --model deepseek/deepseek-r1-0528-qwen3-8b \
   --ollama-host localhost \
   --ollama-port 11434
 
@@ -302,7 +302,7 @@ anvyl agent act dev-agent "run local tests"
 
 ```bash
 # Create task-specific agents
-anvyl agent create monitoring-agent --provider openai --model gpt-4o-mini
+anvyl agent create monitoring-agent --provider openai --model deepseek/deepseek-r1-0528-qwen3-8b
 anvyl agent create deployment-agent --provider anthropic --model claude-3-sonnet-20240229
 anvyl agent create debug-agent --provider ollama --model codellama
 
@@ -334,8 +334,8 @@ from anvyl.agent_manager import get_agent_manager
 manager = get_agent_manager()
 
 # Create agents
-manager.create_agent("my-local", provider="lmstudio", model_id="llama-3.2-1b-instruct-mlx")
-manager.create_agent("my-cloud", provider="openai", model_id="gpt-4o-mini", api_key="key")
+manager.create_agent("my-local", provider="lmstudio", model_id="deepseek/deepseek-r1-0528-qwen3-8b")
+manager.create_agent("my-cloud", provider="openai", model_id="deepseek/deepseek-r1-0528-qwen3-8b", api_key="key")
 
 # Start agents
 local_agent = manager.start_agent("my-local")
@@ -367,7 +367,7 @@ anvyl agent info my-agent
 
 # Remove and recreate if needed
 anvyl agent remove my-agent
-anvyl agent create my-agent --provider ollama --model llama3.2
+anvyl agent create my-agent --provider ollama --model deepseek/deepseek-r1-0528-qwen3-8b
 ```
 
 ### Provider Issues
@@ -383,10 +383,10 @@ anvyl agent act ollama-agent "test"   # Uses Ollama
 ### For Existing Scripts
 ```bash
 # Old way - configuration every time
-anvyl agent chat my-agent "show hosts" --provider lmstudio --model llama-3.2-1b-instruct-mlx
+anvyl agent chat my-agent "show hosts" --provider ollama --model deepseek/deepseek-r1-0528-qwen3-8b
 
 # New way - configure once, use many times
-anvyl agent create my-agent --provider lmstudio --model llama-3.2-1b-instruct-mlx --start
+anvyl agent create my-agent --provider ollama --model deepseek/deepseek-r1-0528-qwen3-8b --start
 anvyl agent act my-agent "show hosts"
 ```
 

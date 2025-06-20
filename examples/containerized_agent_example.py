@@ -60,7 +60,7 @@ def main():
 
     # Step 1: Create an agent
     console.print("\n1️⃣ [bold cyan]Creating AI Agent...[/bold cyan]")
-    console.print("   Command: anvyl agent create my-container-agent --provider lmstudio --model llama-3.2-1b-instruct-mlx")
+    console.print("   Command: anvyl agent create my-container-agent --provider lmstudio --model deepseek/deepseek-r1-0528-qwen3-8b")
 
     # Step 2: Start the agent in a container
     console.print("\n2️⃣ [bold cyan]Starting Agent in Container...[/bold cyan]")

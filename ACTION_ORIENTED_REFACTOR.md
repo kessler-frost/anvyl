@@ -108,7 +108,7 @@ Focus on TAKING ACTION, not just describing what you would do.
 from anvyl.ai_agent import create_ai_agent
 
 # Create agent
-agent = create_ai_agent("lmstudio", "llama-3.2-1b-instruct-mlx")
+agent = create_ai_agent("lmstudio", "deepseek/deepseek-r1-0528-qwen3-8b")
 
 # Execute actions
 result = agent.act("Show me all hosts")
@@ -125,7 +125,7 @@ model_info = agent.get_model_info()
 #### Multi-Provider Action Execution
 ```python
 # LM Studio
-agent = create_ai_agent("lmstudio", "llama-3.2-1b-instruct-mlx")
+agent = create_ai_agent("lmstudio", "deepseek/deepseek-r1-0528-qwen3-8b")
 result = agent.act("List all containers")
 
 # Ollama
@@ -254,22 +254,22 @@ anvyl agent chat my-agent "show hosts"
 #### Simple Migration
 ```python
 # Before
-agent = create_ai_agent(model_id="llama-3.2-1b-instruct-mlx")
+agent = create_ai_agent(model_id="deepseek/deepseek-r1-0528-qwen3-8b")
 response = agent.chat("show hosts")
 
 # After
-agent = create_ai_agent(model_id="llama-3.2-1b-instruct-mlx")
+agent = create_ai_agent(model_id="deepseek/deepseek-r1-0528-qwen3-8b")
 result = agent.act("show hosts")
 ```
 
 #### Enhanced Migration (Recommended)
 ```python
 # Before
-agent = create_ai_agent(model_id="llama-3.2-1b-instruct-mlx")
+agent = create_ai_agent(model_id="deepseek/deepseek-r1-0528-qwen3-8b")
 response = agent.chat("show hosts")
 
 # After - with provider abstraction
-agent = create_ai_agent("lmstudio", "llama-3.2-1b-instruct-mlx")
+agent = create_ai_agent("lmstudio", "deepseek/deepseek-r1-0528-qwen3-8b")
 result = agent.execute_instruction("show hosts")
 
 # Or try different providers

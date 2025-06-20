@@ -41,7 +41,7 @@ def main():
         # Create AI agent with default LM Studio provider
         agent = create_ai_agent(
             model_provider="lmstudio",  # Can also use "ollama", "openai", "anthropic"
-            model_id="llama-3.2-1b-instruct-mlx",
+            model_id="deepseek/deepseek-r1-0528-qwen3-8b",
             agent_name=agent_name,
             verbose=True
         )

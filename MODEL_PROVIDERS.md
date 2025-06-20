@@ -34,7 +34,7 @@ LM Studio provides local model inference with MLX models.
 ```bash
 anvyl agent create my-agent \
   --provider lmstudio \
-  --model llama-3.2-1b-instruct-mlx \
+  --model deepseek/deepseek-r1-0528-qwen3-8b \
   --host localhost \
   --port 50051
 ```
@@ -135,7 +135,7 @@ anvyl agent create my-agent \
 
 ```bash
 # LM Studio (default - no additional flags needed)
-anvyl agent create lm-agent --provider lmstudio --model llama-3.2-1b-instruct-mlx
+anvyl agent create lm-agent --provider lmstudio --model deepseek/deepseek-r1-0528-qwen3-8b
 
 # Ollama with custom server
 anvyl agent create ollama-agent --provider ollama --model llama3.2:1b --provider-host remote-server --provider-port 11434

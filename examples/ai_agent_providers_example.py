@@ -32,12 +32,7 @@ def demo_lmstudio():
 
     try:
         # Create agent with LM Studio (default)
-        agent = create_ai_agent(
-            model_provider="lmstudio",
-            model_id="llama-3.2-1b-instruct-mlx",
-            agent_name="lmstudio-agent",
-            verbose=True
-        )
+        agent = create_ai_agent("lmstudio", "deepseek/deepseek-r1-0528-qwen3-8b")
 
         model_info = agent.get_model_info()
         console.print(f"✅ Connected to {model_info['provider']} with {model_info['model_id']}")

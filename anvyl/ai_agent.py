@@ -41,7 +41,7 @@ class AnvylAIAgent:
 
     def __init__(self,
                  model_provider: Union[str, ModelProvider] = "lmstudio",
-                 model_id: str = "llama-3.2-1b-instruct-mlx",
+                 model_id: str = "deepseek/deepseek-r1-0528-qwen3-8b",
                  host: str = "localhost",
                  port: int = 50051,
                  verbose: bool = False,
@@ -607,7 +607,7 @@ class AnvylAIAgent:
 
 
 def create_ai_agent(model_provider: Union[str, ModelProvider] = "lmstudio",
-                   model_id: str = "llama-3.2-1b-instruct-mlx",
+                   model_id: str = "deepseek/deepseek-r1-0528-qwen3-8b",
                    host: str = "localhost",
                    port: int = 50051,
                    verbose: bool = False,

@@ -73,7 +73,7 @@ anvyl agent interactive my-ai
 anvyl agent chat my-ai "What's the system status?"
 
 # Use a specific model
-anvyl agent chat my-ai "List all containers" --model llama-3.2-3b-instruct-mlx
+anvyl agent chat my-ai "List all containers" --model deepseek/deepseek-r1-0528-qwen3-8b
 ```
 
 ### 4. Demo Mode
@@ -105,7 +105,7 @@ anvyl agent chat <agent_name> "your message"
 ```
 
 **Options:**
-- `--model, -m`: LMStudio model to use (default: llama-3.2-1b-instruct-mlx)
+- `--model, -m`: LMStudio model to use (default: deepseek/deepseek-r1-0528-qwen3-8b)
 - `--host, -h`: Anvyl server host (default: localhost)
 - `--port, -p`: Anvyl server port (default: 50051)
 - `--verbose, -v`: Enable verbose output
@@ -116,7 +116,7 @@ anvyl agent chat <agent_name> "your message"
 anvyl agent chat my-ai "Show me all hosts"
 
 # With custom model
-anvyl agent chat my-ai "Create a container" --model llama-3.2-7b-instruct-mlx
+anvyl agent chat my-ai "Create a container" --model deepseek/deepseek-r1-0528-qwen3-8b
 
 # Verbose mode
 anvyl agent chat my-ai "List containers" --verbose
@@ -224,7 +224,7 @@ from anvyl.ai_agent import create_ai_agent
 
 # Create an AI agent with default settings
 agent = create_ai_agent(
-    model_id="llama-3.2-1b-instruct-mlx",
+    model_id="deepseek/deepseek-r1-0528-qwen3-8b",
     host="localhost",
     port=50051,
     verbose=True,
@@ -250,7 +250,7 @@ agent.interactive_chat()
 
 ### Model Selection
 Choose from available LMStudio models:
-- `llama-3.2-1b-instruct-mlx` (default, fast)
+- `deepseek/deepseek-r1-0528-qwen3-8b` (default, fast)
 - `llama-3.2-3b-instruct-mlx` (balanced)
 - `llama-3.2-7b-instruct-mlx` (high quality)
 - Any other MLX model available in LMStudio
@@ -290,9 +290,9 @@ routing_result = agent._route_to_agent("my-ai", "your command")
 
 1. **Model Not Found**
    ```
-   Error: Model 'llama-3.2-1b-instruct-mlx' not available
+   Error: Model 'deepseek/deepseek-r1-0528-qwen3-8b' not available
    ```
-   **Solution**: Download the model in LMStudio: `lms get llama-3.2-1b-instruct-mlx`
+   **Solution**: Download the model in LMStudio: `lms get deepseek/deepseek-r1-0528-qwen3-8b`
 
 2. **Anvyl Server Not Running**
    ```

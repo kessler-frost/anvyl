@@ -79,7 +79,7 @@ anvyl container create my-app nginx:latest --port 8080:80
 
 ```bash
 # Create an AI agent
-anvyl agent create my-agent --provider lmstudio --model llama-3.2-1b-instruct-mlx
+anvyl agent create my-agent --provider lmstudio --model deepseek/deepseek-r1-0528-qwen3-8b
 
 # Start the agent
 anvyl agent start my-agent

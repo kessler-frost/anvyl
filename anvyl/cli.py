@@ -865,23 +865,24 @@ def agent_remove(
             # Check if agent is running
             status = manager.get_agent_status(name)
             if status and status.get("running", False):
-                console.print(f"[yellow]Warning: Agent '{name}' is currently running[/yellow]")
+                console.print(f"[yellow bold]⚠️  Warning:[/yellow bold] Agent '[bold]{name}[/bold]' is currently running!")
 
-            confirm = typer.confirm(f"Are you sure you want to remove agent '{name}'? This will also remove its Docker image.")
+            console.print(f"[bold red]This will permanently remove agent '[bold]{name}[/bold]' and its Docker image.[/bold red]")
+            confirm = typer.confirm(f"[bold]Are you sure you want to proceed?[/bold]", default=True)
             if not confirm:
-                console.print("Operation cancelled.")
+                console.print("[yellow]Operation cancelled.[/yellow]")
                 return
 
-        console.print(f"🗑️ [bold red]Removing agent '{name}'...[/bold red]")
+        console.print(f"🗑️ [bold red]Removing agent '[bold]{name}[/bold]'...[/bold red]")
 
         with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
             task = progress.add_task("Removing agent...", total=None)
             success = manager.remove_agent(name)
 
         if success:
-            console.print(f"✅ [green]Agent '{name}' removed successfully[/green]")
+            console.print(f"✅ [green]Agent '[bold]{name}[/bold]' removed successfully[/green]")
         else:
-            console.print(f"[red]Failed to remove agent '{name}'[/red]")
+            console.print(f"[red]Failed to remove agent '[bold]{name}[/bold]'[/red]")
             raise typer.Exit(1)
 
     except Exception as e:

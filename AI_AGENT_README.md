@@ -284,16 +284,11 @@ class CustomAIAgent(AnvylAIAgent):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         
-        # Add custom functions
-        self.functions["custom_function"] = self._custom_function
-        self.function_descriptions["custom_function"] = {
-            "description": "Custom function description",
-            "parameters": {
-                "param1": {"type": "string", "description": "Parameter description"}
-            }
-        }
+        # Add custom functions to the functions list
+        self.functions.append(self._custom_function)
     
     def _custom_function(self, param1: str, **kwargs):
+        """Custom function description"""
         # Your custom logic here
         return {"success": True, "result": f"Processed: {param1}"}
 ```

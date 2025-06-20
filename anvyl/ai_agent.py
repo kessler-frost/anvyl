@@ -22,11 +22,11 @@ console = Console()
 
 # Conditional LMStudio import
 try:
-    import lmstudio
+    import lmstudio as lms
     LMSTUDIO_AVAILABLE = True
 except ImportError:
     LMSTUDIO_AVAILABLE = False
-    lmstudio = None
+    lms = None
 
 
 class AnvylAIAgent:
@@ -67,124 +67,36 @@ class AnvylAIAgent:
         if not self.client.connect():
             raise ConnectionError(f"Failed to connect to Anvyl server at {host}:{port}")
         
-        # Initialize LMStudio client
+        # Initialize LMStudio model
         if not LMSTUDIO_AVAILABLE:
             raise ImportError("LMStudio is not available. Install with: pip install lmstudio")
         
+        # Type assertion for the type checker
+        assert lms is not None
+        
         try:
-            self.lms_client = lmstudio.get_default_client()
+            self.model = lms.llm(model_id)
             logger.info(f"Connected to LMStudio with model: {model_id}")
         except Exception as e:
             logger.error(f"Failed to connect to LMStudio: {e}")
             raise ConnectionError("LMStudio is not available. Please ensure LMStudio is running.")
         
         # Define available functions for the AI agent
-        self.functions = {
-            "list_hosts": self._list_hosts,
-            "add_host": self._add_host,
-            "get_host_metrics": self._get_host_metrics,
-            "list_containers": self._list_containers,
-            "create_container": self._create_container,
-            "stop_container": self._stop_container,
-            "get_container_logs": self._get_container_logs,
-            "exec_container_command": self._exec_container_command,
-            "list_agents": self._list_agents,
-            "launch_agent": self._launch_agent,
-            "stop_agent": self._stop_agent,
-            "get_system_status": self._get_system_status,
-            "get_ui_status": self._get_ui_status,
-        }
-        
-        # Function descriptions for LMStudio
-        self.function_descriptions = {
-            "list_hosts": {
-                "description": "List all registered hosts in the Anvyl infrastructure",
-                "parameters": {}
-            },
-            "add_host": {
-                "description": "Add a new host to the Anvyl infrastructure",
-                "parameters": {
-                    "name": {"type": "string", "description": "Host name"},
-                    "ip": {"type": "string", "description": "Host IP address"},
-                    "os": {"type": "string", "description": "Operating system (optional)"},
-                    "tags": {"type": "array", "description": "Host tags (optional)"}
-                }
-            },
-            "get_host_metrics": {
-                "description": "Get resource metrics for a specific host",
-                "parameters": {
-                    "host_id": {"type": "string", "description": "Host ID to get metrics for"}
-                }
-            },
-            "list_containers": {
-                "description": "List all containers in the Anvyl infrastructure",
-                "parameters": {
-                    "host_id": {"type": "string", "description": "Filter by host ID (optional)"}
-                }
-            },
-            "create_container": {
-                "description": "Create a new container",
-                "parameters": {
-                    "name": {"type": "string", "description": "Container name"},
-                    "image": {"type": "string", "description": "Docker image"},
-                    "host_id": {"type": "string", "description": "Target host ID (optional)"},
-                    "ports": {"type": "array", "description": "Port mappings (optional)"},
-                    "volumes": {"type": "array", "description": "Volume mounts (optional)"},
-                    "environment": {"type": "array", "description": "Environment variables (optional)"}
-                }
-            },
-            "stop_container": {
-                "description": "Stop a running container",
-                "parameters": {
-                    "container_id": {"type": "string", "description": "Container ID to stop"},
-                    "timeout": {"type": "integer", "description": "Stop timeout in seconds (optional)"}
-                }
-            },
-            "get_container_logs": {
-                "description": "Get logs from a container",
-                "parameters": {
-                    "container_id": {"type": "string", "description": "Container ID"},
-                    "tail": {"type": "integer", "description": "Number of lines to show (optional)"}
-                }
-            },
-            "exec_container_command": {
-                "description": "Execute a command inside a container",
-                "parameters": {
-                    "container_id": {"type": "string", "description": "Container ID"},
-                    "command": {"type": "array", "description": "Command to execute"}
-                }
-            },
-            "list_agents": {
-                "description": "List all agents in the Anvyl infrastructure",
-                "parameters": {
-                    "host_id": {"type": "string", "description": "Filter by host ID (optional)"}
-                }
-            },
-            "launch_agent": {
-                "description": "Launch a new agent",
-                "parameters": {
-                    "name": {"type": "string", "description": "Agent name"},
-                    "host_id": {"type": "string", "description": "Target host ID"},
-                    "entrypoint": {"type": "string", "description": "Agent entrypoint script"},
-                    "use_container": {"type": "boolean", "description": "Run in container (optional)"},
-                    "environment": {"type": "array", "description": "Environment variables (optional)"}
-                }
-            },
-            "stop_agent": {
-                "description": "Stop a running agent",
-                "parameters": {
-                    "agent_id": {"type": "string", "description": "Agent ID to stop"}
-                }
-            },
-            "get_system_status": {
-                "description": "Get overall system status including hosts, containers, and agents",
-                "parameters": {}
-            },
-            "get_ui_status": {
-                "description": "Get status of the Anvyl UI stack (frontend, backend, gRPC server)",
-                "parameters": {}
-            }
-        }
+        self.functions = [
+            self._list_hosts,
+            self._add_host,
+            self._get_host_metrics,
+            self._list_containers,
+            self._create_container,
+            self._stop_container,
+            self._get_container_logs,
+            self._exec_container_command,
+            self._list_agents,
+            self._launch_agent,
+            self._stop_agent,
+            self._get_system_status,
+            self._get_ui_status,
+        ]
     
     def _list_hosts(self, **kwargs) -> Dict[str, Any]:
         """List all hosts."""
@@ -207,7 +119,7 @@ class AnvylAIAgent:
         except Exception as e:
             return {"success": False, "error": str(e)}
     
-    def _add_host(self, name: str, ip: str, os: str = "", tags: List[str] = None, **kwargs) -> Dict[str, Any]:
+    def _add_host(self, name: str, ip: str, os: str = "", tags: Optional[List[str]] = None, **kwargs) -> Dict[str, Any]:
         """Add a new host."""
         try:
             host = self.client.add_host(name, ip, os, tags or [])
@@ -243,7 +155,7 @@ class AnvylAIAgent:
         except Exception as e:
             return {"success": False, "error": str(e)}
     
-    def _list_containers(self, host_id: str = None, **kwargs) -> Dict[str, Any]:
+    def _list_containers(self, host_id: Optional[str] = None, **kwargs) -> Dict[str, Any]:
         """List containers."""
         try:
             containers = self.client.list_containers(host_id)
@@ -263,9 +175,9 @@ class AnvylAIAgent:
         except Exception as e:
             return {"success": False, "error": str(e)}
     
-    def _create_container(self, name: str, image: str, host_id: str = None, 
-                         ports: List[str] = None, volumes: List[str] = None, 
-                         environment: List[str] = None, **kwargs) -> Dict[str, Any]:
+    def _create_container(self, name: str, image: str, host_id: Optional[str] = None, 
+                         ports: Optional[List[str]] = None, volumes: Optional[List[str]] = None, 
+                         environment: Optional[List[str]] = None, **kwargs) -> Dict[str, Any]:
         """Create a container."""
         try:
             container = self.client.add_container(
@@ -316,7 +228,7 @@ class AnvylAIAgent:
         except Exception as e:
             return {"success": False, "error": str(e)}
     
-    def _list_agents(self, host_id: str = None, **kwargs) -> Dict[str, Any]:
+    def _list_agents(self, host_id: Optional[str] = None, **kwargs) -> Dict[str, Any]:
         """List agents."""
         try:
             agents = self.client.list_agents(host_id)
@@ -336,7 +248,7 @@ class AnvylAIAgent:
             return {"success": False, "error": str(e)}
     
     def _launch_agent(self, name: str, host_id: str, entrypoint: str, 
-                     use_container: bool = False, environment: List[str] = None, **kwargs) -> Dict[str, Any]:
+                     use_container: bool = False, environment: Optional[List[str]] = None, **kwargs) -> Dict[str, Any]:
         """Launch an agent."""
         try:
             agent = self.client.launch_agent(
@@ -414,39 +326,20 @@ class AnvylAIAgent:
             AI response with action results
         """
         try:
-            # Create system prompt
-            agent_name_str = f"Agent name: {self.agent_name}\n" if self.agent_name else ""
-            system_prompt = f"""You are an AI assistant that helps manage Anvyl infrastructure. {agent_name_str}You have access to the following functions:
+            # Type assertion for the type checker
+            assert lms is not None
 
-{json.dumps(self.function_descriptions, indent=2)}
-
-When a user asks you to do something, use the appropriate function(s) to accomplish the task. Always provide clear, helpful responses with the results of your actions.
-
-Current Anvyl server: {self.host}:{self.port}
-Available model: {self.model_id}
-
-Remember to:
-1. Use functions to perform actions
-2. Provide clear explanations of what you're doing
-3. Show results in a readable format
-4. Handle errors gracefully
-5. Ask for clarification if needed"""
-
-            # Use LMStudio's act() function
-            response = lmstudio.act(
-                model=self.model_id,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": message}
-                ],
-                functions=self.functions,
-                function_call="auto"
+            # Use LMStudio's act() function with the model instance
+            response = self.model.act(
+                message,
+                self.functions,
+                on_message=lambda msg: None  # We'll capture the response differently
             )
             
             if self.verbose:
                 console.print(Panel(f"AI Response: {response}", title="🤖 AI Agent", border_style="blue"))
             
-            return response
+            return str(response) if response else "No response received"
             
         except Exception as e:
             error_msg = f"Error in AI agent chat: {e}"
@@ -494,7 +387,7 @@ def create_ai_agent(model_id: str = "llama-3.2-1b-instruct-mlx",
                    host: str = "localhost", 
                    port: int = 50051,
                    verbose: bool = False,
-                   agent_name: str = None) -> AnvylAIAgent:
+                   agent_name: Optional[str] = None) -> AnvylAIAgent:
     """
     Create an Anvyl AI agent instance.
     

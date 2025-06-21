@@ -99,11 +99,13 @@ class InfrastructureClient:
         return response.get('success', False)
 
     # Container management methods
-    async def list_containers(self, host_id: Optional[str] = None) -> List[Dict[str, Any]]:
-        """List containers, optionally filtered by host."""
+    async def list_containers(self, host_id: Optional[str] = None, all: bool = False) -> List[Dict[str, Any]]:
+        """List containers, optionally filtered by host. If all=True, include all containers regardless of label or status."""
         params = {}
         if host_id:
             params['host_id'] = host_id
+        if all:
+            params['all'] = 'true'
         response = await self._make_request('GET', '/containers', params=params)
         return response.get('containers', [])
 

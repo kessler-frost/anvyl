@@ -57,14 +57,13 @@ def check_model_provider(model_provider_url: str) -> bool:
         return False
 
 
-def create_agent(infrastructure_api_url: str, model_provider_url: str, model_name: str):
+def create_agent(infrastructure_api_url: str, model_provider_url: str):
     """Create an agent instance for demo purposes."""
     # This is a placeholder - in a real demo, you might want to create an agent instance
     # For now, we'll just return a dict with the configuration
     return {
         "infrastructure_api_url": infrastructure_api_url,
-        "model_provider_url": model_provider_url,
-        "model_name": model_name
+        "model_provider_url": model_provider_url
     }
 
 
@@ -75,7 +74,6 @@ def run_demo(agent):
 
     print(f"🏗️  Infrastructure API: {agent['infrastructure_api_url']}")
     print(f"🧠 Model Provider: {agent['model_provider_url']}")
-    print(f"🤖 Model: {agent['model_name']}")
     print()
 
     print("📋 Demo Queries:")
@@ -98,8 +96,7 @@ def run_demo(agent):
         start_agent_server(
             port=4201,
             infrastructure_api_url=agent['infrastructure_api_url'],
-            model_provider_url=agent['model_provider_url'],
-            model_name=agent['model_name']
+            model_provider_url=agent['model_provider_url']
         )
     except KeyboardInterrupt:
         print("\n🛑 Agent stopped by user")
@@ -130,8 +127,7 @@ async def demo_local_agent():
     try:
         start_agent_server(
             port=4201,
-            model_provider_url="http://localhost:1234/v1",
-            model_name="llama-3.2-3b-instruct",
+            model_provider_url="http://localhost:11434/v1",
             infrastructure_api_url="http://localhost:4200"
         )
     except KeyboardInterrupt:
@@ -201,12 +197,10 @@ def main():
 
     # Configuration
     infrastructure_api_url = "http://localhost:4200"
-    model_provider_url = "http://localhost:1234/v1"
-    model_name = "llama-3.2-3b-instruct"
+    model_provider_url = "http://localhost:11434/v1"
 
     print(f"🏗️  Infrastructure API: {infrastructure_api_url}")
     print(f"🧠 Model Provider: {model_provider_url}")
-    print(f"🤖 Model: {model_name}")
     print()
 
     # Check if infrastructure API is available
@@ -223,8 +217,7 @@ def main():
     try:
         agent = create_agent(
             infrastructure_api_url=infrastructure_api_url,
-            model_provider_url=model_provider_url,
-            model_name=model_name
+            model_provider_url=model_provider_url
         )
 
         # Run the demo

@@ -354,6 +354,23 @@ class BackgroundServiceManager:
         """Stop the infrastructure API service."""
         return self.stop_service("infrastructure_api")
 
+    def start_agent_service(self, host: str = "127.0.0.1", port: int = 4201,
+                           model_provider_url: str = "http://localhost:11434/v1",
+                           infrastructure_api_url: str = "http://localhost:4200") -> bool:
+        """Start the agent service in the background."""
+        return self.start_service(
+            service_name="anvyl_agent",
+            command=[sys.executable, "-m", "anvyl.agent.server",
+                    "--host-ip", host,
+                    "--port", str(port),
+                    "--model-provider-url", model_provider_url,
+                    "--infrastructure-api-url", infrastructure_api_url]
+        )
+
+    def stop_agent_service(self) -> bool:
+        """Stop the agent service."""
+        return self.stop_service("anvyl_agent")
+
 
 # Global service manager instance
 _service_manager = None

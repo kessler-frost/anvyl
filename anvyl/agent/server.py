@@ -29,8 +29,7 @@ _agent_config = {
     "host_ip": None,
     "port": 4201,
     "infrastructure_api_url": "http://localhost:4200",
-    "model_provider_url": "http://localhost:1234/v1",
-    "model_name": "llama-3.2-3b-instruct",
+    "model_provider_url": "http://localhost:11434/v1",
     "tools": []
 }
 
@@ -60,7 +59,6 @@ async def lifespan(app: FastAPI):
             tools=tools,
             infrastructure_api_url=_agent_config["infrastructure_api_url"],
             model_provider_url=_agent_config["model_provider_url"],
-            model_name=_agent_config["model_name"],
             port=_agent_config["port"]
         )
 
@@ -222,8 +220,7 @@ async def handle_broadcast(message_data: Dict[str, Any]):
 
 def set_agent_config(
     infrastructure_api_url: str = "http://localhost:4200",
-    model_provider_url: str = "http://localhost:1234/v1",
-    model_name: str = "llama-3.2-3b-instruct",
+    model_provider_url: str = "http://localhost:11434/v1",
     port: int = 4201
 ):
     """Set the agent configuration globally."""
@@ -231,7 +228,6 @@ def set_agent_config(
     _agent_config.update({
         "infrastructure_api_url": infrastructure_api_url,
         "model_provider_url": model_provider_url,
-        "model_name": model_name,
         "port": port
     })
 
@@ -241,8 +237,7 @@ def create_host_agent(
     host_ip: str,
     port: int = 4201,
     infrastructure_api_url: str = "http://localhost:4200",
-    model_provider_url: str = "http://localhost:1234/v1",
-    model_name: str = "llama-3.2-3b-instruct",
+    model_provider_url: str = "http://localhost:11434/v1",
     tools: List = None
 ) -> HostAgent:
     """Create a new host agent instance."""
@@ -250,7 +245,7 @@ def create_host_agent(
         tools = []
 
     # Create communication and tools
-    communication = AgentCommunication(host_id=host_id, port=port)
+    communication = AgentCommunication(local_host_id=host_id, local_host_ip=host_ip, port=port)
     agent_tools = get_agent_tools(infrastructure_api_url)
 
     # Create the host agent
@@ -261,7 +256,6 @@ def create_host_agent(
         host_id=host_id,
         host_ip=host_ip,
         model_provider_url=model_provider_url,
-        model_name=model_name,
         port=port
     )
 
@@ -273,8 +267,7 @@ def start_agent_server(
     host_ip: str = None,
     port: int = 4201,
     infrastructure_api_url: str = "http://localhost:4200",
-    model_provider_url: str = "http://localhost:1234/v1",
-    model_name: str = "llama-3.2-3b-instruct"
+    model_provider_url: str = "http://localhost:11434/v1"
 ):
     """Start the agent server with the specified configuration."""
     if host_id is None:
@@ -288,8 +281,7 @@ def start_agent_server(
         "host_ip": host_ip,
         "port": port,
         "infrastructure_api_url": infrastructure_api_url,
-        "model_provider_url": model_provider_url,
-        "model_name": model_name
+        "model_provider_url": model_provider_url
     }
 
     # Create and start the agent
@@ -298,15 +290,13 @@ def start_agent_server(
         host_ip=host_ip,
         port=port,
         infrastructure_api_url=infrastructure_api_url,
-        model_provider_url=model_provider_url,
-        model_name=model_name
+        model_provider_url=model_provider_url
     )
 
     # Set the configuration
     set_agent_config(
         infrastructure_api_url=infrastructure_api_url,
         model_provider_url=model_provider_url,
-        model_name=model_name,
         port=port
     )
 
@@ -328,8 +318,7 @@ if __name__ == "__main__":
     parser.add_argument("--host-ip", type=str, help="Host IP (default: auto-detected)")
     parser.add_argument("--port", type=int, default=4201, help="Agent port")
     parser.add_argument("--infrastructure-api-url", type=str, default="http://localhost:4200", help="Infrastructure API URL")
-    parser.add_argument("--model-provider-url", type=str, default="http://localhost:1234/v1", help="Model provider API URL")
-    parser.add_argument("--model", type=str, default="llama-3.2-3b-instruct", help="Model provider model name")
+    parser.add_argument("--model-provider-url", type=str, default="http://localhost:11434/v1", help="Model provider API URL")
 
     args = parser.parse_args()
 
@@ -338,6 +327,5 @@ if __name__ == "__main__":
         host_ip=args.host_ip,
         port=args.port,
         infrastructure_api_url=args.infrastructure_api_url,
-        model_provider_url=args.model_provider_url,
-        model_name=args.model
+        model_provider_url=args.model_provider_url
     )

@@ -24,15 +24,15 @@ logger = logging.getLogger(__name__)
 class HostAgent:
     """AI Agent that manages infrastructure on a single host."""
 
-    def __init__(self,
-                 communication: AgentCommunication,
-                 tools: List,
-                 infrastructure_api_url: str = "http://localhost:4200",
-                 host_id: str = None,
-                 host_ip: str = None,
-                 model_provider_url: Optional[str] = None,
-                 model_name: str = "default",
-                 port: int = 4201):
+    def __init__(
+        self,
+        communication: AgentCommunication,
+        tools: List,
+        infrastructure_api_url: str = "http://localhost:4200",
+        host_id: str = None,
+        host_ip: str = None,
+        model_provider_url: Optional[str] = None,
+        port: int = 4201):
         """Initialize the host agent."""
         self.infrastructure_api_url = infrastructure_api_url
         self.infrastructure_client = None  # Will be initialized async
@@ -53,24 +53,45 @@ class HostAgent:
         self.host_id = host_id
         self.host_ip = host_ip
         self.port = port
-        self.model_provider_url = model_provider_url or "http://localhost:1234/v1"
-        self.model_name = model_name
+        self.model_provider_url = model_provider_url or "http://localhost:11434/v1"
 
         # Initialize model and get actual model info
         self.model, self.actual_model_name = self._initialize_model()
 
         # Define system prompt
-        self.system_prompt = f"""You are an AI agent running on host {self.host_id}.
+        self.system_prompt = f"""You are an AI agent running on host {self.host_id} (IP: {self.host_ip}) in the Anvyl infrastructure orchestration system.
 
-Your capabilities include:
-- Managing containers (list, start, stop, create)
-- Querying host information and resources
-- Executing commands on the host
-- Communicating with other hosts in the network
-- Processing user queries and requests
+Your primary role is to help manage and monitor infrastructure on this host and communicate with other hosts in the network.
 
-You have access to various tools to help you accomplish these tasks. Always be helpful and provide clear, actionable responses.
-"""
+AVAILABLE TOOLS:
+- list_containers: List Docker containers (use all=True to include stopped/non-Anvyl containers)
+- get_container_info: Get detailed information about a specific container
+- stop_container: Stop a running container
+- create_container: Create and start a new container with specified image, ports, volumes, environment
+- get_host_info: Get information about hosts in the network
+- get_host_resources: Get current CPU, memory, and disk usage for the local host
+- list_hosts: List all hosts in the Anvyl network
+- execute_command: Run shell commands on the local host
+
+LIMITATIONS:
+- Container start functionality is not yet implemented via the API
+- Remote host resource querying is not yet implemented
+- You can only execute commands on the local host
+- Container operations are limited to Anvyl-managed containers by default
+
+COMMUNICATION:
+- You can communicate with other agents in the network
+- You can query remote hosts for container and host information
+- You can broadcast messages to all known hosts
+
+When responding to queries:
+1. Use the appropriate tools to gather information
+2. Provide clear, actionable responses
+3. Include relevant details like container IDs, status, and resource usage
+4. Be helpful and explain what you're doing
+5. If a tool fails, explain the error and suggest alternatives
+
+Always be accurate about your capabilities and limitations."""
 
         # Initialize agent
         self.agent = self._create_agent()
@@ -79,6 +100,7 @@ You have access to various tools to help you accomplish these tasks. Always be h
         self._register_message_handlers()
 
         logger.info(f"Host agent initialized for host {host_id}")
+        logger.info(f"Model provider: {self.model_provider_url}")
 
     async def _initialize_infrastructure_client(self):
         """Initialize the infrastructure client asynchronously."""
@@ -94,19 +116,22 @@ You have access to various tools to help you accomplish these tasks. Always be h
                 models = response.json()
                 if models and "data" in models:
                     return models["data"][0]["id"]
-            return self.model_name
+            return self.actual_model_name
         except Exception as e:
             logger.warning(f"Could not fetch model info from model provider: {e}")
-            return self.model_name
+            return self.actual_model_name
 
     def _initialize_model(self):
         """Initialize the model and return both the model instance and actual model name."""
+        # NOTE: The model_name here is arbitrary and only required by the OpenAIModel constructor.
+        # It is not exposed to the user and can be changed to any valid model name supported by the provider.
+        # 'llama3.2:latest' is used as a default, but you can change it if needed.
         if self.model_provider_url:
             try:
                 # Create model provider using OpenAIProvider with custom base URL
                 model_provider = OpenAIProvider(base_url=self.model_provider_url)
                 model = OpenAIModel(
-                    model_name=self.model_name,
+                    model_name="llama3.2:latest",  # Arbitrary model name, required by OpenAIModel
                     provider=model_provider
                 )
                 # Test the connection and get actual model name
@@ -118,13 +143,13 @@ You have access to various tools to help you accomplish these tasks. Always be h
         else:
             # Try to use default model provider URL
             try:
-                model_provider = OpenAIProvider(base_url="http://localhost:1234/v1")
+                model_provider = OpenAIProvider(base_url="http://localhost:11434/v1")
                 model = OpenAIModel(
-                    model_name="default",
+                    model_name="llama3.2:latest",  # Arbitrary model name, required by OpenAIModel
                     provider=model_provider
                 )
                 # Test the connection
-                actual_model = self._get_actual_model_name("http://localhost:1234/v1")
+                actual_model = self._get_actual_model_name("http://localhost:11434/v1")
                 return model, actual_model
             except Exception as e:
                 logger.warning(f"Model provider not available: {e}, falling back to mock model")
@@ -296,7 +321,7 @@ You have access to various tools to help you accomplish these tasks. Always be h
         return {
             "host_id": self.host_id,
             "host_ip": self.host_ip,
-            "llm_model": self.model_name,
+            "llm_model": self.actual_model_name,
             "actual_model_name": self.actual_model_name,
             "tools_available": tool_names,
             "known_hosts": self.get_known_hosts(),
@@ -310,7 +335,6 @@ You have access to various tools to help you accomplish these tasks. Always be h
             "is_running": self.is_running,
             "last_heartbeat": self.last_heartbeat,
             "model_provider_url": self.model_provider_url,
-            "model_name": self.model_name,
-            "llm_model": self.model_name,
+            "actual_model_name": self.actual_model_name,
             "agent_config": self.agent_config
         }

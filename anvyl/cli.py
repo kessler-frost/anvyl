@@ -22,8 +22,10 @@ import requests
 import subprocess
 from pathlib import Path
 import asyncio
+import uuid
+import socket
+import re
 
-from anvyl.infra.service import get_infrastructure_service
 from anvyl.database.models import DatabaseManager
 from anvyl.utils.background_service import get_service_manager
 from anvyl.infra.client import get_infrastructure_client
@@ -39,6 +41,7 @@ app = typer.Typer(
 def get_infrastructure():
     """Get the infrastructure service instance."""
     try:
+        from anvyl.infra.service import get_infrastructure_service
         return get_infrastructure_service()
     except Exception as e:
         console.print(f"[red]Error initializing infrastructure service: {e}[/red]")
@@ -855,25 +858,30 @@ app.add_typer(agent_group, name="agent")
 
 @agent_group.command("up")
 def agent_up(
-    model_provider_url: str = typer.Option("http://localhost:1234/v1", "--model-provider-url", help="Model provider API URL"),
-    model_name: str = typer.Option("llama-3.2-3b-instruct", "--model", help="Model provider model name"),
+    model_provider_url: str = typer.Option("http://localhost:11434/v1", "--model-provider-url", help="Model provider API URL"),
     port: int = typer.Option(4201, "--port", help="Agent port"),
     host: str = typer.Option("127.0.0.1", "--host", help="Host to bind to"),
-    infrastructure_api_url: str = typer.Option("http://localhost:4200", "--infrastructure-api-url", help="Infrastructure API URL")
+    infrastructure_api_url: str = typer.Option("http://localhost:4200", "--infrastructure-api-url", help="Infrastructure API URL"),
+    background: bool = typer.Option(True, "--background/--foreground", help="Run agent in background (default: background)")
 ):
     """Start an AI agent (requires a model provider running locally)"""
     try:
-        # Start the agent server
         from anvyl.agent.server import start_agent_server
         import uuid
         import socket
+        from anvyl.utils.background_service import get_service_manager
+        import sys
 
-        # Generate host ID and get host IP
         host_id = str(uuid.uuid4())
-        try:
-            host_ip = socket.gethostbyname(socket.gethostname())
-        except:
+        if background:
+            # Use localhost for background mode so CLI commands can connect
             host_ip = "127.0.0.1"
+        else:
+            # Use actual host IP for foreground mode
+            try:
+                host_ip = socket.gethostbyname(socket.gethostname())
+            except:
+                host_ip = "127.0.0.1"
 
         console.print(f"🚀 Starting AI agent...")
         console.print(f"🆔 Host ID: {host_id}")
@@ -881,17 +889,46 @@ def agent_up(
         console.print(f"🔌 Port: {port}")
         console.print(f"🏗️  Infrastructure API: {infrastructure_api_url}")
         console.print(f"🧠 Model Provider: {model_provider_url}")
-        console.print(f"🤖 Model: {model_name}")
 
-        # Start the server
-        start_agent_server(
-            host_id=host_id,
-            host_ip=host_ip,
-            port=port,
-            infrastructure_api_url=infrastructure_api_url,
-            model_provider_url=model_provider_url,
-            model_name=model_name
-        )
+        if background:
+            service_manager = get_service_manager()
+            if service_manager.is_service_running("anvyl_agent"):
+                console.print("[yellow]Agent is already running[/yellow]")
+                return
+            success = service_manager.start_service(
+                service_name="anvyl_agent",
+                command=[
+                    sys.executable, "-m", "anvyl.agent.server",
+                    "--host-id", host_id,
+                    "--host-ip", host_ip,
+                    "--port", str(port),
+                    "--infrastructure-api-url", infrastructure_api_url,
+                    "--model-provider-url", model_provider_url
+                ],
+                port=port
+            )
+            if success:
+                console.print(f"✅ Agent started successfully in background")
+                console.print(f"🌐 Agent API: http://{host_ip}:{port}")
+                console.print(f"📋 API Docs: http://{host_ip}:{port}/docs")
+                console.print()
+                console.print("Use 'anvyl agent logs' to view logs")
+                console.print("Use 'anvyl agent down' to stop the agent")
+            else:
+                console.print("[red]❌ Failed to start agent[/red]")
+                raise typer.Exit(1)
+        else:
+            console.print(f"🌐 Agent API: http://{host_ip}:{port}")
+            console.print(f"📋 API Docs: http://{host_ip}:{port}/docs")
+            console.print()
+            console.print("Starting agent server... (Press Ctrl+C to stop)")
+            start_agent_server(
+                host_id=host_id,
+                host_ip=host_ip,
+                port=port,
+                infrastructure_api_url=infrastructure_api_url,
+                model_provider_url=model_provider_url
+            )
 
     except KeyboardInterrupt:
         console.print("\n🛑 Agent stopped by user")
@@ -1068,8 +1105,28 @@ def query_agent(
 
         if response.status_code == 200:
             result = response.json()
+            output = result.get("response", "No response")
+
+            # Parse AgentRunResult-style output
+            if isinstance(output, dict) and "output" in output:
+                output = output["output"]
+            elif isinstance(output, str):
+                # Handle AgentRunResult string format
+                if output.startswith("AgentRunResult("):
+                    # Extract the output field from AgentRunResult
+                    import re
+                    # Look for output= followed by quoted string, handling escaped quotes
+                    match = re.search(r'output=(["\'])((?:[^\\]|\\.)*?)\1', output, re.DOTALL)
+                    if match:
+                        output = match.group(2)
+                        # Unescape common escape sequences
+                        output = output.replace('\\"', '"').replace("\\'", "'").replace('\\n', '\n').replace('\\t', '\t').replace('\\\\', '\\')
+                else:
+                    # Regular string output, just unescape quotes
+                    output = output.replace('\\"', '"').replace("\\'", "'")
+
             console.print(f"✅ [green]Agent response:[/green]")
-            console.print(Panel(result.get("response", "No response"), title="Agent Response"))
+            console.print(Panel(output, title="Agent Response"))
         else:
             console.print(f"[red]Error: HTTP {response.status_code}[/red]")
             console.print(f"[red]Response: {response.text}[/red]")
@@ -1190,6 +1247,39 @@ def purge_data(
 
     except Exception as e:
         console.print(f"[red]Error during purge: {e}[/red]")
+        raise typer.Exit(1)
+
+@app.command("restart")
+def restart_all_services():
+    """Restart both the Anvyl Infra API and Agent services."""
+    try:
+        console.print("🔄 [bold blue]Restarting Anvyl Infra API and Agent services...[/bold blue]")
+        service_manager = get_service_manager()
+
+        # Stop services
+        console.print("🛑 Stopping Infra API...")
+        service_manager.stop_infrastructure_api()
+        console.print("🛑 Stopping Agent...")
+        service_manager.stop_agent_service()
+
+        # Start services
+        console.print("🚀 Starting Infra API...")
+        started_infra = service_manager.start_infrastructure_api()
+        if started_infra:
+            console.print("✅ [green]Infra API started successfully[/green]")
+        else:
+            console.print("[red]❌ Failed to start Infra API[/red]")
+
+        console.print("🚀 Starting Agent...")
+        started_agent = service_manager.start_agent_service()
+        if started_agent:
+            console.print("✅ [green]Agent started successfully[/green]")
+        else:
+            console.print("[red]❌ Failed to start Agent[/red]")
+
+        console.print("[bold green]Restart complete![/bold green]")
+    except Exception as e:
+        console.print(f"[red]Error restarting services: {e}[/red]")
         raise typer.Exit(1)
 
 if __name__ == "__main__":

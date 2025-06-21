@@ -12,8 +12,6 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import uvicorn
 
-from anvyl.infra.service import get_infrastructure_service
-
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -54,8 +52,10 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Get infrastructure service instance
-infrastructure_service = get_infrastructure_service()
+def get_infrastructure_service():
+    """Get the infrastructure service instance."""
+    from anvyl.infra.service import get_infrastructure_service as _get_service
+    return _get_service()
 
 @app.get("/")
 async def root():
@@ -72,6 +72,7 @@ async def health_check():
     """Health check endpoint."""
     try:
         # Basic health check
+        infrastructure_service = get_infrastructure_service()
         hosts = infrastructure_service.list_hosts()
         return {
             "status": "healthy",
@@ -87,6 +88,7 @@ async def health_check():
 async def list_hosts():
     """List all registered hosts."""
     try:
+        infrastructure_service = get_infrastructure_service()
         hosts = infrastructure_service.list_hosts()
         return {"hosts": hosts}
     except Exception as e:
@@ -97,6 +99,7 @@ async def list_hosts():
 async def add_host(host_data: HostCreate):
     """Add a new host."""
     try:
+        infrastructure_service = get_infrastructure_service()
         host = infrastructure_service.add_host(
             name=host_data.name,
             ip=host_data.ip,
@@ -115,6 +118,7 @@ async def add_host(host_data: HostCreate):
 async def update_host(host_id: str, host_data: HostUpdate):
     """Update host information."""
     try:
+        infrastructure_service = get_infrastructure_service()
         host = infrastructure_service.update_host(
             host_id=host_id,
             resources=host_data.resources,
@@ -133,6 +137,7 @@ async def update_host(host_id: str, host_data: HostUpdate):
 async def get_host_metrics(host_id: str):
     """Get metrics for a specific host."""
     try:
+        infrastructure_service = get_infrastructure_service()
         metrics = infrastructure_service.get_host_metrics(host_id)
         if metrics:
             return {"metrics": metrics}
@@ -146,6 +151,7 @@ async def get_host_metrics(host_id: str):
 async def host_heartbeat(host_id: str):
     """Send a heartbeat for a host."""
     try:
+        infrastructure_service = get_infrastructure_service()
         success = infrastructure_service.host_heartbeat(host_id)
         return {"success": success}
     except Exception as e:
@@ -154,10 +160,11 @@ async def host_heartbeat(host_id: str):
 
 # Container management endpoints
 @app.get("/containers")
-async def list_containers(host_id: Optional[str] = None):
-    """List containers, optionally filtered by host."""
+async def list_containers(host_id: Optional[str] = None, all: bool = False):
+    """List containers, optionally filtered by host. If all=True, include all containers regardless of label or status."""
     try:
-        containers = infrastructure_service.list_containers(host_id)
+        infrastructure_service = get_infrastructure_service()
+        containers = infrastructure_service.list_containers(host_id, all=all)
         return {"containers": containers}
     except Exception as e:
         logger.error(f"Error listing containers: {e}")
@@ -167,6 +174,7 @@ async def list_containers(host_id: Optional[str] = None):
 async def add_container(container_data: ContainerCreate):
     """Add a new container."""
     try:
+        infrastructure_service = get_infrastructure_service()
         container = infrastructure_service.add_container(
             name=container_data.name,
             image=container_data.image,
@@ -188,6 +196,7 @@ async def add_container(container_data: ContainerCreate):
 async def stop_container(container_id: str, timeout: int = 10):
     """Stop a container."""
     try:
+        infrastructure_service = get_infrastructure_service()
         success = infrastructure_service.stop_container(container_id, timeout)
         if success:
             return {"message": "Container stopped successfully"}
@@ -201,6 +210,7 @@ async def stop_container(container_id: str, timeout: int = 10):
 async def get_container_logs(container_id: str, follow: bool = False, tail: int = 100):
     """Get logs from a container."""
     try:
+        infrastructure_service = get_infrastructure_service()
         logs = infrastructure_service.get_logs(container_id, follow=follow, tail=tail)
         if logs is not None:
             return {"logs": logs}
@@ -214,6 +224,7 @@ async def get_container_logs(container_id: str, follow: bool = False, tail: int 
 async def exec_command(container_id: str, command: List[str], tty: bool = False):
     """Execute a command in a container."""
     try:
+        infrastructure_service = get_infrastructure_service()
         result = infrastructure_service.exec_command(container_id, command, tty)
         if result:
             return {"result": result}
@@ -234,6 +245,7 @@ async def exec_command_on_host(
 ):
     """Execute a command on a specific host."""
     try:
+        infrastructure_service = get_infrastructure_service()
         result = infrastructure_service.exec_command_on_host(
             host_id=host_id,
             command=command,

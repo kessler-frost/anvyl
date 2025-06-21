@@ -76,10 +76,10 @@ class InfrastructureTools:
             Tool(self.execute_command),
         ]
 
-    async def list_containers(self, host_id: Optional[str] = None) -> str:
-        """List all containers on a host. Use host_id=None for local host."""
+    async def list_containers(self, host_id: Optional[str] = None, all: bool = False) -> str:
+        """List all containers on a host. Use host_id=None for local host. If all=True, include all containers regardless of label or status."""
         try:
-            containers = await self._infrastructure_client.list_containers(host_id)
+            containers = await self._infrastructure_client.list_containers(host_id, all=all)
             if not containers:
                 return f"No containers found on host {host_id or 'local'}"
 

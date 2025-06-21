@@ -278,15 +278,15 @@ class InfrastructureService:
             return False
 
     # Container management methods
-    def list_containers(self, host_id: Optional[str] = None) -> List[Dict[str, Any]]:
-        """List containers, optionally filtered by host. Only include Anvyl-managed containers."""
+    def list_containers(self, host_id: Optional[str] = None, all: bool = False) -> List[Dict[str, Any]]:
+        """List containers, optionally filtered by host. If all=True, include all containers regardless of label or status."""
         containers = self.db.list_containers(host_id)
         result = []
 
         for container in containers:
             labels = container.get_labels()
-            # Only include containers with the 'anvyl.type' label
-            if not labels or not any(k.startswith("anvyl.") for k in labels):
+            # Only include containers with the 'anvyl.type' label unless all=True
+            if not all and (not labels or not any(k.startswith("anvyl.") for k in labels)):
                 continue
             container_dict = {
                 "id": container.id,

@@ -12,6 +12,7 @@ import socket
 from typing import Dict, List, Any, Optional
 from pydantic_ai import Agent
 from pydantic_ai.models.openai import OpenAIModel
+from pydantic_ai.providers.openai import OpenAIProvider
 import json
 
 from anvyl.agent.communication import AgentCommunication, AgentMessage
@@ -107,10 +108,11 @@ You have access to various tools to help you accomplish these tasks. Always be h
         """Initialize the model and return both the model instance and actual model name."""
         if self.lmstudio_url:
             try:
-                # Create a custom model for LMStudio using OpenAI-compatible API
+                # Create LMStudio model using OpenAIProvider with custom base URL
+                lmstudio_provider = OpenAIProvider(base_url=self.lmstudio_url)
                 model = OpenAIModel(
                     model_name=self.lmstudio_model,
-                    provider="openai"
+                    provider=lmstudio_provider
                 )
                 # Test the connection and get actual model name
                 actual_model = self._get_actual_model_name(self.lmstudio_url)
@@ -121,9 +123,10 @@ You have access to various tools to help you accomplish these tasks. Always be h
         else:
             # Try to use default LMStudio URL
             try:
+                lmstudio_provider = OpenAIProvider(base_url="http://localhost:1234/v1")
                 model = OpenAIModel(
                     model_name="default",
-                    provider="openai"
+                    provider=lmstudio_provider
                 )
                 # Test the connection
                 actual_model = self._get_actual_model_name("http://localhost:1234/v1")

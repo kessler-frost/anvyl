@@ -13,7 +13,7 @@ __email__ = "team@anvyl.ai"
 from anvyl.infra.service import get_infrastructure_service
 
 # Agent system
-from anvyl.agent import AgentManager, create_agent_manager, HostAgent
+from anvyl.agent import HostAgent
 
 # Database models
 from anvyl.database import DatabaseManager, Host, Container
@@ -24,8 +24,6 @@ from anvyl.infra.client import get_infrastructure_client
 __all__ = [
     "get_infrastructure_service",
     "get_infrastructure_client",
-    "AgentManager",
-    "create_agent_manager",
     "HostAgent",
     "DatabaseManager",
     "Host",

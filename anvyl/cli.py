@@ -25,7 +25,6 @@ import asyncio
 
 from anvyl.infra.service import get_infrastructure_service
 from anvyl.database.models import DatabaseManager
-from anvyl.agent import AgentManager, create_agent_manager
 from anvyl.utils.background_service import get_service_manager
 from anvyl.infra.client import get_infrastructure_client
 

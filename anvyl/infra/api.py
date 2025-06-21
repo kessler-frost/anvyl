@@ -1,26 +1,21 @@
 """
 Anvyl Infrastructure API
 
-This module provides a FastAPI service that exposes infrastructure management
-functionality via HTTP endpoints, allowing agents to interact with the
-infrastructure service remotely.
+This module provides a FastAPI-based REST API for infrastructure management.
 """
 
-import warnings
-import logging
 import asyncio
 import argparse
+import logging
 from typing import Dict, List, Any, Optional
 from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-import uvicorn
 from pydantic import BaseModel
-
-# Suppress the RuntimeWarning about sys.modules
-warnings.filterwarnings("ignore", message=".*found in sys.modules.*", category=RuntimeWarning)
+import uvicorn
 
 from anvyl.infra.service import get_infrastructure_service
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Pydantic models for request/response
@@ -57,15 +52,6 @@ app = FastAPI(
     title="Anvyl Infrastructure API",
     description="API for managing Anvyl infrastructure and hosts",
     version="1.0.0"
-)
-
-# Add CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
 )
 
 # Get infrastructure service instance

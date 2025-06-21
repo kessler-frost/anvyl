@@ -8,7 +8,6 @@ direct Python calls instead of gRPC.
 
 import logging
 import uuid
-import time
 from datetime import datetime, timezone
 from typing import Dict, List, Any, Optional
 import docker
@@ -31,6 +30,13 @@ class InfrastructureService:
         """Initialize the service."""
         self.db = DatabaseManager()
         self.host_id = str(uuid.uuid4())
+
+        # Initialize Docker client
+        try:
+            self.docker_client = docker.from_env()
+        except Exception as e:
+            logger.warning(f"Failed to initialize Docker client: {e}")
+            self.docker_client = None
 
         # Register local host
         self._register_local_host()
@@ -99,6 +105,10 @@ class InfrastructureService:
 
     def _sync_containers_with_docker(self):
         """Sync container information with Docker."""
+        if not self.docker_client:
+            logger.warning("Docker client not available, skipping container sync")
+            return
+
         try:
             # Get all containers from Docker
             docker_containers = self.docker_client.containers.list(all=True)

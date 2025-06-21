@@ -7,6 +7,7 @@ This module provides a FastAPI server for the Anvyl AI Agent that can run direct
 import logging
 import asyncio
 import uvicorn
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Dict, Any, Optional, List
@@ -18,11 +19,65 @@ from anvyl.agent.tools import get_agent_tools
 
 logger = logging.getLogger(__name__)
 
-# Global agent instance
+# Global agent instance and configuration
 _agent: Optional[HostAgent] = None
 _communication: Optional[AgentCommunication] = None
+_agent_config = {
+    "infrastructure_api_url": "http://localhost:4200",
+    "lmstudio_url": "http://localhost:1234/v1",
+    "lmstudio_model": "llama-3.2-3b-instruct",
+    "port": 4201
+}
 
-app = FastAPI(title="Anvyl AI Agent", version="1.0.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for startup and shutdown events."""
+    global _agent, _communication, _agent_config
+
+    # Startup
+    logger.info("Starting Anvyl AI Agent server...")
+
+    try:
+        # Create communication instance
+        _communication = AgentCommunication(
+            local_host_id="local",
+            local_host_ip="127.0.0.1",
+            port=_agent_config["port"]
+        )
+
+        # Get tools
+        tools = get_agent_tools(_agent_config["infrastructure_api_url"])
+
+        # Create agent
+        _agent = HostAgent(
+            communication=_communication,
+            tools=tools,
+            infrastructure_api_url=_agent_config["infrastructure_api_url"],
+            lmstudio_url=_agent_config["lmstudio_url"],
+            lmstudio_model=_agent_config["lmstudio_model"],
+            port=_agent_config["port"]
+        )
+
+        logger.info(f"Agent created successfully on port {_agent_config['port']}")
+    except Exception as e:
+        logger.error(f"Failed to initialize agent: {e}")
+        _agent = None
+        _communication = None
+
+    yield
+
+    # Shutdown
+    logger.info("Shutting down Anvyl AI Agent server...")
+    _agent = None
+    _communication = None
+
+
+app = FastAPI(
+    title="Anvyl AI Agent",
+    version="1.0.0",
+    lifespan=lifespan
+)
 
 
 class QueryRequest(BaseModel):
@@ -43,16 +98,10 @@ class BroadcastRequest(BaseModel):
     message: str
 
 
-@app.on_event("startup")
-async def startup_event():
-    """Initialize the agent on startup."""
-    global _agent, _communication
-    logger.info("Starting Anvyl AI Agent server...")
-
-
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
+    # Test reload functionality - this comment should trigger a reload
     return {"status": "healthy", "service": "anvyl-agent"}
 
 
@@ -166,37 +215,20 @@ async def handle_broadcast(message_data: Dict[str, Any]):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-def create_agent(
+def set_agent_config(
     infrastructure_api_url: str = "http://localhost:4200",
     lmstudio_url: str = "http://localhost:1234/v1",
     lmstudio_model: str = "llama-3.2-3b-instruct",
     port: int = 4201
 ):
-    """Create and initialize the agent."""
-    global _agent, _communication
-
-    # Create communication instance
-    _communication = AgentCommunication(
-        local_host_id="local",
-        local_host_ip="127.0.0.1",
-        port=port
-    )
-
-    # Get tools
-    tools = get_agent_tools(infrastructure_api_url)
-
-    # Create agent
-    _agent = HostAgent(
-        communication=_communication,
-        tools=tools,
-        infrastructure_api_url=infrastructure_api_url,
-        lmstudio_url=lmstudio_url,
-        lmstudio_model=lmstudio_model,
-        port=port
-    )
-
-    logger.info(f"Agent created successfully on port {port}")
-    return _agent
+    """Set the agent configuration globally."""
+    global _agent_config
+    _agent_config.update({
+        "infrastructure_api_url": infrastructure_api_url,
+        "lmstudio_url": lmstudio_url,
+        "lmstudio_model": lmstudio_model,
+        "port": port
+    })
 
 
 def run_agent_server(
@@ -207,20 +239,20 @@ def run_agent_server(
     lmstudio_model: str = "llama-3.2-3b-instruct"
 ):
     """Run the agent server."""
-    # Create the agent
-    create_agent(
+    # Set the configuration
+    set_agent_config(
         infrastructure_api_url=infrastructure_api_url,
         lmstudio_url=lmstudio_url,
         lmstudio_model=lmstudio_model,
         port=port
     )
 
-    # Run the server
+    # Run the server with reload enabled
     uvicorn.run(
         "anvyl.agent.server:app",
         host=host,
         port=port,
-        reload=False,
+        reload=True,
         log_level="info"
     )
 

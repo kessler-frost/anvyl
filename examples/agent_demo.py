@@ -15,7 +15,7 @@ from typing import Dict, Any
 # Add the project root to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from anvyl.agent import create_agent_manager
+from anvyl.agent.server import run_agent_server
 from anvyl.infra.client import get_infrastructure_client
 
 
@@ -23,14 +23,6 @@ async def demo_local_agent():
     """Demo the local agent capabilities."""
     print("🤖 Anvyl AI Agent Demo - Local Agent")
     print("=" * 50)
-
-    # Start the agent
-    print("Starting agent...")
-    agent_manager = await create_agent_manager(
-        lmstudio_url="http://localhost:1234/v1",
-        lmstudio_model="llama-3.2-3b-instruct",
-        port=4200
-    )
 
     # Demo queries
     demo_queries = [
@@ -50,11 +42,15 @@ async def demo_local_agent():
 
     # Start the agent server
     try:
-        await agent_manager.start()
+        run_agent_server(
+            host="127.0.0.1",
+            port=4201,
+            lmstudio_url="http://localhost:1234/v1",
+            lmstudio_model="llama-3.2-3b-instruct",
+            infrastructure_api_url="http://localhost:4200"
+        )
     except KeyboardInterrupt:
         print("\n🛑 Agent stopped by user")
-    finally:
-        await agent_manager.stop()
 
 
 async def demo_infrastructure_tools():
@@ -102,15 +98,15 @@ def demo_remote_queries():
 
     print("\nExample setup:")
     print("  # On Host A")
-    print("  anvyl agent start --port 4200")
+    print("  anvyl agent up --port 4201")
     print("  anvyl agent add-host host-b 192.168.1.101")
     print("")
     print("  # On Host B")
-    print("  anvyl agent start --port 4201")
+    print("  anvyl agent up --port 4202")
     print("  anvyl agent add-host host-a 192.168.1.100")
     print("")
     print("  # Query from Host A to Host B")
-    print("  anvyl agent query-remote host-b 'List all containers'")
+    print("  anvyl agent query host-b 'List all containers'")
 
 
 async def main():
@@ -149,7 +145,7 @@ async def main():
         print()
         await demo_local_agent()
     else:
-        print("\n✅ Demo completed. Use 'anvyl agent start' to start the agent manually.")
+        print("\n✅ Demo completed. Use 'anvyl agent up' to start the agent manually.")
 
 
 if __name__ == "__main__":

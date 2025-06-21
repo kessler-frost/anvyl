@@ -26,7 +26,7 @@ async def demo_local_agent():
 
     # Start the agent
     print("Starting agent...")
-    agent_manager = create_agent_manager(
+    agent_manager = await create_agent_manager(
         lmstudio_url="http://localhost:1234/v1",
         lmstudio_model="llama-3.2-3b-instruct",
         port=4200
@@ -53,20 +53,22 @@ async def demo_local_agent():
         await agent_manager.start()
     except KeyboardInterrupt:
         print("\n🛑 Agent stopped by user")
+    finally:
+        await agent_manager.stop()
 
 
-def demo_infrastructure_tools():
+async def demo_infrastructure_tools():
     """Demo the infrastructure tools directly."""
     print("🔧 Infrastructure Tools Demo")
     print("=" * 40)
 
     try:
         # Get infrastructure client
-        client = get_infrastructure_client()
+        client = await get_infrastructure_client()
 
         # Demo container listing
         print("\n📦 Container Management:")
-        containers = client.list_containers()
+        containers = await client.list_containers()
         if containers:
             for container in containers[:3]:  # Show first 3
                 print(f"  - {container['name']} ({container['status']})")
@@ -75,12 +77,14 @@ def demo_infrastructure_tools():
 
         # Demo host listing
         print("\n🖥️  Host Management:")
-        hosts = client.list_hosts()
+        hosts = await client.list_hosts()
         if hosts:
             for host in hosts:
                 print(f"  - {host['name']} ({host['ip']}) - {host['status']}")
         else:
             print("  No hosts found")
+
+        await client.close()
 
     except Exception as e:
         print(f"  Error: {e}")
@@ -109,7 +113,7 @@ def demo_remote_queries():
     print("  anvyl agent query-remote host-b 'List all containers'")
 
 
-def main():
+async def main():
     """Main demo function."""
     print("🚀 Anvyl AI Agent System Demo")
     print("=" * 60)
@@ -132,7 +136,7 @@ def main():
         print()
 
     # Demo infrastructure tools
-    demo_infrastructure_tools()
+    await demo_infrastructure_tools()
 
     # Demo remote queries
     demo_remote_queries()
@@ -143,10 +147,10 @@ def main():
 
     if response in ['y', 'yes']:
         print()
-        asyncio.run(demo_local_agent())
+        await demo_local_agent()
     else:
         print("\n✅ Demo completed. Use 'anvyl agent start' to start the agent manually.")
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

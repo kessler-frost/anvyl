@@ -18,8 +18,12 @@ from anvyl.agent import AgentManager, create_agent_manager, HostAgent
 # Database models
 from anvyl.database import DatabaseManager, Host, Container
 
+# Infrastructure client (async)
+from anvyl.infra.infrastructure_client import get_infrastructure_client
+
 __all__ = [
     "get_infrastructure_service",
+    "get_infrastructure_client",
     "AgentManager",
     "create_agent_manager",
     "HostAgent",

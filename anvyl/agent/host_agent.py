@@ -33,7 +33,8 @@ class HostAgent:
                  lmstudio_model: str = "default",
                  port: int = 4201):
         """Initialize the host agent."""
-        self.infrastructure_client = get_infrastructure_client(infrastructure_api_url)
+        self.infrastructure_api_url = infrastructure_api_url
+        self.infrastructure_client = None  # Will be initialized async
 
         # Use provided communication and tools
         self.communication = communication
@@ -77,6 +78,11 @@ You have access to various tools to help you accomplish these tasks. Always be h
         self._register_message_handlers()
 
         logger.info(f"Host agent initialized for host {host_id}")
+
+    async def _initialize_infrastructure_client(self):
+        """Initialize the infrastructure client asynchronously."""
+        if self.infrastructure_client is None:
+            self.infrastructure_client = await get_infrastructure_client(self.infrastructure_api_url)
 
     def _get_actual_model_name(self, lmstudio_url: str) -> str:
         """Get the actual model name from LMStudio."""
@@ -198,35 +204,40 @@ You have access to various tools to help you accomplish these tasks. Always be h
             logger.error(f"Error handling query: {e}")
             return {
                 "host_id": self.host_id,
+                "host_ip": self.host_ip,
+                "query": query,
                 "error": str(e),
-                "query": message.content.get("query", "")
+                "timestamp": message.timestamp.isoformat()
             }
 
     async def _handle_broadcast(self, message: AgentMessage) -> Dict[str, Any]:
         """Handle a broadcast message from another agent."""
         try:
-            content = message.content
-            logger.info(f"Handling broadcast from {message.sender_host}: {content}")
+            query = message.content.get("message", "")
+            logger.info(f"Handling broadcast from {message.sender_host}: {query}")
 
-            # For now, just acknowledge the broadcast
-            # In the future, this could trigger specific actions
+            # Execute the query using the agent
+            result = await self.agent.run(query)
+
             return {
                 "host_id": self.host_id,
                 "host_ip": self.host_ip,
-                "broadcast_received": True,
-                "content": content,
+                "broadcast": query,
+                "response": result.content if hasattr(result, 'content') else str(result),
                 "timestamp": message.timestamp.isoformat()
             }
         except Exception as e:
             logger.error(f"Error handling broadcast: {e}")
             return {
                 "host_id": self.host_id,
+                "host_ip": self.host_ip,
+                "broadcast": query,
                 "error": str(e),
-                "content": message.content
+                "timestamp": message.timestamp.isoformat()
             }
 
     async def process_query(self, query: str) -> str:
-        """Process a query using the agent."""
+        """Process a query using the AI agent."""
         try:
             result = await self.agent.run(query)
             return result.content if hasattr(result, 'content') else str(result)
@@ -238,9 +249,7 @@ You have access to various tools to help you accomplish these tasks. Always be h
         """Query a remote host's agent."""
         try:
             result = await self.communication.send_query(host_id, query)
-            if "error" in result:
-                return f"Error querying remote host: {result['error']}"
-            return result.get("response", "No response from remote host")
+            return json.dumps(result, indent=2)
         except Exception as e:
             logger.error(f"Error querying remote host: {e}")
             return f"Error querying remote host: {str(e)}"
@@ -250,41 +259,48 @@ You have access to various tools to help you accomplish these tasks. Always be h
         return await self.query_remote_host(host_id, "List all containers on this host")
 
     async def get_remote_host_info(self, host_id: str) -> str:
-        """Get information from a remote host."""
-        return await self.query_remote_host(host_id, "Get information about this host")
+        """Get host information from a remote host."""
+        return await self.query_remote_host(host_id, "Get host information and resources")
 
     def add_known_host(self, host_id: str, host_ip: str):
-        """Add a known host to the communication system."""
-        self.communication.known_hosts[host_id] = host_ip
+        """Add a known host."""
+        self.communication.add_known_host(host_id, host_ip)
 
     def remove_known_host(self, host_id: str):
-        """Remove a known host from the communication system."""
-        if host_id in self.communication.known_hosts:
-            del self.communication.known_hosts[host_id]
+        """Remove a known host."""
+        self.communication.remove_known_host(host_id)
 
     def get_known_hosts(self) -> Dict[str, str]:
         """Get all known hosts."""
-        return self.communication.known_hosts.copy()
+        return self.communication.get_known_hosts()
 
     async def broadcast_to_all_hosts(self, message: str) -> List[Dict[str, Any]]:
         """Broadcast a message to all known hosts."""
-        results = []
-        for host_id in self.communication.known_hosts:
-            try:
-                result = await self.communication.send_query(host_id, message)
-                results.append({"host_id": host_id, "result": result})
-            except Exception as e:
-                results.append({"host_id": host_id, "error": str(e)})
-        return results
+        try:
+            return await self.communication.broadcast_message("broadcast", {"message": message})
+        except Exception as e:
+            logger.error(f"Error broadcasting to all hosts: {e}")
+            return [{"error": str(e)}]
 
     def get_agent_info(self) -> Dict[str, Any]:
         """Get information about this agent."""
+        # Extract tool names properly from Pydantic AI Tool objects
+        tool_names = []
+        if self.tools:
+            for tool in self.tools:
+                if hasattr(tool, 'name'):
+                    tool_names.append(tool.name)
+                elif hasattr(tool, '__name__'):
+                    tool_names.append(tool.__name__)
+                else:
+                    tool_names.append(str(type(tool).__name__))
+
         return {
             "host_id": self.host_id,
             "host_ip": self.host_ip,
-            "port": self.port,
+            "llm_model": self.lmstudio_model,
+            "actual_model_name": self.actual_model_name,
+            "tools_available": tool_names,
             "known_hosts": self.get_known_hosts(),
-            "tools_available": [tool.__name__ for tool in self.tools],
-            "model_provider": self.model.system if hasattr(self.model, 'system') else "unknown",
-            "actual_model_name": self.actual_model_name
+            "port": self.port
         }

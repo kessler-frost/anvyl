@@ -76,10 +76,10 @@ class InfrastructureTools:
             Tool(self.execute_command),
         ]
 
-    def list_containers(self, host_id: Optional[str] = None) -> str:
+    async def list_containers(self, host_id: Optional[str] = None) -> str:
         """List all containers on a host. Use host_id=None for local host."""
         try:
-            containers = self._infrastructure_client.list_containers(host_id)
+            containers = await self._infrastructure_client.list_containers(host_id)
             if not containers:
                 return f"No containers found on host {host_id or 'local'}"
 
@@ -91,10 +91,10 @@ class InfrastructureTools:
         except Exception as e:
             return f"Error listing containers: {str(e)}"
 
-    def get_container_info(self, container_id: str, host_id: Optional[str] = None) -> str:
+    async def get_container_info(self, container_id: str, host_id: Optional[str] = None) -> str:
         """Get detailed information about a specific container."""
         try:
-            containers = self._infrastructure_client.list_containers(host_id)
+            containers = await self._infrastructure_client.list_containers(host_id)
             for container in containers:
                 if container['id'] == container_id or container['id'].startswith(container_id):
                     return json.dumps(container, indent=2)
@@ -102,7 +102,7 @@ class InfrastructureTools:
         except Exception as e:
             return f"Error getting container info: {str(e)}"
 
-    def start_container(self, container_id: str, host_id: Optional[str] = None) -> str:
+    async def start_container(self, container_id: str, host_id: Optional[str] = None) -> str:
         """Start a stopped container."""
         try:
             # Use infrastructure client to start container
@@ -111,11 +111,11 @@ class InfrastructureTools:
         except Exception as e:
             return f"Error starting container: {str(e)}"
 
-    def stop_container(self, container_id: str, host_id: Optional[str] = None) -> str:
+    async def stop_container(self, container_id: str, host_id: Optional[str] = None) -> str:
         """Stop a running container."""
         try:
             # Use infrastructure client to stop container
-            success = self._infrastructure_client.stop_container(container_id)
+            success = await self._infrastructure_client.stop_container(container_id)
             if success:
                 return f"Stopped container {container_id}"
             else:
@@ -123,12 +123,12 @@ class InfrastructureTools:
         except Exception as e:
             return f"Error stopping container: {str(e)}"
 
-    def create_container(self, name: str, image: str, host_id: Optional[str] = None,
+    async def create_container(self, name: str, image: str, host_id: Optional[str] = None,
                         ports: Optional[List[str]] = None, environment: Optional[List[str]] = None,
                         volumes: Optional[List[str]] = None) -> str:
         """Create and start a new container."""
         try:
-            container = self._infrastructure_client.add_container(
+            container = await self._infrastructure_client.add_container(
                 name=name,
                 image=image,
                 host_id=host_id,
@@ -143,10 +143,10 @@ class InfrastructureTools:
         except Exception as e:
             return f"Error creating container: {str(e)}"
 
-    def get_host_info(self, host_id: Optional[str] = None) -> str:
+    async def get_host_info(self, host_id: Optional[str] = None) -> str:
         """Get information about a specific host."""
         try:
-            hosts = self._infrastructure_client.list_hosts()
+            hosts = await self._infrastructure_client.list_hosts()
             if host_id is None:
                 for host in hosts:
                     if host.get('tags') and 'local' in host['tags']:
@@ -160,7 +160,7 @@ class InfrastructureTools:
         except Exception as e:
             return f"Error getting host info: {str(e)}"
 
-    def get_host_resources(self, host_id: Optional[str] = None) -> str:
+    async def get_host_resources(self, host_id: Optional[str] = None) -> str:
         """Get current resource usage for a host."""
         try:
             if host_id is None:
@@ -190,35 +190,43 @@ class InfrastructureTools:
         except Exception as e:
             return f"Error getting host resources: {str(e)}"
 
-    def list_hosts(self) -> str:
+    async def list_hosts(self) -> str:
         """List all hosts in the Anvyl network."""
         try:
-            hosts = self._infrastructure_client.list_hosts()
+            hosts = await self._infrastructure_client.list_hosts()
             if not hosts:
                 return "No hosts found in the network"
 
             result = []
             for host in hosts:
-                tags = ", ".join(host.get('tags', [])) if host.get('tags') else "no tags"
-                result.append(f"- {host['name']} ({host['id']}) - {host['ip']} - {tags}")
+                status = host.get('status', 'unknown')
+                tags = host.get('tags', [])
+                tags_str = f" [{', '.join(tags)}]" if tags else ""
+                result.append(f"- {host['name']} ({host['ip']}) - {status}{tags_str}")
 
             return "Hosts in the network:\n" + "\n".join(result)
         except Exception as e:
             return f"Error listing hosts: {str(e)}"
 
-    def execute_command(self, command: str, host_id: Optional[str] = None) -> str:
+    async def execute_command(self, command: str, host_id: Optional[str] = None) -> str:
         """Execute a command on a host."""
         try:
             if host_id is None:
-                # Execute command locally
+                # Execute locally
                 import subprocess
                 result = subprocess.run(command, shell=True, capture_output=True, text=True)
                 if result.returncode == 0:
                     return f"Command executed successfully:\n{result.stdout}"
                 else:
-                    return f"Command failed with return code {result.returncode}:\n{result.stderr}"
+                    return f"Command failed (exit code {result.returncode}):\n{result.stderr}"
             else:
-                # For remote hosts, we'd need to implement remote command execution
-                return f"Remote command execution not yet implemented for host {host_id}"
+                # Execute on remote host
+                result = await self._infrastructure_client.exec_command_on_host(
+                    host_id, [command]
+                )
+                if result:
+                    return json.dumps(result, indent=2)
+                else:
+                    return f"Failed to execute command on host {host_id}"
         except Exception as e:
             return f"Error executing command: {str(e)}"

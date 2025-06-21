@@ -1,44 +1,86 @@
-# Anvyl Infrastructure Orchestrator
+# Anvyl - AI-Powered Infrastructure Management
 
-A self-hosted infrastructure management platform designed specifically for Apple Silicon,
-providing container orchestration capabilities.
+A modern, self-hosted infrastructure management platform that uses AI agents to manage infrastructure across multiple hosts. Built specifically for Apple Silicon with container orchestration capabilities.
 
-## Features
+## 🚀 Features
 
+- **AI Agent System**: Intelligent agents that can manage infrastructure using natural language
 - **Host Management**: Register and monitor macOS hosts in your network
 - **Container Orchestration**: Create, manage, and monitor Docker containers
-- **Infrastructure Service**: Core service managing hosts and containers
-- **Web UI**: Modern web interface for infrastructure management
+- **Modern Web UI**: Beautiful, responsive interface for infrastructure management
 - **CLI Interface**: Comprehensive command-line interface for automation
+- **Distributed Management**: Manage infrastructure across multiple hosts
+- **Real-time Monitoring**: Live resource monitoring and status updates
 
-## Quick Start
+## 🏗️ Architecture
 
-1. **Install Anvyl**:
-   ```bash
-   pip install anvyl
-   ```
+Anvyl consists of several key components:
 
-2. **Start the infrastructure**:
-   ```bash
-   anvyl up
-   ```
+- **AI Agents**: Intelligent agents that can understand and execute infrastructure tasks
+- **Infrastructure Service**: Core service managing hosts and containers
+- **Web UI**: Modern React-based interface with real-time updates
+- **CLI**: Command-line interface for automation and scripting
+- **Database**: SQLite-based storage for hosts, containers, and agent data
 
-3. **Access the web interface**:
-   Open http://localhost:3000 in your browser
+## 🚀 Quick Start
 
-4. **Use the CLI**:
-   ```bash
-   # Show system status
-   anvyl status
+### 1. Install Anvyl
 
-   # List hosts
-   anvyl host list
+```bash
+pip install anvyl
+```
 
-   # List containers
-   anvyl container list
-   ```
+### 2. Start the Infrastructure Stack
 
-## CLI Commands
+```bash
+# Start the web UI and backend services
+anvyl up
+
+# Access the web interface at http://localhost:3000
+```
+
+### 3. Start an AI Agent
+
+```bash
+# Start an AI agent (requires LMStudio running locally)
+anvyl agent start
+
+# Query the agent
+anvyl agent query "List all containers on this host"
+```
+
+### 4. Use the CLI
+
+```bash
+# Show system status
+anvyl status
+
+# List hosts
+anvyl host list
+
+# List containers
+anvyl container list
+```
+
+## 🤖 AI Agent System
+
+Anvyl's AI agents can understand natural language commands and execute infrastructure tasks:
+
+```bash
+# Start an agent
+anvyl agent start --lmstudio-url http://localhost:1234/v1 --model llama-3.2-3b-instruct
+
+# Query the agent
+anvyl agent query "Show me all running containers"
+anvyl agent query "Create a new nginx container on port 8080"
+anvyl agent query "What's the CPU usage on this host?"
+
+# Manage remote hosts
+anvyl agent add-host host-b 192.168.1.101
+anvyl agent query "List containers on host-b"
+```
+
+## 📋 CLI Commands
 
 ### Infrastructure Management
 
@@ -91,13 +133,50 @@ anvyl container logs <container-id> --follow
 anvyl container exec <container-id> ls -la
 ```
 
-## Architecture
+### Agent Operations
+
+```bash
+# Start an AI agent
+anvyl agent start
+
+# Stop the agent
+anvyl agent stop
+
+# Query the agent
+anvyl agent query "Your question here"
+
+# List agent hosts
+anvyl agent hosts
+
+# Add a remote host to the agent
+anvyl agent add-host <host-id> <host-ip>
+```
+
+## 🎨 Web Interface
+
+Anvyl includes a modern, responsive web interface with:
+
+- **Dashboard**: Real-time system overview with beautiful charts
+- **Host Management**: Visual host monitoring and management
+- **Container Management**: Container lifecycle control and monitoring
+- **Agent Management**: AI agent status and configuration
+- **Settings**: System configuration and preferences
+
+Access the web interface at `http://localhost:3000` after running `anvyl up`.
+
+## 🏗️ Project Structure
 
 ```
 anvyl/
 ├── anvyl/                    # Core package
+│   ├── agent/               # AI agent system
+│   │   ├── agent_manager.py # Agent orchestration
+│   │   ├── host_agent.py    # Host-specific agents
+│   │   └── tools.py         # Infrastructure tools
 │   ├── cli.py               # Command-line interface
-│   ├── infrastructure_service.py  # Infrastructure management
+│   ├── infra/               # Infrastructure management
+│   │   ├── infrastructure_service.py
+│   │   └── infrastructure_client.py
 │   └── database/
 │       └── models.py        # Database models
 ├── ui/                      # Web interface
@@ -107,19 +186,20 @@ anvyl/
 └── tests/                   # Test suite
 ```
 
-## Development
+## 🛠️ Development
 
 ### Prerequisites
 
-- Python 3.12+
+- Python 3.10+
 - Docker Desktop
 - macOS (Apple Silicon recommended)
+- LMStudio (for AI agent functionality)
 
 ### Setup
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/your-org/anvyl.git
+   git clone https://github.com/kessler-frost/anvyl.git
    cd anvyl
    ```
 
@@ -138,7 +218,23 @@ anvyl/
    anvyl up
    ```
 
-## Contributing
+### AI Agent Development
+
+To use the AI agent features, you'll need LMStudio running locally:
+
+1. **Install LMStudio**: Download from [lmstudio.ai](https://lmstudio.ai)
+2. **Load a model**: Download and load a model like `llama-3.2-3b-instruct`
+3. **Start the API server**: Enable the local server in LMStudio
+4. **Start Anvyl agent**: `anvyl agent start`
+
+## 📚 Examples
+
+See the `examples/` directory for usage examples:
+
+- `agent_demo.py`: AI agent demonstration
+- Various CLI usage patterns
+
+## 🤝 Contributing
 
 1. Fork the repository
 2. Create a feature branch
@@ -146,12 +242,12 @@ anvyl/
 4. Add tests
 5. Submit a pull request
 
-## License
+## 📄 License
 
 MIT License - see [LICENSE](LICENSE) for details.
 
-## Support
+## 🆘 Support
 
 - Documentation: [docs/](docs/)
-- Issues: [GitHub Issues](https://github.com/your-org/anvyl/issues)
-- Discussions: [GitHub Discussions](https://github.com/your-org/anvyl/discussions)
+- Issues: [GitHub Issues](https://github.com/kessler-frost/anvyl/issues)
+- Discussions: [GitHub Discussions](https://github.com/kessler-frost/anvyl/discussions)

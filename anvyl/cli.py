@@ -854,73 +854,49 @@ agent_group = typer.Typer(
 app.add_typer(agent_group, name="agent")
 
 @agent_group.command("up")
-def up_agent(
-    lmstudio_url: str = typer.Option("http://localhost:1234/v1", "--lmstudio-url", help="LMStudio API URL"),
-    lmstudio_model: str = typer.Option("llama-3.2-3b-instruct", "--model", help="LMStudio model name"),
-    port: int = typer.Option(4201, "--port", help="Agent API port"),
-    infrastructure_api_url: str = typer.Option("http://localhost:4200", "--infra-api-url", help="Infrastructure API URL"),
-    background: bool = typer.Option(True, "--background/--foreground", help="Run in background")
+def agent_up(
+    model_provider_url: str = typer.Option("http://localhost:1234/v1", "--model-provider-url", help="Model provider API URL"),
+    model_name: str = typer.Option("llama-3.2-3b-instruct", "--model", help="Model provider model name"),
+    port: int = typer.Option(4201, "--port", help="Agent port"),
+    host: str = typer.Option("127.0.0.1", "--host", help="Host to bind to"),
+    infrastructure_api_url: str = typer.Option("http://localhost:4200", "--infrastructure-api-url", help="Infrastructure API URL")
 ):
-    """Start the AI agent directly on the host."""
+    """Start an AI agent (requires a model provider running locally)"""
     try:
-        console.print("🤖 [bold blue]Starting Anvyl AI Agent[/bold blue]")
+        # Start the agent server
+        from anvyl.agent.server import start_agent_server
+        import uuid
+        import socket
 
-        if background:
-            # Use background service manager
-            service_manager = get_service_manager()
+        # Generate host ID and get host IP
+        host_id = str(uuid.uuid4())
+        try:
+            host_ip = socket.gethostbyname(socket.gethostname())
+        except:
+            host_ip = "127.0.0.1"
 
-            # Check if agent is already running
-            if service_manager.is_service_running("anvyl_agent"):
-                console.print("[yellow]Agent is already running[/yellow]")
-                return
+        console.print(f"🚀 Starting AI agent...")
+        console.print(f"🆔 Host ID: {host_id}")
+        console.print(f"🌐 Host IP: {host_ip}")
+        console.print(f"🔌 Port: {port}")
+        console.print(f"🏗️  Infrastructure API: {infrastructure_api_url}")
+        console.print(f"🧠 Model Provider: {model_provider_url}")
+        console.print(f"🤖 Model: {model_name}")
 
-            # Start the agent service
-            success = service_manager.start_service(
-                service_name="anvyl_agent",
-                command=[
-                    sys.executable, "-m", "anvyl.agent.server",
-                    "--host", "127.0.0.1",
-                    "--port", str(port),
-                    "--infra-api-url", infrastructure_api_url,
-                    "--lmstudio-url", lmstudio_url,
-                    "--model", lmstudio_model
-                ],
-                port=port
-            )
+        # Start the server
+        start_agent_server(
+            host_id=host_id,
+            host_ip=host_ip,
+            port=port,
+            infrastructure_api_url=infrastructure_api_url,
+            model_provider_url=model_provider_url,
+            model_name=model_name
+        )
 
-            if success:
-                console.print(f"✅ Agent started successfully in background")
-                console.print(f"🌐 Agent API: http://localhost:{port}")
-                console.print(f"📋 API Docs: http://localhost:{port}/docs")
-                console.print(f"🧠 LLM: LMStudio at {lmstudio_url}")
-                console.print(f"🤖 Model: {lmstudio_model}")
-                console.print()
-                console.print("Use 'anvyl agent logs' to view logs")
-                console.print("Use 'anvyl agent down' to stop the agent")
-            else:
-                console.print("[red]❌ Failed to start agent[/red]")
-                raise typer.Exit(1)
-        else:
-            # Run in foreground
-            console.print(f"🌐 Agent API: http://localhost:{port}")
-            console.print(f"📋 API Docs: http://localhost:{port}/docs")
-            console.print(f"🧠 LLM: LMStudio at {lmstudio_url}")
-            console.print(f"🤖 Model: {lmstudio_model}")
-            console.print()
-            console.print("Starting agent server... (Press Ctrl+C to stop)")
-
-            # Import and run the agent server directly
-            from anvyl.agent.server import run_agent_server
-            run_agent_server(
-                host="127.0.0.1",
-                port=port,
-                infrastructure_api_url=infrastructure_api_url,
-                lmstudio_url=lmstudio_url,
-                lmstudio_model=lmstudio_model
-            )
-
+    except KeyboardInterrupt:
+        console.print("\n🛑 Agent stopped by user")
     except Exception as e:
-        console.print(f"[red]Error starting agent: {e}[/red]")
+        console.print(f"❌ Failed to start agent: {e}")
         raise typer.Exit(1)
 
 @agent_group.command("down")

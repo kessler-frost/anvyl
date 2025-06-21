@@ -10,13 +10,99 @@ import asyncio
 import os
 import sys
 import time
+import requests
 from typing import Dict, Any
 
 # Add the project root to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from anvyl.agent.server import run_agent_server
+from anvyl.agent.server import start_agent_server
 from anvyl.infra.client import get_infrastructure_client
+
+
+def check_infrastructure_api(infrastructure_api_url: str) -> bool:
+    """Check if the infrastructure API is available."""
+    try:
+        response = requests.get(f"{infrastructure_api_url}/health", timeout=5)
+        if response.status_code == 200:
+            print("✅ [green]Infrastructure API is running and accessible[/green]")
+            return True
+        else:
+            print("⚠️  Warning: Infrastructure API not accessible")
+            return False
+    except Exception as e:
+        print("⚠️  Warning: Infrastructure API not accessible")
+        print("   Start the infrastructure API with 'anvyl infra up'")
+        return False
+
+
+def check_model_provider(model_provider_url: str) -> bool:
+    """Check if the model provider is available."""
+    try:
+        response = requests.get(f"{model_provider_url}/models", timeout=5)
+        if response.status_code == 200:
+            models = response.json()
+            if models and "data" in models and models["data"]:
+                print("✅ [green]Model provider is running and accessible[/green]")
+                return True
+            else:
+                print("⚠️  Warning: Model provider is running but may not be serving models")
+                return False
+        else:
+            print("⚠️  Warning: Model provider not accessible")
+            return False
+    except Exception as e:
+        print("⚠️  Warning: Model provider not accessible")
+        print("   Start a model provider and load a model for full AI capabilities")
+        return False
+
+
+def create_agent(infrastructure_api_url: str, model_provider_url: str, model_name: str):
+    """Create an agent instance for demo purposes."""
+    # This is a placeholder - in a real demo, you might want to create an agent instance
+    # For now, we'll just return a dict with the configuration
+    return {
+        "infrastructure_api_url": infrastructure_api_url,
+        "model_provider_url": model_provider_url,
+        "model_name": model_name
+    }
+
+
+def run_demo(agent):
+    """Run the demo with the created agent."""
+    print("🤖 Anvyl AI Agent Demo")
+    print("=" * 50)
+
+    print(f"🏗️  Infrastructure API: {agent['infrastructure_api_url']}")
+    print(f"🧠 Model Provider: {agent['model_provider_url']}")
+    print(f"🤖 Model: {agent['model_name']}")
+    print()
+
+    print("📋 Demo Queries:")
+    demo_queries = [
+        "List all containers on this host",
+        "Get current host resources",
+        "Show information about this host",
+        "List all hosts in the network"
+    ]
+
+    for i, query in enumerate(demo_queries, 1):
+        print(f"  {i}. {query}")
+
+    print("\n🚀 Starting agent server...")
+    print("   (Press Ctrl+C to stop)")
+    print()
+
+    # Start the agent server
+    try:
+        start_agent_server(
+            port=4201,
+            infrastructure_api_url=agent['infrastructure_api_url'],
+            model_provider_url=agent['model_provider_url'],
+            model_name=agent['model_name']
+        )
+    except KeyboardInterrupt:
+        print("\n🛑 Agent stopped by user")
 
 
 async def demo_local_agent():
@@ -42,11 +128,10 @@ async def demo_local_agent():
 
     # Start the agent server
     try:
-        run_agent_server(
-            host="127.0.0.1",
+        start_agent_server(
             port=4201,
-            lmstudio_url="http://localhost:1234/v1",
-            lmstudio_model="llama-3.2-3b-instruct",
+            model_provider_url="http://localhost:1234/v1",
+            model_name="llama-3.2-3b-instruct",
             infrastructure_api_url="http://localhost:4200"
         )
     except KeyboardInterrupt:
@@ -109,44 +194,46 @@ def demo_remote_queries():
     print("  anvyl agent query host-b 'List all containers'")
 
 
-async def main():
+def main():
     """Main demo function."""
-    print("🚀 Anvyl AI Agent System Demo")
-    print("=" * 60)
+    print("🚀 [bold blue]Anvyl AI Agent Demo[/bold blue]")
     print()
 
-    # Check if LMStudio is available
-    lmstudio_url = "http://localhost:1234/v1"
+    # Configuration
+    infrastructure_api_url = "http://localhost:4200"
+    model_provider_url = "http://localhost:1234/v1"
+    model_name = "llama-3.2-3b-instruct"
+
+    print(f"🏗️  Infrastructure API: {infrastructure_api_url}")
+    print(f"🧠 Model Provider: {model_provider_url}")
+    print(f"🤖 Model: {model_name}")
+    print()
+
+    # Check if infrastructure API is available
+    if not check_infrastructure_api(infrastructure_api_url):
+        print("❌ Infrastructure API not available. Please start it with 'anvyl infra up'")
+        return
+
+    # Check if model provider is available
+    if not check_model_provider(model_provider_url):
+        print("⚠️  Model provider not available. Agent will use mock responses.")
+        print("   Start a model provider for full AI capabilities")
+
+    # Create and start the agent
     try:
-        import requests
-        response = requests.get(f"{lmstudio_url}/models", timeout=5)
-        if response.status_code == 200:
-            print("✅ [green]LMStudio is running and accessible[/green]")
-        else:
-            print("⚠️  Warning: LMStudio is running but may not be serving models")
+        agent = create_agent(
+            infrastructure_api_url=infrastructure_api_url,
+            model_provider_url=model_provider_url,
+            model_name=model_name
+        )
+
+        # Run the demo
+        run_demo(agent)
+
     except Exception as e:
-        print("⚠️  Warning: LMStudio not accessible")
-        print(f"   Error: {e}")
-        print("   The agent will run in mock mode with limited functionality")
-        print("   Start LMStudio and load a model for full AI capabilities")
-        print()
-
-    # Demo infrastructure tools
-    await demo_infrastructure_tools()
-
-    # Demo remote queries
-    demo_remote_queries()
-
-    # Ask user if they want to start the agent
-    print("🤖 Would you like to start the AI agent server? (y/n): ", end="")
-    response = input().lower().strip()
-
-    if response in ['y', 'yes']:
-        print()
-        await demo_local_agent()
-    else:
-        print("\n✅ Demo completed. Use 'anvyl agent up' to start the agent manually.")
+        print(f"❌ Error: {e}")
+        return
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

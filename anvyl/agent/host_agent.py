@@ -30,8 +30,8 @@ class HostAgent:
                  infrastructure_api_url: str = "http://localhost:4200",
                  host_id: str = None,
                  host_ip: str = None,
-                 lmstudio_url: Optional[str] = None,
-                 lmstudio_model: str = "default",
+                 model_provider_url: Optional[str] = None,
+                 model_name: str = "default",
                  port: int = 4201):
         """Initialize the host agent."""
         self.infrastructure_api_url = infrastructure_api_url
@@ -53,8 +53,8 @@ class HostAgent:
         self.host_id = host_id
         self.host_ip = host_ip
         self.port = port
-        self.lmstudio_url = lmstudio_url or "http://localhost:1234/v1"
-        self.lmstudio_model = lmstudio_model
+        self.model_provider_url = model_provider_url or "http://localhost:1234/v1"
+        self.model_name = model_name
 
         # Initialize model and get actual model info
         self.model, self.actual_model_name = self._initialize_model()
@@ -85,58 +85,53 @@ You have access to various tools to help you accomplish these tasks. Always be h
         if self.infrastructure_client is None:
             self.infrastructure_client = await get_infrastructure_client(self.infrastructure_api_url)
 
-    def _get_actual_model_name(self, lmstudio_url: str) -> str:
-        """Get the actual model name from LMStudio."""
+    def _get_actual_model_name(self, model_provider_url: str) -> str:
+        """Get the actual model name from the model provider."""
         try:
             import requests
-            response = requests.get(f"{lmstudio_url}/models", timeout=5)
+            response = requests.get(f"{model_provider_url}/models", timeout=5)
             if response.status_code == 200:
                 models = response.json()
-                if models and "data" in models and models["data"]:
-                    # Get the first available model
-                    model = models["data"][0]
-                    return model.get("id", "unknown")
-                else:
-                    return "no models available"
-            else:
-                return f"error: HTTP {response.status_code}"
+                if models and "data" in models:
+                    return models["data"][0]["id"]
+            return self.model_name
         except Exception as e:
-            logger.warning(f"Could not fetch model info from LMStudio: {e}")
-            return "unknown"
+            logger.warning(f"Could not fetch model info from model provider: {e}")
+            return self.model_name
 
     def _initialize_model(self):
         """Initialize the model and return both the model instance and actual model name."""
-        if self.lmstudio_url:
+        if self.model_provider_url:
             try:
-                # Create LMStudio model using OpenAIProvider with custom base URL
-                lmstudio_provider = OpenAIProvider(base_url=self.lmstudio_url)
+                # Create model provider using OpenAIProvider with custom base URL
+                model_provider = OpenAIProvider(base_url=self.model_provider_url)
                 model = OpenAIModel(
-                    model_name=self.lmstudio_model,
-                    provider=lmstudio_provider
+                    model_name=self.model_name,
+                    provider=model_provider
                 )
                 # Test the connection and get actual model name
-                actual_model = self._get_actual_model_name(self.lmstudio_url)
+                actual_model = self._get_actual_model_name(self.model_provider_url)
                 return model, actual_model
             except Exception as e:
-                logger.warning(f"LMStudio not available: {e}, falling back to mock model")
+                logger.warning(f"Model provider not available: {e}, falling back to mock model")
                 return self._create_mock_model(), "mock"
         else:
-            # Try to use default LMStudio URL
+            # Try to use default model provider URL
             try:
-                lmstudio_provider = OpenAIProvider(base_url="http://localhost:1234/v1")
+                model_provider = OpenAIProvider(base_url="http://localhost:1234/v1")
                 model = OpenAIModel(
                     model_name="default",
-                    provider=lmstudio_provider
+                    provider=model_provider
                 )
                 # Test the connection
                 actual_model = self._get_actual_model_name("http://localhost:1234/v1")
                 return model, actual_model
             except Exception as e:
-                logger.warning(f"LMStudio not available: {e}, falling back to mock model")
+                logger.warning(f"Model provider not available: {e}, falling back to mock model")
                 return self._create_mock_model(), "mock"
 
     def _create_mock_model(self):
-        """Create a mock model for testing when LMStudio is not available."""
+        """Create a mock model for testing when the model provider is not available."""
         from pydantic_ai.models import Model
 
         class MockModel(Model):
@@ -157,7 +152,7 @@ You have access to various tools to help you accomplish these tasks. Always be h
                 return ModelResponse(
                     parts=[ModelResponsePart(
                         type="text",
-                        text="I'm a mock model. Please start LMStudio for full functionality."
+                        text="I'm a mock model. Please start a model provider for full functionality."
                     )]
                 )
 
@@ -301,9 +296,21 @@ You have access to various tools to help you accomplish these tasks. Always be h
         return {
             "host_id": self.host_id,
             "host_ip": self.host_ip,
-            "llm_model": self.lmstudio_model,
+            "llm_model": self.model_name,
             "actual_model_name": self.actual_model_name,
             "tools_available": tool_names,
             "known_hosts": self.get_known_hosts(),
             "port": self.port
+        }
+
+    def get_status(self) -> Dict[str, Any]:
+        """Get the current status of the agent."""
+        return {
+            "host_id": self.host_id,
+            "is_running": self.is_running,
+            "last_heartbeat": self.last_heartbeat,
+            "model_provider_url": self.model_provider_url,
+            "model_name": self.model_name,
+            "llm_model": self.model_name,
+            "agent_config": self.agent_config
         }

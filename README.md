@@ -42,11 +42,17 @@ anvyl up
 ### 3. Start an AI Agent
 
 ```bash
-# Start an AI agent (requires LMStudio running locally)
-anvyl agent up
+# Start an AI agent (requires a model provider running locally)
+anvyl agent up --model-provider-url http://localhost:1234/v1 --model llama-3.2-3b-instruct
 
 # Query the agent
 anvyl agent query "List all containers on this host"
+
+# Get agent status
+anvyl agent status
+
+# Stop the agent
+anvyl agent down
 ```
 
 ### 4. Use the CLI
@@ -68,7 +74,7 @@ Anvyl's AI agents can understand natural language commands and execute infrastru
 
 ```bash
 # Start an agent
-anvyl agent up --lmstudio-url http://localhost:1234/v1 --model llama-3.2-3b-instruct
+anvyl agent up --model-provider-url http://localhost:1234/v1 --model llama-3.2-3b-instruct
 
 # Query the agent
 anvyl agent query "Show me all running containers"
@@ -193,7 +199,7 @@ anvyl/
 - Python 3.10+
 - Docker Desktop
 - macOS (Apple Silicon recommended)
-- LMStudio (for AI agent functionality)
+- Model provider (for AI agent functionality)
 
 ### Setup
 
@@ -220,12 +226,12 @@ anvyl/
 
 ### AI Agent Development
 
-To use the AI agent features, you'll need LMStudio running locally:
+To use the AI agent features, you'll need a model provider running locally:
 
-1. **Install LMStudio**: Download from [lmstudio.ai](https://lmstudio.ai)
+1. **Install a model provider**: Options include LMStudio, Ollama, or other OpenAI-compatible providers
 2. **Load a model**: Download and load a model like `llama-3.2-3b-instruct`
-3. **Start the API server**: Enable the local server in LMStudio
-4. **Start Anvyl agent**: `anvyl agent start`
+3. **Start the API server**: Enable the local server in your model provider
+4. **Start Anvyl agent**: `anvyl agent up --model-provider-url http://localhost:1234/v1 --model llama-3.2-3b-instruct`
 
 ## 📚 Examples
 

@@ -12,6 +12,8 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Dict, Any, Optional, List
 import json
+import uuid
+import socket
 
 from anvyl.agent.host_agent import HostAgent
 from anvyl.agent.communication import AgentCommunication
@@ -23,10 +25,13 @@ logger = logging.getLogger(__name__)
 _agent: Optional[HostAgent] = None
 _communication: Optional[AgentCommunication] = None
 _agent_config = {
+    "host_id": None,
+    "host_ip": None,
+    "port": 4201,
     "infrastructure_api_url": "http://localhost:4200",
-    "lmstudio_url": "http://localhost:1234/v1",
-    "lmstudio_model": "llama-3.2-3b-instruct",
-    "port": 4201
+    "model_provider_url": "http://localhost:1234/v1",
+    "model_name": "llama-3.2-3b-instruct",
+    "tools": []
 }
 
 
@@ -54,8 +59,8 @@ async def lifespan(app: FastAPI):
             communication=_communication,
             tools=tools,
             infrastructure_api_url=_agent_config["infrastructure_api_url"],
-            lmstudio_url=_agent_config["lmstudio_url"],
-            lmstudio_model=_agent_config["lmstudio_model"],
+            model_provider_url=_agent_config["model_provider_url"],
+            model_name=_agent_config["model_name"],
             port=_agent_config["port"]
         )
 
@@ -217,40 +222,98 @@ async def handle_broadcast(message_data: Dict[str, Any]):
 
 def set_agent_config(
     infrastructure_api_url: str = "http://localhost:4200",
-    lmstudio_url: str = "http://localhost:1234/v1",
-    lmstudio_model: str = "llama-3.2-3b-instruct",
+    model_provider_url: str = "http://localhost:1234/v1",
+    model_name: str = "llama-3.2-3b-instruct",
     port: int = 4201
 ):
     """Set the agent configuration globally."""
     global _agent_config
     _agent_config.update({
         "infrastructure_api_url": infrastructure_api_url,
-        "lmstudio_url": lmstudio_url,
-        "lmstudio_model": lmstudio_model,
+        "model_provider_url": model_provider_url,
+        "model_name": model_name,
         "port": port
     })
 
 
-def run_agent_server(
-    host: str = "127.0.0.1",
+def create_host_agent(
+    host_id: str,
+    host_ip: str,
     port: int = 4201,
     infrastructure_api_url: str = "http://localhost:4200",
-    lmstudio_url: str = "http://localhost:1234/v1",
-    lmstudio_model: str = "llama-3.2-3b-instruct"
+    model_provider_url: str = "http://localhost:1234/v1",
+    model_name: str = "llama-3.2-3b-instruct",
+    tools: List = None
+) -> HostAgent:
+    """Create a new host agent instance."""
+    if tools is None:
+        tools = []
+
+    # Create communication and tools
+    communication = AgentCommunication(host_id=host_id, port=port)
+    agent_tools = get_agent_tools(infrastructure_api_url)
+
+    # Create the host agent
+    agent = HostAgent(
+        communication=communication,
+        tools=agent_tools,
+        infrastructure_api_url=infrastructure_api_url,
+        host_id=host_id,
+        host_ip=host_ip,
+        model_provider_url=model_provider_url,
+        model_name=model_name,
+        port=port
+    )
+
+    return agent
+
+
+def start_agent_server(
+    host_id: str = None,
+    host_ip: str = None,
+    port: int = 4201,
+    infrastructure_api_url: str = "http://localhost:4200",
+    model_provider_url: str = "http://localhost:1234/v1",
+    model_name: str = "llama-3.2-3b-instruct"
 ):
-    """Run the agent server."""
+    """Start the agent server with the specified configuration."""
+    if host_id is None:
+        host_id = str(uuid.uuid4())
+    if host_ip is None:
+        host_ip = socket.gethostbyname(socket.gethostname())
+
+    # Create agent configuration
+    agent_config = {
+        "host_id": host_id,
+        "host_ip": host_ip,
+        "port": port,
+        "infrastructure_api_url": infrastructure_api_url,
+        "model_provider_url": model_provider_url,
+        "model_name": model_name
+    }
+
+    # Create and start the agent
+    agent = create_host_agent(
+        host_id=host_id,
+        host_ip=host_ip,
+        port=port,
+        infrastructure_api_url=infrastructure_api_url,
+        model_provider_url=model_provider_url,
+        model_name=model_name
+    )
+
     # Set the configuration
     set_agent_config(
         infrastructure_api_url=infrastructure_api_url,
-        lmstudio_url=lmstudio_url,
-        lmstudio_model=lmstudio_model,
+        model_provider_url=model_provider_url,
+        model_name=model_name,
         port=port
     )
 
     # Run the server with reload enabled
     uvicorn.run(
         "anvyl.agent.server:app",
-        host=host,
+        host=host_ip,
         port=port,
         reload=True,
         log_level="info"
@@ -260,19 +323,21 @@ def run_agent_server(
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Run Anvyl AI Agent Server")
-    parser.add_argument("--host", type=str, default="127.0.0.1", help="Host to bind to")
-    parser.add_argument("--port", type=int, default=4201, help="Port to bind to")
-    parser.add_argument("--infra-api-url", type=str, default="http://localhost:4200", help="Infrastructure API URL")
-    parser.add_argument("--lmstudio-url", type=str, default="http://localhost:1234/v1", help="LMStudio API URL")
-    parser.add_argument("--model", type=str, default="llama-3.2-3b-instruct", help="LMStudio model name")
+    parser = argparse.ArgumentParser(description="Start an Anvyl host agent")
+    parser.add_argument("--host-id", type=str, help="Host ID (default: auto-generated)")
+    parser.add_argument("--host-ip", type=str, help="Host IP (default: auto-detected)")
+    parser.add_argument("--port", type=int, default=4201, help="Agent port")
+    parser.add_argument("--infrastructure-api-url", type=str, default="http://localhost:4200", help="Infrastructure API URL")
+    parser.add_argument("--model-provider-url", type=str, default="http://localhost:1234/v1", help="Model provider API URL")
+    parser.add_argument("--model", type=str, default="llama-3.2-3b-instruct", help="Model provider model name")
 
     args = parser.parse_args()
 
-    run_agent_server(
-        host=args.host,
+    start_agent_server(
+        host_id=args.host_id,
+        host_ip=args.host_ip,
         port=args.port,
-        infrastructure_api_url=args.infra_api_url,
-        lmstudio_url=args.lmstudio_url,
-        lmstudio_model=args.model
+        infrastructure_api_url=args.infrastructure_api_url,
+        model_provider_url=args.model_provider_url,
+        model_name=args.model
     )

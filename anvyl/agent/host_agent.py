@@ -2,7 +2,7 @@
 Host Agent
 
 This module provides the main AI agent that runs on each host and manages
-local infrastructure using LangChain and tool-use capabilities.
+local infrastructure using Pydantic AI and tool-use capabilities.
 """
 
 import logging
@@ -10,14 +10,12 @@ import asyncio
 import uuid
 import socket
 from typing import Dict, List, Any, Optional
-from langchain.agents import AgentExecutor, create_openai_tools_agent
-from langchain_openai import OpenAI
-from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain.tools import BaseTool
+from pydantic_ai import Agent
+from pydantic_ai.models.openai import OpenAIModel
 import json
 
 from anvyl.agent.communication import AgentCommunication, AgentMessage
-from anvyl.infrastructure_client import get_infrastructure_client
+from anvyl.infra.infrastructure_client import get_infrastructure_client
 
 logger = logging.getLogger(__name__)
 
@@ -27,13 +25,13 @@ class HostAgent:
 
     def __init__(self,
                  communication: AgentCommunication,
-                 tools: List[BaseTool],
-                 infrastructure_api_url: str = "http://localhost:8080",
+                 tools: List,
+                 infrastructure_api_url: str = "http://localhost:4200",
                  host_id: str = None,
                  host_ip: str = None,
                  lmstudio_url: Optional[str] = None,
                  lmstudio_model: str = "default",
-                 port: int = 4200):
+                 port: int = 4201):
         """Initialize the host agent."""
         self.infrastructure_client = get_infrastructure_client(infrastructure_api_url)
 
@@ -56,17 +54,10 @@ class HostAgent:
         self.lmstudio_url = lmstudio_url or "http://localhost:1234/v1"
         self.lmstudio_model = lmstudio_model
 
-        # Initialize LLM and get actual model info
-        self.llm, self.actual_model_name = self._initialize_llm()
+        # Initialize model and get actual model info
+        self.model, self.actual_model_name = self._initialize_model()
 
-        # Initialize agent
-        self.agent_executor = self._create_agent()
-
-        # Register message handlers
-        self._register_message_handlers()
-
-        logger.info(f"Host agent initialized for host {host_id}")
-
+        # Define system prompt
         self.system_prompt = f"""You are an AI agent running on host {self.host_id}.
 
 Your capabilities include:
@@ -78,6 +69,14 @@ Your capabilities include:
 
 You have access to various tools to help you accomplish these tasks. Always be helpful and provide clear, actionable responses.
 """
+
+        # Initialize agent
+        self.agent = self._create_agent()
+
+        # Register message handlers
+        self._register_message_handlers()
+
+        logger.info(f"Host agent initialized for host {host_id}")
 
     def _get_actual_model_name(self, lmstudio_url: str) -> str:
         """Get the actual model name from LMStudio."""
@@ -98,109 +97,78 @@ You have access to various tools to help you accomplish these tasks. Always be h
             logger.warning(f"Could not fetch model info from LMStudio: {e}")
             return "unknown"
 
-    def _initialize_llm(self):
-        """Initialize the LLM and return both the LLM instance and actual model name."""
+    def _initialize_model(self):
+        """Initialize the model and return both the model instance and actual model name."""
         if self.lmstudio_url:
             try:
-                llm = OpenAI(
-                    openai_api_base=self.lmstudio_url,
+                # Create a custom model for LMStudio using OpenAI-compatible API
+                model = OpenAIModel(
                     model_name=self.lmstudio_model,
-                    openai_api_key="dummy-key",
-                    temperature=0,
-                    max_tokens=1000
+                    provider="openai"
                 )
                 # Test the connection and get actual model name
                 actual_model = self._get_actual_model_name(self.lmstudio_url)
-                return llm, actual_model
+                return model, actual_model
             except Exception as e:
-                logger.warning(f"LMStudio not available: {e}, falling back to mock LLM")
-                return self._create_mock_llm(), "mock"
+                logger.warning(f"LMStudio not available: {e}, falling back to mock model")
+                return self._create_mock_model(), "mock"
         else:
             # Try to use default LMStudio URL
             try:
-                llm = OpenAI(
-                    openai_api_base="http://localhost:1234/v1",
+                model = OpenAIModel(
                     model_name="default",
-                    openai_api_key="dummy-key",
-                    temperature=0,
-                    max_tokens=1000
+                    provider="openai"
                 )
                 # Test the connection
-                test_response = llm("Hello")
-                if "Error" in test_response:
-                    logger.warning("LMStudio not available, falling back to mock LLM")
-                    return self._create_mock_llm(), "mock"
-                else:
-                    actual_model = self._get_actual_model_name("http://localhost:1234/v1")
-                    return llm, actual_model
+                actual_model = self._get_actual_model_name("http://localhost:1234/v1")
+                return model, actual_model
             except Exception as e:
-                logger.warning(f"LMStudio not available: {e}, falling back to mock LLM")
-                return self._create_mock_llm(), "mock"
+                logger.warning(f"LMStudio not available: {e}, falling back to mock model")
+                return self._create_mock_model(), "mock"
 
-    def _create_mock_llm(self):
-        """Create a mock LLM for testing when LMStudio is not available."""
-        from langchain_core.language_models.base import BaseLanguageModel
+    def _create_mock_model(self):
+        """Create a mock model for testing when LMStudio is not available."""
+        from pydantic_ai.models import Model
 
-        class MockLLM(BaseLanguageModel):
-            def _call(self, prompt: str, stop: Optional[List[str]] = None) -> str:
-                return "I'm a mock LLM. Please start LMStudio for full functionality."
-
+        class MockModel(Model):
             @property
-            def _llm_type(self) -> str:
+            def system(self):
                 return "mock"
 
-            # Required abstract methods for BaseLanguageModel
-            def predict(self, text: str, *args, **kwargs) -> str:
-                return self._call(text)
+            @property
+            def model_name(self):
+                return "mock"
 
-            async def apredict(self, text: str, *args, **kwargs) -> str:
-                return self._call(text)  # Mock async call
+            @property
+            def provider(self):
+                return "mock"
 
-            def predict_messages(self, messages, *args, **kwargs):
-                raise NotImplementedError("predict_messages is not implemented in MockLLM")
+            async def request(self, messages, model_settings=None, model_request_parameters=None):
+                from pydantic_ai.models import ModelResponse, ModelResponsePart
+                return ModelResponse(
+                    parts=[ModelResponsePart(
+                        type="text",
+                        text="I'm a mock model. Please start LMStudio for full functionality."
+                    )]
+                )
 
-            async def apredict_messages(self, messages, *args, **kwargs):
-                raise NotImplementedError("apredict_messages is not implemented in MockLLM")
+        return MockModel()
 
-            def generate_prompt(self, *args, **kwargs):
-                raise NotImplementedError("generate_prompt is not implemented in MockLLM")
-
-            async def agenerate_prompt(self, *args, **kwargs):
-                raise NotImplementedError("agenerate_prompt is not implemented in MockLLM")
-
-            def invoke(self, *args, **kwargs):
-                raise NotImplementedError("invoke is not implemented in MockLLM")
-
-        return MockLLM()
-
-    def _create_agent(self) -> AgentExecutor:
-        """Create the LangChain agent with tools."""
+    def _create_agent(self) -> Agent:
+        """Create the Pydantic AI agent with tools."""
         try:
-            logger.info("Creating agent with LLM type: %s", self.llm._llm_type)
+            logger.info("Creating agent with model provider: %s", self.model.system)
             logger.info("Number of tools: %d", len(self.tools))
 
-            system_prompt = self.system_prompt
-
-            prompt = ChatPromptTemplate.from_messages([
-                ("system", system_prompt),
-                MessagesPlaceholder(variable_name="chat_history"),
-                ("human", "{input}"),
-                MessagesPlaceholder(variable_name="agent_scratchpad"),
-            ])
-
-            logger.info("Creating OpenAI tools agent...")
-            # Use create_openai_tools_agent for better compatibility with newer LangChain
-            agent = create_openai_tools_agent(
-                llm=self.llm,
+            # Create the agent with the model and tools
+            agent = Agent(
+                model=self.model,
                 tools=self.tools,
-                prompt=prompt
+                system_prompt=self.system_prompt
             )
-            logger.info("Creating agent executor...")
-            return AgentExecutor(
-                agent=agent,
-                tools=self.tools,
-                verbose=True
-            )
+
+            logger.info("Agent created successfully")
+            return agent
         except Exception as e:
             logger.error("Error creating agent: %s", str(e))
             raise
@@ -217,13 +185,13 @@ You have access to various tools to help you accomplish these tasks. Always be h
             logger.info(f"Handling query from {message.sender_host}: {query}")
 
             # Execute the query using the agent
-            result = await self.agent_executor.ainvoke({"input": query})
+            result = await self.agent.run(query)
 
             return {
                 "host_id": self.host_id,
                 "host_ip": self.host_ip,
                 "query": query,
-                "response": result.get("output", "No response generated"),
+                "response": result.content if hasattr(result, 'content') else str(result),
                 "timestamp": message.timestamp.isoformat()
             }
         except Exception as e:
@@ -253,49 +221,61 @@ You have access to various tools to help you accomplish these tasks. Always be h
             logger.error(f"Error handling broadcast: {e}")
             return {
                 "host_id": self.host_id,
-                "error": str(e)
+                "error": str(e),
+                "content": message.content
             }
 
     async def process_query(self, query: str) -> str:
         """Process a query using the agent."""
         try:
-            result = await self.agent_executor.ainvoke({"input": query})
-            return result.get("output", "No response generated")
+            result = await self.agent.run(query)
+            return result.content if hasattr(result, 'content') else str(result)
         except Exception as e:
             logger.error(f"Error processing query: {e}")
             return f"Error processing query: {str(e)}"
 
     async def query_remote_host(self, host_id: str, query: str) -> str:
         """Query a remote host's agent."""
-        result = await self.communication.send_query(host_id, query)
-        if "error" in result:
-            return f"Error querying remote host: {result['error']}"
-        else:
+        try:
+            result = await self.communication.send_query(host_id, query)
+            if "error" in result:
+                return f"Error querying remote host: {result['error']}"
             return result.get("response", "No response from remote host")
+        except Exception as e:
+            logger.error(f"Error querying remote host: {e}")
+            return f"Error querying remote host: {str(e)}"
 
     async def get_remote_containers(self, host_id: str) -> str:
         """Get containers from a remote host."""
         return await self.query_remote_host(host_id, "List all containers on this host")
 
     async def get_remote_host_info(self, host_id: str) -> str:
-        """Get host information from a remote host."""
-        return await self.query_remote_host(host_id, "Get host information and resources")
+        """Get information from a remote host."""
+        return await self.query_remote_host(host_id, "Get information about this host")
 
     def add_known_host(self, host_id: str, host_ip: str):
-        """Add a host to the known hosts list."""
-        self.communication.add_known_host(host_id, host_ip)
+        """Add a known host to the communication system."""
+        self.communication.known_hosts[host_id] = host_ip
 
     def remove_known_host(self, host_id: str):
-        """Remove a host from the known hosts list."""
-        self.communication.remove_known_host(host_id)
+        """Remove a known host from the communication system."""
+        if host_id in self.communication.known_hosts:
+            del self.communication.known_hosts[host_id]
 
     def get_known_hosts(self) -> Dict[str, str]:
         """Get all known hosts."""
-        return self.communication.get_known_hosts()
+        return self.communication.known_hosts.copy()
 
     async def broadcast_to_all_hosts(self, message: str) -> List[Dict[str, Any]]:
         """Broadcast a message to all known hosts."""
-        return await self.communication.broadcast_message("info", {"message": message})
+        results = []
+        for host_id in self.communication.known_hosts:
+            try:
+                result = await self.communication.send_query(host_id, message)
+                results.append({"host_id": host_id, "result": result})
+            except Exception as e:
+                results.append({"host_id": host_id, "error": str(e)})
+        return results
 
     def get_agent_info(self) -> Dict[str, Any]:
         """Get information about this agent."""
@@ -304,7 +284,7 @@ You have access to various tools to help you accomplish these tasks. Always be h
             "host_ip": self.host_ip,
             "port": self.port,
             "known_hosts": self.get_known_hosts(),
-            "tools_available": [tool.name for tool in self.tools],
-            "llm_model": self.llm._llm_type if hasattr(self.llm, '_llm_type') else "unknown",
+            "tools_available": [tool.__name__ for tool in self.tools],
+            "model_provider": self.model.system if hasattr(self.model, 'system') else "unknown",
             "actual_model_name": self.actual_model_name
         }

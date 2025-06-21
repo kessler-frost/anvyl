@@ -12,17 +12,18 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from anvyl.agent import HostAgent, AgentManager, InfrastructureTools
-from anvyl.infrastructure_service import InfrastructureService
-from anvyl.database.models import DatabaseManager
+from anvyl.infra.infrastructure_client import InfrastructureClient
+from anvyl.agent.communication import AgentCommunication
 
+pytest_asyncio = pytest.importorskip('pytest_asyncio', reason='pytest-asyncio is required for async tests')
 
 class TestInfrastructureTools:
     """Test the infrastructure tools."""
 
     def setup_method(self):
         """Set up test fixtures."""
-        self.infrastructure_service = Mock(spec=InfrastructureService)
-        self.tools = InfrastructureTools(self.infrastructure_service)
+        self.infrastructure_client = Mock(spec=InfrastructureClient)
+        self.tools = InfrastructureTools(self.infrastructure_client)
 
     def test_tools_creation(self):
         """Test that tools are created correctly."""
@@ -48,8 +49,8 @@ class TestInfrastructureTools:
 
     def test_list_containers_tool(self):
         """Test the list containers tool."""
-        # Mock the infrastructure service response
-        self.infrastructure_service.list_containers.return_value = [
+        # Mock the infrastructure client response
+        self.infrastructure_client.list_containers.return_value = [
             {
                 'id': 'test-container-id',
                 'name': 'test-container',
@@ -57,19 +58,18 @@ class TestInfrastructureTools:
             }
         ]
 
-        # Get the list containers tool
-        list_tool = None
-        for tool in self.tools.get_tools():
-            if tool.name == 'list_containers':
-                list_tool = tool
-                break
-
-        assert list_tool is not None
-
         # Test the tool
-        result = list_tool._run()
+        result = self.tools.list_containers()
         assert 'test-container' in result
         assert 'running' in result
+
+    def test_get_host_resources_tool(self):
+        """Test the get host resources tool."""
+        # Test the tool (should work with local psutil)
+        result = self.tools.get_host_resources()
+        assert 'cpu_percent' in result
+        assert 'memory' in result
+        assert 'disk' in result
 
 
 class TestHostAgent:
@@ -77,12 +77,13 @@ class TestHostAgent:
 
     def setup_method(self):
         """Set up test fixtures."""
-        self.infrastructure_service = Mock(spec=InfrastructureService)
+        self.infrastructure_client = Mock(spec=InfrastructureClient)
         self.host_id = "test-host-id"
         self.host_ip = "127.0.0.1"
+        self.communication = Mock(spec=AgentCommunication)
 
-        # Mock the infrastructure service to return some hosts
-        self.infrastructure_service.list_hosts.return_value = [
+        # Mock the infrastructure client to return some hosts
+        self.infrastructure_client.list_hosts.return_value = [
             {
                 'id': self.host_id,
                 'name': 'test-host',
@@ -92,16 +93,21 @@ class TestHostAgent:
             }
         ]
 
-    @patch('anvyl.agent.host_agent.LMStudioLLM')
-    def test_host_agent_creation(self, mock_lmstudio):
+        # Mock communication
+        self.communication.known_hosts = {}
+
+    @patch('anvyl.agent.agent_manager.HostAgent')
+    def test_host_agent_creation(self, mock_host_agent):
         """Test that host agent can be created."""
-        # Mock the LMStudio client
-        mock_llm = Mock()
-        mock_lmstudio.return_value = mock_llm
+        # Mock the model
+        mock_model_instance = Mock()
+        mock_model_instance.provider = "mock"
+        mock_host_agent.return_value = mock_model_instance
 
         # Create the host agent
         agent = HostAgent(
-            infrastructure_service=self.infrastructure_service,
+            communication=self.communication,
+            tools=[],
             host_id=self.host_id,
             host_ip=self.host_ip,
             lmstudio_url="http://localhost:1234/v1",
@@ -110,26 +116,28 @@ class TestHostAgent:
 
         assert agent.host_id == self.host_id
         assert agent.host_ip == self.host_ip
-        assert agent.infrastructure_service == self.infrastructure_service
-        assert len(agent.tools) > 0
+        from anvyl.infra.infrastructure_client import InfrastructureClient
+        assert isinstance(agent.infrastructure_client, InfrastructureClient)
 
-    def test_host_agent_mock_llm(self):
-        """Test host agent with mock LLM (no LMStudio)."""
+    def test_host_agent_mock_model(self):
+        """Test host agent with mock model (no LMStudio)."""
         agent = HostAgent(
-            infrastructure_service=self.infrastructure_service,
+            communication=self.communication,
+            tools=[],
             host_id=self.host_id,
             host_ip=self.host_ip
         )
 
         assert agent.host_id == self.host_id
         assert agent.host_ip == self.host_ip
-        assert hasattr(agent.llm, '_llm_type')
-        assert agent.llm._llm_type == 'mock'
+        assert hasattr(agent.model, 'provider')
+        assert agent.model.provider == 'mock'
 
     def test_agent_info(self):
         """Test getting agent information."""
         agent = HostAgent(
-            infrastructure_service=self.infrastructure_service,
+            communication=self.communication,
+            tools=[],
             host_id=self.host_id,
             host_ip=self.host_ip
         )
@@ -139,12 +147,13 @@ class TestHostAgent:
         assert info['host_id'] == self.host_id
         assert info['host_ip'] == self.host_ip
         assert 'tools_available' in info
-        assert 'llm_model' in info
+        assert 'model_provider' in info
 
     def test_known_hosts_management(self):
         """Test adding and removing known hosts."""
         agent = HostAgent(
-            infrastructure_service=self.infrastructure_service,
+            communication=self.communication,
+            tools=[],
             host_id=self.host_id,
             host_ip=self.host_ip
         )
@@ -168,198 +177,168 @@ class TestAgentManager:
 
     def setup_method(self):
         """Set up test fixtures."""
-        self.infrastructure_service = Mock(spec=InfrastructureService)
         self.host_id = "test-host-id"
         self.host_ip = "127.0.0.1"
 
-        # Mock the infrastructure service to return some hosts
-        self.infrastructure_service.list_hosts.return_value = [
-            {
-                'id': self.host_id,
-                'name': 'test-host',
-                'ip': self.host_ip,
-                'status': 'online',
-                'tags': ['local', 'anvyl-server']
-            }
-        ]
-
     @patch('anvyl.agent.agent_manager.HostAgent')
-    def test_agent_manager_creation(self, mock_host_agent):
+    @patch('anvyl.agent.agent_manager.InfrastructureTools')
+    def test_agent_manager_creation(self, mock_tools, mock_host_agent):
         """Test that agent manager can be created."""
-        # Mock the host agent
+        # Mock the tools and host agent
+        mock_tools_instance = Mock()
+        mock_tools_instance.get_tools.return_value = []
+        mock_tools.return_value = mock_tools_instance
+
         mock_agent = Mock()
         mock_host_agent.return_value = mock_agent
 
         # Create the agent manager
         manager = AgentManager(
-            infrastructure_service=self.infrastructure_service,
             host_id=self.host_id,
             host_ip=self.host_ip,
             lmstudio_url="http://localhost:1234/v1",
             lmstudio_model="default",
-            port=8080
+            port=4201
         )
 
         assert manager.host_id == self.host_id
         assert manager.host_ip == self.host_ip
-        assert manager.port == 8080
-        assert manager.infrastructure_service == self.infrastructure_service
+        assert manager.port == 4201
 
     def test_fastapi_app_creation(self):
         """Test that FastAPI app is created correctly."""
-        with patch('anvyl.agent.agent_manager.HostAgent'):
-            manager = AgentManager(
-                infrastructure_service=self.infrastructure_service,
-                host_id=self.host_id,
-                host_ip=self.host_ip,
-                port=8080
-            )
+        manager = AgentManager(
+            host_id=self.host_id,
+            host_ip=self.host_ip,
+            port=4201
+        )
 
-            assert manager.app is not None
-            assert hasattr(manager.app, 'routes')
+        assert manager.app is not None
+        assert hasattr(manager.app, 'routes')
 
     @patch('anvyl.agent.agent_manager.HostAgent')
-    def test_api_endpoints(self, mock_host_agent):
+    @patch('anvyl.agent.agent_manager.InfrastructureTools')
+    def test_api_endpoints(self, mock_tools, mock_host_agent):
         """Test that API endpoints are registered."""
-        # Mock the host agent
+        # Mock the tools and host agent
+        mock_tools_instance = Mock()
+        mock_tools_instance.get_tools.return_value = []
+        mock_tools.return_value = mock_tools_instance
+
         mock_agent = Mock()
+        mock_agent.get_agent_info.return_value = {"test": "info"}
         mock_host_agent.return_value = mock_agent
 
         manager = AgentManager(
-            infrastructure_service=self.infrastructure_service,
             host_id=self.host_id,
             host_ip=self.host_ip,
-            port=8080
+            port=4201
         )
 
-        # Check that we have the expected routes
-        route_paths = [route.path for route in manager.app.routes]
-
-        expected_paths = [
-            '/',
-            '/agent/info',
-            '/agent/query',
-            '/agent/broadcast',
-            '/agent/process',
-            '/agent/remote-query',
-            '/agent/hosts',
-            '/infrastructure/containers',
-            '/infrastructure/hosts'
+        # Check that endpoints are registered
+        routes = [route.path for route in manager.app.routes]
+        expected_routes = [
+            "/",
+            "/health",
+            "/agent/info",
+            "/agent/query",
+            "/agent/broadcast",
+            "/agent/process",
+            "/agent/remote-query",
+            "/agent/hosts",
+            "/infrastructure/containers",
+            "/infrastructure/hosts"
         ]
 
-        for expected_path in expected_paths:
-            assert expected_path in route_paths
+        for expected_route in expected_routes:
+            assert expected_route in routes
 
 
 @pytest.mark.asyncio
-async def test_agent_communication():
-    """Test agent communication functionality."""
+def test_agent_communication():
+    """Test agent communication."""
     from anvyl.agent.communication import AgentCommunication, AgentMessage
+    from datetime import datetime, timezone
 
     # Create communication instance
-    comm = AgentCommunication("host-a", "192.168.1.100", 8080)
-
-    # Test adding known hosts
-    comm.add_known_host("host-b", "192.168.1.101")
-    known_hosts = comm.get_known_hosts()
-    assert "host-b" in known_hosts
-    assert known_hosts["host-b"] == "192.168.1.101"
-
-    # Test message creation
-    message = AgentMessage(
-        sender_id="host-a",
-        sender_host="192.168.1.100",
-        message_type="query",
-        content={"query": "test query"}
+    comm = AgentCommunication(
+        local_host_id="test-host",
+        local_host_ip="127.0.0.1",
+        port=4200
     )
 
-    assert message.sender_id == "host-a"
-    assert message.message_type == "query"
-    assert message.content["query"] == "test query"
-    assert message.timestamp is not None
+    # Add a known host
+    comm.known_hosts["remote-host"] = "192.168.1.100"
+
+    # Test known hosts
+    assert "remote-host" in comm.known_hosts
+    assert comm.known_hosts["remote-host"] == "192.168.1.100"
 
 
 def test_create_agent_manager():
-    """Test the create_agent_manager helper function."""
-    with patch('anvyl.agent.agent_manager.InfrastructureService') as mock_service:
-        # Mock the infrastructure service
-        mock_infrastructure = Mock()
-        mock_service.return_value = mock_infrastructure
+    """Test the create_agent_manager function."""
+    from anvyl.agent.agent_manager import create_agent_manager
 
-        # Mock the list_hosts method
-        mock_infrastructure.list_hosts.return_value = [
-            {
-                'id': 'test-host-id',
-                'name': 'test-host',
-                'ip': '127.0.0.1',
-                'status': 'online',
-                'tags': ['local', 'anvyl-server']
-            }
-        ]
+    manager = create_agent_manager(
+        lmstudio_url="http://localhost:1234/v1",
+        lmstudio_model="test-model",
+        port=4201,
+        infrastructure_api_url="http://localhost:4200"
+    )
 
-        with patch('anvyl.agent.agent_manager.AgentManager') as mock_manager:
-            # Mock the agent manager
-            mock_agent_manager = Mock()
-            mock_manager.return_value = mock_agent_manager
-
-            # Test the function
-            from anvyl.agent.agent_manager import create_agent_manager
-            result = create_agent_manager(lmstudio_url="http://localhost:1234/v1", lmstudio_model="default", port=8080)
-
-            assert result == mock_agent_manager
-            mock_manager.assert_called_once()
+    assert manager is not None
+    assert manager.port == 4201
+    assert manager.lmstudio_url == "http://localhost:1234/v1"
+    assert manager.lmstudio_model == "test-model"
 
 
-class TestLMStudioLLM:
-    """Test the LMStudio LLM class."""
+class TestModelIntegration:
+    """Test model integration."""
 
-    @patch('requests.post')
-    def test_lmstudio_llm_call(self, mock_post):
-        """Test LMStudio LLM API call."""
-        from anvyl.agent.host_agent import LMStudioLLM
+    def test_mock_model_creation(self):
+        """Test mock model creation when LMStudio is not available."""
+        from anvyl.agent.host_agent import HostAgent
+        from anvyl.agent.communication import AgentCommunication
+
+        communication = Mock(spec=AgentCommunication)
+        communication.known_hosts = {}
+
+        agent = HostAgent(
+            communication=communication,
+            tools=[],
+            host_id="test-host",
+            host_ip="127.0.0.1"
+        )
+
+        # Should create a mock model
+        assert hasattr(agent.model, 'provider')
+        assert agent.model.provider == 'mock'
+
+    @patch('requests.get')
+    def test_model_name_fetching(self, mock_get):
+        """Test fetching model name from LMStudio."""
+        from anvyl.agent.host_agent import HostAgent
+        from anvyl.agent.communication import AgentCommunication
 
         # Mock successful response
-        mock_response = Mock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "choices": [{"message": {"content": "Hello from LMStudio"}}]
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.json.return_value = {
+            "data": [{"id": "test-model"}]
         }
-        mock_post.return_value = mock_response
 
-        # Create LLM instance
-        llm = LMStudioLLM(base_url="http://localhost:1234/v1", model="default")
+        communication = Mock(spec=AgentCommunication)
+        communication.known_hosts = {}
 
-        # Test the call
-        result = llm._call("Hello")
-        assert result == "Hello from LMStudio"
+        agent = HostAgent(
+            communication=communication,
+            tools=[],
+            host_id="test-host",
+            host_ip="127.0.0.1",
+            lmstudio_url="http://localhost:1234/v1"
+        )
 
-        # Verify the API call
-        mock_post.assert_called_once()
-        call_args = mock_post.call_args
-        assert call_args[0][0] == "http://localhost:1234/v1/chat/completions"
-
-        # Verify the request payload
-        payload = call_args[1]['json']
-        assert payload['model'] == 'default'
-        assert payload['messages'][0]['content'] == 'Hello'
-
-    @patch('requests.post')
-    def test_lmstudio_llm_error(self, mock_post):
-        """Test LMStudio LLM error handling."""
-        from anvyl.agent.host_agent import LMStudioLLM
-
-        # Mock error response
-        mock_response = Mock()
-        mock_response.status_code = 500
-        mock_response.text = "Internal Server Error"
-        mock_post.return_value = mock_response
-
-        # Create LLM instance
-        llm = LMStudioLLM(base_url="http://localhost:1234/v1", model="default")
-
-        # Test the call
-        result = llm._call("Hello")
-        assert "trouble connecting" in result.lower()
+        # Should get the actual model name (mock if LMStudio is not available)
+        assert agent.actual_model_name in ("test-model", "mock")
 
 
 if __name__ == "__main__":

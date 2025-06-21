@@ -7,13 +7,13 @@ infrastructure on their local host and query other hosts.
 
 import logging
 from typing import Dict, List, Any, Optional
-from langchain.tools import BaseTool
-from pydantic import BaseModel, Field, PrivateAttr
+from pydantic import BaseModel, Field
+from pydantic_ai.tools import Tool
 import psutil
 import socket
 import json
 
-from anvyl.infrastructure_client import InfrastructureClient
+from anvyl.infra.infrastructure_client import InfrastructureClient
 
 logger = logging.getLogger(__name__)
 
@@ -61,41 +61,23 @@ class InfrastructureTools:
     def __init__(self, infrastructure_client: InfrastructureClient):
         """Initialize tools with infrastructure client."""
         self._infrastructure_client = infrastructure_client
-        self.tools = self._create_tools()
 
-    def _create_tools(self) -> List[BaseTool]:
-        """Create all available tools."""
+    def get_tools(self):
+        """Get all available tools as a list of tool functions."""
         return [
-            ListContainersTool(self._infrastructure_client),
-            GetContainerInfoTool(self._infrastructure_client),
-            StartContainerTool(self._infrastructure_client),
-            StopContainerTool(self._infrastructure_client),
-            CreateContainerTool(self._infrastructure_client),
-            GetHostInfoTool(self._infrastructure_client),
-            GetHostResourcesTool(self._infrastructure_client),
-            ListHostsTool(self._infrastructure_client),
-            ExecuteCommandTool(self._infrastructure_client),
+            Tool(self.list_containers),
+            Tool(self.get_container_info),
+            Tool(self.start_container),
+            Tool(self.stop_container),
+            Tool(self.create_container),
+            Tool(self.get_host_info),
+            Tool(self.get_host_resources),
+            Tool(self.list_hosts),
+            Tool(self.execute_command),
         ]
 
-    def get_tools(self) -> List[BaseTool]:
-        """Get all available tools."""
-        return self.tools
-
-
-class ListContainersTool(BaseTool):
-    """Tool for listing containers on a host."""
-
-    name: str = "list_containers"
-    description: str = "List all containers on a host. Use host_id=None for local host."
-    args_schema: type = ListContainersInput
-    _infrastructure_client: Any = PrivateAttr()
-
-    def __init__(self, infrastructure_client: InfrastructureClient):
-        super().__init__()
-        self._infrastructure_client = infrastructure_client
-
-    def _run(self, host_id: Optional[str] = None) -> str:
-        """List containers on the specified host."""
+    def list_containers(self, host_id: Optional[str] = None) -> str:
+        """List all containers on a host. Use host_id=None for local host."""
         try:
             containers = self._infrastructure_client.list_containers(host_id)
             if not containers:
@@ -109,21 +91,8 @@ class ListContainersTool(BaseTool):
         except Exception as e:
             return f"Error listing containers: {str(e)}"
 
-
-class GetContainerInfoTool(BaseTool):
-    """Tool for getting detailed container information."""
-
-    name: str = "get_container_info"
-    description: str = "Get detailed information about a specific container."
-    args_schema: type = ContainerActionInput
-    _infrastructure_client: Any = PrivateAttr()
-
-    def __init__(self, infrastructure_client: InfrastructureClient):
-        super().__init__()
-        self._infrastructure_client = infrastructure_client
-
-    def _run(self, container_id: str, host_id: Optional[str] = None) -> str:
-        """Get container information."""
+    def get_container_info(self, container_id: str, host_id: Optional[str] = None) -> str:
+        """Get detailed information about a specific container."""
         try:
             containers = self._infrastructure_client.list_containers(host_id)
             for container in containers:
@@ -133,21 +102,8 @@ class GetContainerInfoTool(BaseTool):
         except Exception as e:
             return f"Error getting container info: {str(e)}"
 
-
-class StartContainerTool(BaseTool):
-    """Tool for starting a container."""
-
-    name: str = "start_container"
-    description: str = "Start a stopped container."
-    args_schema: type = ContainerActionInput
-    _infrastructure_client: Any = PrivateAttr()
-
-    def __init__(self, infrastructure_client: InfrastructureClient):
-        super().__init__()
-        self._infrastructure_client = infrastructure_client
-
-    def _run(self, container_id: str, host_id: Optional[str] = None) -> str:
-        """Start a container."""
+    def start_container(self, container_id: str, host_id: Optional[str] = None) -> str:
+        """Start a stopped container."""
         try:
             # Use infrastructure client to start container
             # This will be implemented when we add container start functionality to the API
@@ -155,21 +111,8 @@ class StartContainerTool(BaseTool):
         except Exception as e:
             return f"Error starting container: {str(e)}"
 
-
-class StopContainerTool(BaseTool):
-    """Tool for stopping a container."""
-
-    name: str = "stop_container"
-    description: str = "Stop a running container."
-    args_schema: type = ContainerActionInput
-    _infrastructure_client: Any = PrivateAttr()
-
-    def __init__(self, infrastructure_client: InfrastructureClient):
-        super().__init__()
-        self._infrastructure_client = infrastructure_client
-
-    def _run(self, container_id: str, host_id: Optional[str] = None) -> str:
-        """Stop a container."""
+    def stop_container(self, container_id: str, host_id: Optional[str] = None) -> str:
+        """Stop a running container."""
         try:
             # Use infrastructure client to stop container
             success = self._infrastructure_client.stop_container(container_id)
@@ -180,23 +123,10 @@ class StopContainerTool(BaseTool):
         except Exception as e:
             return f"Error stopping container: {str(e)}"
 
-
-class CreateContainerTool(BaseTool):
-    """Tool for creating a new container."""
-
-    name: str = "create_container"
-    description: str = "Create and start a new container."
-    args_schema: type = CreateContainerInput
-    _infrastructure_client: Any = PrivateAttr()
-
-    def __init__(self, infrastructure_client: InfrastructureClient):
-        super().__init__()
-        self._infrastructure_client = infrastructure_client
-
-    def _run(self, name: str, image: str, host_id: Optional[str] = None,
-             ports: Optional[List[str]] = None, environment: Optional[List[str]] = None,
-             volumes: Optional[List[str]] = None) -> str:
-        """Create a new container."""
+    def create_container(self, name: str, image: str, host_id: Optional[str] = None,
+                        ports: Optional[List[str]] = None, environment: Optional[List[str]] = None,
+                        volumes: Optional[List[str]] = None) -> str:
+        """Create and start a new container."""
         try:
             container = self._infrastructure_client.add_container(
                 name=name,
@@ -213,21 +143,8 @@ class CreateContainerTool(BaseTool):
         except Exception as e:
             return f"Error creating container: {str(e)}"
 
-
-class GetHostInfoTool(BaseTool):
-    """Tool for getting host information."""
-
-    name: str = "get_host_info"
-    description: str = "Get information about a specific host."
-    args_schema: type = HostQueryInput
-    _infrastructure_client: Any = PrivateAttr()
-
-    def __init__(self, infrastructure_client: InfrastructureClient):
-        super().__init__()
-        self._infrastructure_client = infrastructure_client
-
-    def _run(self, host_id: Optional[str] = None) -> str:
-        """Get host information."""
+    def get_host_info(self, host_id: Optional[str] = None) -> str:
+        """Get information about a specific host."""
         try:
             hosts = self._infrastructure_client.list_hosts()
             if host_id is None:
@@ -243,57 +160,38 @@ class GetHostInfoTool(BaseTool):
         except Exception as e:
             return f"Error getting host info: {str(e)}"
 
-
-class GetHostResourcesTool(BaseTool):
-    """Tool for getting host resource usage."""
-
-    name: str = "get_host_resources"
-    description: str = "Get current resource usage for a host."
-    args_schema: type = HostQueryInput
-    _infrastructure_client: Any = PrivateAttr()
-
-    def __init__(self, infrastructure_client: InfrastructureClient):
-        super().__init__()
-        self._infrastructure_client = infrastructure_client
-
-    def _run(self, host_id: Optional[str] = None) -> str:
-        """Get host resources."""
+    def get_host_resources(self, host_id: Optional[str] = None) -> str:
+        """Get current resource usage for a host."""
         try:
-            if host_id is None:  # Local host
+            if host_id is None:
+                # Get local host resources
                 cpu_percent = psutil.cpu_percent(interval=1)
                 memory = psutil.virtual_memory()
                 disk = psutil.disk_usage('/')
 
                 resources = {
                     "cpu_percent": cpu_percent,
-                    "memory_total_gb": round(memory.total / (1024**3), 2),
-                    "memory_used_gb": round(memory.used / (1024**3), 2),
-                    "memory_percent": memory.percent,
-                    "disk_total_gb": round(disk.total / (1024**3), 2),
-                    "disk_used_gb": round(disk.used / (1024**3), 2),
-                    "disk_percent": round((disk.used / disk.total) * 100, 2)
+                    "memory": {
+                        "total": memory.total,
+                        "available": memory.available,
+                        "percent": memory.percent
+                    },
+                    "disk": {
+                        "total": disk.total,
+                        "used": disk.used,
+                        "free": disk.free,
+                        "percent": (disk.used / disk.total) * 100
+                    }
                 }
                 return json.dumps(resources, indent=2)
             else:
-                return f"Remote host resources not yet implemented for host {host_id}"
+                # For remote hosts, we'd need to implement remote resource querying
+                return f"Remote host resource querying not yet implemented for host {host_id}"
         except Exception as e:
             return f"Error getting host resources: {str(e)}"
 
-
-class ListHostsTool(BaseTool):
-    """Tool for listing all hosts in the network."""
-
-    name: str = "list_hosts"
-    description: str = "List all hosts in the Anvyl network."
-    args_schema: type = ListHostsInput
-    _infrastructure_client: Any = PrivateAttr()
-
-    def __init__(self, infrastructure_client: InfrastructureClient):
-        super().__init__()
-        self._infrastructure_client = infrastructure_client
-
-    def _run(self) -> str:
-        """List all hosts."""
+    def list_hosts(self) -> str:
+        """List all hosts in the Anvyl network."""
         try:
             hosts = self._infrastructure_client.list_hosts()
             if not hosts:
@@ -301,37 +199,26 @@ class ListHostsTool(BaseTool):
 
             result = []
             for host in hosts:
-                status_emoji = "🟢" if host['status'] == 'online' else "🔴"
-                result.append(f"{status_emoji} {host['name']} ({host['ip']}) - {host['status']}")
+                tags = ", ".join(host.get('tags', [])) if host.get('tags') else "no tags"
+                result.append(f"- {host['name']} ({host['id']}) - {host['ip']} - {tags}")
 
             return "Hosts in the network:\n" + "\n".join(result)
         except Exception as e:
             return f"Error listing hosts: {str(e)}"
 
-
-class ExecuteCommandTool(BaseTool):
-    """Tool for executing commands on a host."""
-
-    name: str = "execute_command"
-    description: str = "Execute a command on a host."
-    args_schema: type = ExecuteCommandInput
-    _infrastructure_client: Any = PrivateAttr()
-
-    def __init__(self, infrastructure_client: InfrastructureClient):
-        super().__init__()
-        self._infrastructure_client = infrastructure_client
-
-    def _run(self, command: str, host_id: Optional[str] = None) -> str:
-        """Execute a command."""
+    def execute_command(self, command: str, host_id: Optional[str] = None) -> str:
+        """Execute a command on a host."""
         try:
-            if host_id is None:  # Local host
+            if host_id is None:
+                # Execute command locally
                 import subprocess
-                result = subprocess.run(command.split(), capture_output=True, text=True)
+                result = subprocess.run(command, shell=True, capture_output=True, text=True)
                 if result.returncode == 0:
                     return f"Command executed successfully:\n{result.stdout}"
                 else:
-                    return f"Command failed:\n{result.stderr}"
+                    return f"Command failed with return code {result.returncode}:\n{result.stderr}"
             else:
+                # For remote hosts, we'd need to implement remote command execution
                 return f"Remote command execution not yet implemented for host {host_id}"
         except Exception as e:
             return f"Error executing command: {str(e)}"

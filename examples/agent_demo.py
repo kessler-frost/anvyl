@@ -16,7 +16,7 @@ from typing import Dict, Any
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from anvyl.agent import create_agent_manager
-from anvyl.infrastructure_service import get_infrastructure_service
+from anvyl.infra.infrastructure_client import get_infrastructure_client
 
 
 async def demo_local_agent():
@@ -55,55 +55,58 @@ async def demo_local_agent():
         print("\n🛑 Agent stopped by user")
 
 
+def demo_infrastructure_tools():
+    """Demo the infrastructure tools directly."""
+    print("🔧 Infrastructure Tools Demo")
+    print("=" * 40)
+
+    try:
+        # Get infrastructure client
+        client = get_infrastructure_client()
+
+        # Demo container listing
+        print("\n📦 Container Management:")
+        containers = client.list_containers()
+        if containers:
+            for container in containers[:3]:  # Show first 3
+                print(f"  - {container['name']} ({container['status']})")
+        else:
+            print("  No containers found")
+
+        # Demo host listing
+        print("\n🖥️  Host Management:")
+        hosts = client.list_hosts()
+        if hosts:
+            for host in hosts:
+                print(f"  - {host['name']} ({host['ip']}) - {host['status']}")
+        else:
+            print("  No hosts found")
+
+    except Exception as e:
+        print(f"  Error: {e}")
+
+
 def demo_remote_queries():
     """Demo remote agent queries."""
     print("\n🌐 Remote Agent Queries Demo")
-    print("=" * 50)
+    print("=" * 40)
 
-    # This would typically be done through the CLI or API
-    print("\nTo use the CLI instead:")
-    print("1. Start the agent:")
-    print("  anvyl agent start --lmstudio-url http://localhost:1234/v1 --model llama-3.2-3b-instruct --port 4200")
-    print()
-    print("2. Add a remote host:")
-    print("  anvyl agent add-host <host_b_id> <host_b_ip> --port 4200")
-    print()
-    print("3. Query the agent:")
-    print("  anvyl agent query 'How many containers are running?' --host-id <host_b_id> --port 4200")
-    print()
-    print("4. List containers:")
-    print("  anvyl agent query 'List all containers' --host-id <host_b_id> --port 4200")
+    print("To test remote queries, you need:")
+    print("1. Multiple hosts running Anvyl agents")
+    print("2. Network connectivity between hosts")
+    print("3. Known host configurations")
 
-
-def demo_infrastructure_tools():
-    """Demo the infrastructure tools directly."""
-    print("\n🔧 Infrastructure Tools Demo")
-    print("=" * 50)
-
-    # Get infrastructure service
-    infrastructure_service = get_infrastructure_service()
-
-    # Demo tools
-    print("Available infrastructure operations:")
-    print()
-
-    # List hosts
-    hosts = infrastructure_service.list_hosts()
-    print(f"📊 Hosts in network: {len(hosts)}")
-    for host in hosts:
-        status_emoji = "🟢" if host['status'] == 'online' else "🔴"
-        print(f"  {status_emoji} {host['name']} ({host['ip']}) - {host['status']}")
-
-    print()
-
-    # List containers
-    containers = infrastructure_service.list_containers()
-    print(f"🐳 Containers running: {len(containers)}")
-    for container in containers:
-        status_emoji = "🟢" if container['status'] == 'running' else "🔴"
-        print(f"  {status_emoji} {container['name']} - {container['status']}")
-
-    print()
+    print("\nExample setup:")
+    print("  # On Host A")
+    print("  anvyl agent start --port 4200")
+    print("  anvyl agent add-host host-b 192.168.1.101")
+    print("")
+    print("  # On Host B")
+    print("  anvyl agent start --port 4201")
+    print("  anvyl agent add-host host-a 192.168.1.100")
+    print("")
+    print("  # Query from Host A to Host B")
+    print("  anvyl agent query-remote host-b 'List all containers'")
 
 
 def main():

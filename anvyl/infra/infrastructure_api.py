@@ -8,13 +8,14 @@ infrastructure service remotely.
 
 import logging
 import asyncio
+import argparse
 from typing import Dict, List, Any, Optional
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 from pydantic import BaseModel
 
-from anvyl.infrastructure_service import get_infrastructure_service
+from anvyl.infra.infrastructure_service import get_infrastructure_service
 
 logger = logging.getLogger(__name__)
 
@@ -53,10 +54,10 @@ class AddHostRequest(BaseModel):
     host_id: str
     host_ip: str
 
-# Create FastAPI app
+# Initialize FastAPI app
 app = FastAPI(
     title="Anvyl Infrastructure API",
-    description="API for infrastructure management and agent communication",
+    description="API for managing Anvyl infrastructure and hosts",
     version="1.0.0"
 )
 
@@ -74,11 +75,12 @@ infrastructure_service = get_infrastructure_service()
 
 @app.get("/")
 async def root():
-    """Root endpoint."""
+    """Root endpoint with API information."""
     return {
         "message": "Anvyl Infrastructure API",
         "version": "1.0.0",
-        "status": "running"
+        "docs": "/docs",
+        "health": "/health"
     }
 
 @app.get("/health")
@@ -109,7 +111,7 @@ async def list_hosts():
 
 @app.post("/hosts")
 async def add_host(host_data: HostCreate):
-    """Add a new host to the system."""
+    """Add a new host."""
     try:
         host = infrastructure_service.add_host(
             name=host_data.name,
@@ -321,9 +323,17 @@ async def exec_command_on_host(
         logger.error(f"Error executing command on host: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-def run_infrastructure_api(host: str = "0.0.0.0", port: int = 8080):
+def run_infrastructure_api(host: str = "0.0.0.0", port: int = 4200):
     """Run the infrastructure API server."""
-    uvicorn.run(app, host=host, port=port)
+    uvicorn.run("anvyl.infra.infrastructure_api:app", host=host, port=port, reload=True)
+
+def main():
+    """Main entry point for the infrastructure API service."""
+    parser = argparse.ArgumentParser(description="Run Anvyl Infrastructure API")
+    parser.add_argument("--host", type=str, default="0.0.0.0", help="Host to bind to")
+    parser.add_argument("--port", type=int, default=4200, help="Port to bind to")
+    args = parser.parse_args()
+    run_infrastructure_api(host=args.host, port=args.port)
 
 if __name__ == "__main__":
-    run_infrastructure_api()
+    main()

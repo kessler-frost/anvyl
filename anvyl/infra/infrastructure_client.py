@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class InfrastructureClient:
     """Client for interacting with the Anvyl Infrastructure API."""
 
-    def __init__(self, base_url: str = "http://localhost:8080"):
+    def __init__(self, base_url: str = "http://localhost:4200"):
         """Initialize the infrastructure client."""
         self.base_url = base_url.rstrip('/')
         self.session = requests.Session()
@@ -172,6 +172,6 @@ class InfrastructureClient:
         return response.get('result')
 
 
-def get_infrastructure_client(base_url: str = "http://localhost:8080") -> InfrastructureClient:
+def get_infrastructure_client(base_url: str = "http://localhost:4200") -> InfrastructureClient:
     """Get an infrastructure client instance."""
     return InfrastructureClient(base_url)

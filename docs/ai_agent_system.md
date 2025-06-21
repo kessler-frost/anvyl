@@ -1,6 +1,6 @@
 # Anvyl AI Agent System
 
-The Anvyl AI Agent System provides distributed AI agents that can manage infrastructure across multiple hosts using LangChain and tool-use capabilities.
+The Anvyl AI Agent System provides distributed AI agents that can manage infrastructure across multiple hosts using Pydantic AI and tool-use capabilities.
 
 ## Overview
 
@@ -8,7 +8,7 @@ Each host running Anvyl can have an AI agent that:
 - Manages local infrastructure using Docker primitives
 - Communicates with agents on other hosts
 - Provides natural language interface for infrastructure management
-- Uses LangChain for intelligent tool selection and execution
+- Uses Pydantic AI for intelligent tool selection and execution
 - Runs on local LLMs via LMStudio for privacy and cost control
 
 ## Architecture
@@ -21,7 +21,7 @@ Each host running Anvyl can have an AI agent that:
 │ │ AI Agent    │ │    │ │ AI Agent    │ │    │ │ AI Agent    │ │
 │ │             │ │    │ │             │ │    │ │             │ │
 │ │ • Tools     │ │    │ │ • Tools     │ │    │ │ • Tools     │ │
-│ │ • LLM       │ │    │ │ • LLM       │ │    │ │ • LLM       │ │
+│ │ • Model     │ │    │ │ • Model     │ │    │ │ • Model     │ │
 │ │ • API       │ │    │ │ • API       │ │    │ │ • API       │ │
 │ └─────────────┘ │    │ └─────────────┘ │    │ └─────────────┘ │
 │                 │    │                 │    │                 │
@@ -66,164 +66,55 @@ Each host running Anvyl can have an AI agent that:
 - Python 3.10+
 - Docker
 - LMStudio (for local LLM capabilities)
-- `openai` Python package (for LMStudio integration)
 
-### Setup
-1. Install Anvyl with agent dependencies:
-```bash
-pip install anvyl[agent]
-pip install openai
-```
-
-2. Install and configure LMStudio:
-   - Download from [https://lmstudio.ai/](https://lmstudio.ai/)
-   - Install and start LMStudio
-   - Load a model (e.g., Llama 2, Mistral, etc.)
-   - Enable the local server (Settings → Local Server → Start Server)
+### Dependencies
+The AI agent system requires the following Python packages:
+- `pydantic-ai>=0.1.0` - Core AI framework
+- `aiohttp>=3.9.0` - Async HTTP client for agent communication
+- `requests>=2.31.0` - HTTP client for model queries
 
 ## Usage
 
 ### Starting an Agent
 
-Start an AI agent on a host:
+```python
+from anvyl.agent import create_agent_manager
 
-```bash
-# Start with default LMStudio URL
-anvyl agent start
+# Create and start an agent
+agent_manager = create_agent_manager(
+    lmstudio_url="http://localhost:1234/v1",
+    lmstudio_model="llama-3.2-3b-instruct",
+    port=4200
+)
 
-# Start with custom LMStudio URL
-anvyl agent start --lmstudio-url "http://localhost:1234/v1"
-
-# Start with specific model
-anvyl agent start --model "default"
-
-# Start on custom port
-anvyl agent start --port 8081
+# Start the agent server
+await agent_manager.start()
 ```
 
-### Querying Agents
-
-#### Local Queries
-```bash
-# Ask about local containers
-anvyl agent query "How many containers are running?"
-
-# Get host resources
-anvyl agent query "What's the current CPU usage?"
-
-# List all containers
-anvyl agent query "Show me all containers with their status"
-```
-
-#### Remote Queries
-```bash
-# Query a specific remote host
-anvyl agent query "How many containers are running?" --host-id "host-b-id"
-
-# Get containers from remote host
-anvyl agent query "List all containers" --host-id "host-b-id"
-
-# Get remote host resources
-anvyl agent query "What's the memory usage?" --host-id "host-b-id"
-```
-
-### Managing Known Hosts
+### Using the CLI
 
 ```bash
-# List known hosts
-anvyl agent hosts
+# Start an agent
+anvyl agent start --port 4200
 
-# Add a remote host
-anvyl agent add-host "host-b-id" "192.168.1.100"
+# Process a query
+anvyl agent process "List all containers"
 
-# Get agent information
-anvyl agent info
+# Query a remote host
+anvyl agent query-remote host-123 "Get host resources"
 ```
 
 ### API Endpoints
 
-The agent provides a REST API for programmatic access:
+The agent provides a REST API for communication:
 
-```bash
-# Get agent info
-curl http://localhost:8080/agent/info
-
-# Process a local query
-curl -X POST http://localhost:8080/agent/process \
-  -H "Content-Type: application/json" \
-  -d '{"query": "List all containers"}'
-
-# Query a remote host
-curl -X POST http://localhost:8080/agent/remote-query \
-  -H "Content-Type: application/json" \
-  -d '{"host_id": "host-b-id", "query": "How many containers are running?"}'
-
-# List known hosts
-curl http://localhost:8080/agent/hosts
-
-# Add a known host
-curl -X POST http://localhost:8080/agent/hosts \
-  -H "Content-Type: application/json" \
-  -d '{"host_id": "host-b-id", "host_ip": "192.168.1.100"}'
-```
-
-## Example Scenarios
-
-### Scenario 1: Multi-Host Container Management
-
-1. Start agents on multiple hosts:
-```bash
-# On Host A
-anvyl agent start --lmstudio-url http://localhost:1234/v1 --model default --port 8080
-
-# On Host B
-anvyl agent start --lmstudio-url http://localhost:1234/v1 --model default --port 8081
-
-# On Host C
-anvyl agent start --lmstudio-url http://localhost:1234/v1 --model default --port 8082
-```
-
-2. Add hosts to each other's known lists:
-```bash
-# From Host A, add Host B and C
-anvyl agent add-host "host-b-id" "192.168.1.101"
-anvyl agent add-host "host-c-id" "192.168.1.102"
-```
-
-3. Query across hosts:
-```bash
-# From Host A, ask about containers on Host B
-anvyl agent query "How many containers are running on Host B?" --host-id "host-b-id"
-
-# From Host A, get resource usage from Host C
-anvyl agent query "What's the current CPU and memory usage?" --host-id "host-c-id"
-```
-
-### Scenario 2: Infrastructure Monitoring
-
-```bash
-# Get overview of all hosts
-anvyl agent query "Give me a summary of all hosts in the network"
-
-# Check for high resource usage
-anvyl agent query "Which hosts have CPU usage above 80%?"
-
-# Monitor container health
-anvyl agent query "Are there any stopped containers that should be running?"
-```
-
-### Scenario 3: Automated Operations
-
-```bash
-# Scale up a service
-anvyl agent query "Start 3 more instances of the web service container"
-
-# Clean up resources
-anvyl agent query "Stop and remove all stopped containers"
-
-# Deploy new service
-anvyl agent query "Deploy a new nginx container on the host with the most available memory"
-```
+- `GET /agent/info` - Get agent information
+- `POST /agent/process` - Process a local query
+- `POST /agent/remote-query` - Query a remote host
+- `GET /agent/hosts` - List known hosts
+- `POST /agent/hosts` - Add a known host
+- `DELETE /agent/hosts/{host_id}` - Remove a known host
+- `POST /agent/broadcast` - Broadcast a message to all hosts
 
 ## Tools Available
 
@@ -250,15 +141,18 @@ Remote queries are handled through the agent's communication system, not as indi
 ### Environment Variables
 - `ANVYL_LMSTUDIO_URL`: Default LMStudio API URL (default: http://localhost:1234/v1)
 - `ANVYL_LMSTUDIO_MODEL`: Default model name (default: default)
-- `ANVYL_AGENT_PORT`: Default port for agent API (default: 8080)
+- `ANVYL_AGENT_PORT`: Default port for agent API (default: 4201)
+- `ANVYL_INFRA_API_PORT`: Default port for infrastructure API (default: 4200)
 - `ANVYL_AGENT_HOST`: Host to bind agent API to (default: 0.0.0.0)
 
 ### Agent Settings
 - **LMStudio URL**: http://localhost:1234/v1 (configurable)
 - **Model**: Any model loaded in LMStudio (configurable)
+- **Infra API Port**: 4200 (default)
+- **Agent Port**: 4201 (default)
 - **Temperature**: 0 (deterministic responses)
 - **Timeout**: 30 seconds for remote queries
-- **Agent Type**: structured-chat-zero-shot-react-description
+- **Agent Type**: Pydantic AI Agent with tool calling
 
 ### LMStudio Setup
 
@@ -284,103 +178,147 @@ Remote queries are handled through the agent's communication system, not as indi
 ## Security Considerations
 
 ### Network Security
-- Agents communicate over HTTP/JSON (consider HTTPS for production)
-- No built-in authentication (implement for production use)
-- CORS enabled for web access
+- Agents communicate over HTTP/JSON
+- No built-in encryption (use HTTPS in production)
+- Host discovery is manual (no automatic scanning)
+- API endpoints are unauthenticated (add auth in production)
 
-### API Security
-- Validate all incoming requests
-- Rate limiting recommended
-- Input sanitization for commands
+### Model Security
+- Local models provide privacy
+- No data sent to external services
+- Model outputs are not validated
+- Use trusted models only
 
-### Docker Access
-- Agents have full Docker access on local host
-- Consider Docker socket permissions
-- Container isolation recommended
-
-### Local LLM Benefits
-- **Privacy**: No data sent to external APIs
-- **Cost Control**: No per-token charges
-- **Offline Operation**: Works without internet
-- **Custom Models**: Use any model supported by LMStudio
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Agent won't start**
-   - Check if port is already in use
-   - Verify Docker is running
-   - Check if LMStudio is running and serving models
-
-2. **Remote queries fail**
-   - Verify host IP addresses are correct
-   - Check network connectivity
-   - Ensure remote agent is running
-
-3. **Mock LLM responses**
-   - Start LMStudio and load a model
-   - Check LMStudio server URL
-   - Verify model is loaded and accessible
-
-4. **LMStudio connection issues**
-   - Ensure LMStudio is running
-   - Check if local server is started
-   - Verify the API URL is correct
-   - Test with curl: `curl http://localhost:1234/v1/models`
-
-5. **Missing dependencies**
-   - Install required packages: `pip install openai`
-   - Ensure all agent dependencies are installed: `pip install anvyl[agent]`
-
-### Debug Mode
-
-Enable debug logging:
-```bash
-export ANVYL_LOG_LEVEL=DEBUG
-anvyl agent start
-```
-
-### Health Checks
-
-Check agent health:
-```bash
-curl http://localhost:8080/
-curl http://localhost:8080/agent/info
-```
-
-Check LMStudio:
-```bash
-curl http://localhost:1234/v1/models
-curl http://localhost:1234/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{"model": "default", "messages": [{"role": "user", "content": "Hello"}]}'
-```
+### Infrastructure Access
+- Agents have full access to infrastructure management
+- Tools can execute commands on the host
+- Container operations are unrestricted
+- Add access controls in production
 
 ## Development
 
-### Running the Demo
-
-```bash
-# Run the interactive demo
-python examples/agent_demo.py
-
-# Or use the CLI
-anvyl agent start
-```
-
 ### Adding New Tools
 
-1. Create a new tool class in `anvyl/agent/tools.py`
-2. Inherit from `BaseTool`
-3. Implement the `_run` method
-4. Add to the tools list in `InfrastructureTools`
+1. Create a new tool function in `anvyl/agent/tools.py`
+2. Use the `@tool` decorator from Pydantic AI
+3. Add proper type hints and docstrings
+4. Add to the tools list in `InfrastructureTools.get_tools()`
+
+Example:
+```python
+@tool
+def my_new_tool(param1: str, param2: Optional[int] = None) -> str:
+    """Description of what this tool does."""
+    # Implementation here
+    return "Result"
+```
 
 ### Extending Communication
 
 1. Add new message types in `anvyl/agent/communication.py`
 2. Implement handlers in `HostAgent`
 3. Add API endpoints in `AgentManager`
+
+### Testing
+
+```python
+import pytest
+from anvyl.agent import HostAgent, InfrastructureTools
+from anvyl.infrastructure_client import InfrastructureClient
+
+def test_agent_creation():
+    client = InfrastructureClient()
+    tools = InfrastructureTools(client)
+    agent = HostAgent(
+        communication=mock_communication,
+        tools=tools.get_tools(),
+        host_id="test-host"
+    )
+    assert agent.host_id == "test-host"
+```
+
+## Troubleshooting
+
+### Common Issues
+
+1. **LMStudio Not Available**:
+   - Check if LMStudio is running
+   - Verify the API URL is correct
+   - Check if a model is loaded
+
+2. **Tool Execution Errors**:
+   - Check infrastructure client connection
+   - Verify Docker is running
+   - Check permissions for command execution
+
+3. **Communication Errors**:
+   - Verify network connectivity
+   - Check if remote agents are running
+   - Verify host IP addresses are correct
+
+### Debug Mode
+
+Enable debug logging:
+```python
+import logging
+logging.basicConfig(level=logging.DEBUG)
+```
+
+### Health Checks
+
+Check agent health:
+```bash
+curl http://localhost:4200/health
+```
+
+## Examples
+
+### Basic Usage
+
+```python
+from anvyl.agent import create_agent_manager
+
+# Create agent manager
+manager = create_agent_manager(
+    lmstudio_url="http://localhost:1234/v1",
+    lmstudio_model="llama-3.2-3b-instruct"
+)
+
+# Start the agent
+await manager.start()
+```
+
+### Processing Queries
+
+```python
+# Process a local query
+result = await agent.process_query("List all containers")
+print(result)
+
+# Query a remote host
+result = await agent.query_remote_host("host-123", "Get host resources")
+print(result)
+```
+
+### Adding Hosts
+
+```python
+# Add a known host
+agent.add_known_host("host-123", "192.168.1.100")
+
+# List known hosts
+hosts = agent.get_known_hosts()
+print(hosts)
+```
+
+### Broadcasting Messages
+
+```python
+# Broadcast to all hosts
+results = await agent.broadcast_to_all_hosts("System health check")
+for result in results:
+    print(f"Host {result['host_id']}: {result['result']}")
+```
 
 ## Future Enhancements
 
@@ -395,3 +333,7 @@ anvyl agent start
 - **Model Switching**: Dynamic model selection based on task requirements
 - **Remote Tool Integration**: Direct tool access on remote hosts
 - **Broadcast Messages**: Send messages to all known hosts
+
+## New Infra Package
+
+- `anvyl/infra/` - Infrastructure API, client, and service modules

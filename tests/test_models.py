@@ -9,7 +9,7 @@ import json
 import tempfile
 import os
 
-from database.models import Host, Container, DatabaseManager
+from anvyl.database.models import Host, Container, DatabaseManager
 
 
 class TestHost(unittest.TestCase):

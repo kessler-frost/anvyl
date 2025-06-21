@@ -20,9 +20,10 @@ import requests
 import subprocess
 from pathlib import Path
 
-from anvyl.infrastructure_service import get_infrastructure_service
+from anvyl.infra.infrastructure_service import get_infrastructure_service
 from anvyl.database.models import DatabaseManager
 from anvyl.agent import AgentManager, create_agent_manager
+from anvyl.utils.background_service import get_service_manager
 
 # Initialize rich console
 console = Console()
@@ -205,44 +206,228 @@ def show_logs(
     tail: int = typer.Option(100, "--tail", "-n", help="Number of lines to show")
 ):
     """Show logs from Anvyl infrastructure containers."""
+    project_root = get_project_root()
+
     try:
-        infrastructure = get_infrastructure()
-        containers = infrastructure.list_containers()
-
-        # Filter UI-related containers
-        ui_containers = [c for c in containers if "ui" in c.get("name", "").lower() or "frontend" in c.get("name", "").lower() or "backend" in c.get("name", "").lower()]
-
         if service:
             # Show logs for specific service
-            target_container = None
-            for container in ui_containers:
-                if service.lower() in container.get("name", "").lower():
-                    target_container = container
-                    break
+            console.print(f"📋 [bold blue]Logs for {service}[/bold blue]")
 
-            if not target_container:
-                console.print(f"[red]Service '{service}' not found[/red]")
-                raise typer.Exit(1)
+            # Use docker-compose logs
+            cmd = ["docker-compose", "-f", os.path.join(project_root, "ui", "docker-compose.yml"), "logs"]
 
-            console.print(f"📋 [bold]Logs for {target_container['name']}:[/bold]")
-            logs = infrastructure.get_logs(target_container["id"], tail=tail, follow=follow)
-            if logs:
-                console.print(logs)
-            else:
-                console.print("[yellow]No logs available[/yellow]")
+            if follow:
+                cmd.append("-f")
+            if tail:
+                cmd.extend(["--tail", str(tail)])
+
+            cmd.append(service)
+
+            # Run the command and stream output
+            process = subprocess.Popen(
+                cmd,
+                cwd=os.path.join(project_root, "ui"),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1
+            )
+
+            try:
+                for line in process.stdout:
+                    console.print(line.rstrip())
+            except KeyboardInterrupt:
+                process.terminate()
+                console.print("\n[yellow]Log following stopped[/yellow]")
 
         else:
             # Show logs for all services
-            for container in ui_containers:
-                console.print(f"\n📋 [bold]Logs for {container['name']}:[/bold]")
-                logs = infrastructure.get_logs(container["id"], tail=tail, follow=follow)
-                if logs:
-                    console.print(logs)
-                else:
-                    console.print("[yellow]No logs available[/yellow]")
+            console.print("📋 [bold blue]Anvyl Infrastructure Logs[/bold blue]")
+
+            cmd = ["docker-compose", "-f", os.path.join(project_root, "ui", "docker-compose.yml"), "logs"]
+
+            if follow:
+                cmd.append("-f")
+            if tail:
+                cmd.extend(["--tail", str(tail)])
+
+            # Run the command and stream output
+            process = subprocess.Popen(
+                cmd,
+                cwd=os.path.join(project_root, "ui"),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1
+            )
+
+            try:
+                for line in process.stdout:
+                    console.print(line.rstrip())
+            except KeyboardInterrupt:
+                process.terminate()
+                console.print("\n[yellow]Log following stopped[/yellow]")
 
     except Exception as e:
         console.print(f"[red]Error showing logs: {e}[/red]")
+        raise typer.Exit(1)
+
+# Infrastructure API Management Commands
+infra_group = typer.Typer(
+    help="Manage the Anvyl Infrastructure API service.",
+    no_args_is_help=True,
+    add_completion=False
+)
+app.add_typer(infra_group, name="infra")
+
+@infra_group.command("up")
+def start_infrastructure_api(
+    host: str = typer.Option("0.0.0.0", "--host", "-h", help="Host to bind to"),
+    port: int = typer.Option(4200, "--port", "-p", help="Port to bind to"),
+    background: bool = typer.Option(True, "--background/--foreground", help="Run in background")
+):
+    """Start the Anvyl Infrastructure API service."""
+    try:
+        service_manager = get_service_manager()
+
+        if background:
+            console.print("🏗️ [bold blue]Starting Anvyl Infrastructure API in background[/bold blue]")
+
+            if service_manager.start_infrastructure_api(host=host, port=port):
+                console.print(f"✅ [green]Infrastructure API started successfully in background[/green]")
+                console.print(f"🌐 API URL: http://{host}:{port}")
+                console.print(f"📋 API Docs: http://{host}:{port}/docs")
+                console.print(f"📁 Service logs: ~/.anvyl/services/infrastructure_api.log")
+                console.print()
+                console.print("Use 'anvyl infra status' to check service status")
+                console.print("Use 'anvyl infra logs' to view service logs")
+                console.print("Use 'anvyl infra down' to stop the service")
+            else:
+                console.print("[red]❌ Failed to start Infrastructure API[/red]")
+                raise typer.Exit(1)
+        else:
+            console.print("🏗️ [bold blue]Starting Anvyl Infrastructure API in foreground[/bold blue]")
+            console.print(f"🌐 API URL: http://{host}:{port}")
+            console.print(f"📋 API Docs: http://{host}:{port}/docs")
+            console.print("Press Ctrl+C to stop")
+
+            from anvyl.infra.infrastructure_api import run_infrastructure_api
+            run_infrastructure_api(host=host, port=port)
+
+    except Exception as e:
+        console.print(f"[red]Error starting infrastructure API: {e}[/red]")
+        raise typer.Exit(1)
+
+@infra_group.command("down")
+def stop_infrastructure_api():
+    """Stop the Anvyl Infrastructure API service."""
+    try:
+        service_manager = get_service_manager()
+
+        console.print("🛑 [bold red]Stopping Anvyl Infrastructure API[/bold red]")
+
+        if service_manager.stop_infrastructure_api():
+            console.print("✅ [green]Infrastructure API stopped successfully[/green]")
+        else:
+            console.print("[red]❌ Failed to stop Infrastructure API[/red]")
+            raise typer.Exit(1)
+
+    except Exception as e:
+        console.print(f"[red]Error stopping infrastructure API: {e}[/red]")
+        raise typer.Exit(1)
+
+@infra_group.command("status")
+def status_infrastructure_api():
+    """Show status of the Anvyl Infrastructure API service."""
+    try:
+        service_manager = get_service_manager()
+
+        console.print("📊 [bold blue]Anvyl Infrastructure API Status[/bold blue]")
+
+        status = service_manager.get_service_status("infrastructure_api")
+
+        if status:
+            from rich.table import Table
+            table = Table(show_header=False, box=None)
+            table.add_column("Property", style="cyan", width=15)
+            table.add_column("Value", style="green")
+
+            table.add_row("Status", status.get("status", "unknown"))
+            table.add_row("Running", "✅ Yes" if status.get("running", False) else "❌ No")
+            table.add_row("PID", str(status.get("pid", "N/A")))
+            table.add_row("Host", status.get("host", "N/A"))
+            table.add_row("Port", str(status.get("port", "N/A")))
+            table.add_row("Started", status.get("started_at", "N/A"))
+            table.add_row("Log File", status.get("log_file", "N/A"))
+
+            console.print(table)
+
+            if status.get("running", False):
+                console.print(f"\n🌐 API URL: http://{status.get('host')}:{status.get('port')}")
+                console.print(f"📋 API Docs: http://{status.get('host')}:{status.get('port')}/docs")
+        else:
+            console.print("[yellow]Infrastructure API service is not running[/yellow]")
+            console.print("Use 'anvyl infra up' to start the service")
+
+    except Exception as e:
+        console.print(f"[red]Error getting infrastructure API status: {e}[/red]")
+        raise typer.Exit(1)
+
+@infra_group.command("logs")
+def logs_infrastructure_api(
+    follow: bool = typer.Option(False, "--follow", "-f", help="Follow log output"),
+    tail: int = typer.Option(100, "--tail", "-n", help="Number of lines to show")
+):
+    """Show logs from the Anvyl Infrastructure API service."""
+    try:
+        service_manager = get_service_manager()
+
+        console.print("📋 [bold blue]Anvyl Infrastructure API Logs[/bold blue]")
+
+        logs = service_manager.get_service_logs("infrastructure_api", lines=tail)
+
+        if logs:
+            console.print(logs)
+
+            if follow:
+                console.print("\n[yellow]Note: Following logs is not supported for background services[/yellow]")
+                console.print("Use 'anvyl infra logs --tail 100' to see recent logs")
+        else:
+            console.print("[yellow]No logs available[/yellow]")
+            console.print("The service may not be running or no logs have been generated yet")
+
+    except Exception as e:
+        console.print(f"[red]Error viewing infrastructure API logs: {e}[/red]")
+        raise typer.Exit(1)
+
+@infra_group.command("restart")
+def restart_infrastructure_api(
+    host: str = typer.Option("0.0.0.0", "--host", "-h", help="Host to bind to"),
+    port: int = typer.Option(4200, "--port", "-p", help="Port to bind to")
+):
+    """Restart the Anvyl Infrastructure API service."""
+    try:
+        service_manager = get_service_manager()
+
+        console.print("🔄 [bold blue]Restarting Anvyl Infrastructure API[/bold blue]")
+
+        # Stop the service
+        if service_manager.stop_infrastructure_api():
+            console.print("✅ Stopped existing service")
+        else:
+            console.print("[yellow]No existing service to stop[/yellow]")
+
+        # Start the service
+        if service_manager.start_infrastructure_api(host=host, port=port):
+            console.print("✅ [green]Infrastructure API restarted successfully[/green]")
+            console.print(f"🌐 API URL: http://{host}:{port}")
+            console.print(f"📋 API Docs: http://{host}:{port}/docs")
+        else:
+            console.print("[red]❌ Failed to restart Infrastructure API[/red]")
+            raise typer.Exit(1)
+
+    except Exception as e:
+        console.print(f"[red]Error restarting infrastructure API: {e}[/red]")
         raise typer.Exit(1)
 
 # Host Management Commands
@@ -531,7 +716,19 @@ def exec_command(
 def status():
     """Show overall system status."""
     try:
+        import requests
         infrastructure = get_infrastructure()
+
+        # Check infra API health
+        infra_url = "http://localhost:4200/health"
+        try:
+            resp = requests.get(infra_url, timeout=2)
+            if resp.status_code == 200 and resp.json().get("status") == "healthy":
+                infra_status = ("1", "1", "🟢 Healthy")
+            else:
+                infra_status = ("1", "0", "🔴 Unhealthy")
+        except Exception:
+            infra_status = ("1", "0", "🔴 Unreachable")
 
         with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
             task = progress.add_task("Getting system status...", total=None)
@@ -551,6 +748,9 @@ def status():
         status_table.add_column("Active", style="green")
         status_table.add_column("Status", style="bold")
 
+        # Infra API status
+        status_table.add_row("Infra API", *infra_status)
+
         # Hosts status
         host_status = "🟢 Healthy" if online_hosts == total_hosts else "🟡 Partial" if online_hosts > 0 else "🔴 Offline"
         status_table.add_row("Hosts", str(total_hosts), str(online_hosts), host_status)
@@ -558,6 +758,31 @@ def status():
         # Containers status
         container_status = "🟢 Running" if running_containers > 0 else "🔴 Stopped"
         status_table.add_row("Containers", str(total_containers), str(running_containers), container_status)
+
+        # Agent status (container and API)
+        try:
+            from anvyl.infra.infrastructure_client import get_infrastructure_client
+            agent_port = 4201
+            infrastructure_client = get_infrastructure_client("http://localhost:4200")
+            agent_container = infrastructure_client.get_agent_container_status()
+            # Check agent API health
+            try:
+                resp = requests.get(f"http://localhost:{agent_port}/health", timeout=2)
+                if resp.status_code == 200 and resp.json().get("status") == "healthy":
+                    agent_api_status = "🟢 API Healthy"
+                else:
+                    agent_api_status = f"🔴 API Unhealthy (HTTP {resp.status_code})"
+            except Exception:
+                agent_api_status = "🔴 API Unreachable"
+            if agent_container:
+                agent_container_status = "🟢 Running" if agent_container.get("status") == "running" else "🟡 Not Running"
+                agent_details = f"ID: {agent_container.get('id', 'N/A')[:12]}, Image: {agent_container.get('image', 'N/A')} | {agent_api_status}"
+            else:
+                agent_container_status = "🔴 Not Found"
+                agent_details = f"No agent container running | {agent_api_status}"
+            status_table.add_row("Agent", "1", "1" if agent_container_status == "🟢 Running" else "0", agent_container_status + " | " + agent_api_status)
+        except Exception:
+            status_table.add_row("Agent", "1", "0", "🔴 Error getting status")
 
         console.print(status_table)
 
@@ -583,25 +808,6 @@ def status():
 
     except Exception as e:
         console.print(f"[red]Error getting status: {e}[/red]")
-        raise typer.Exit(1)
-
-@app.command("infrastructure")
-def start_infrastructure_api(
-    host: str = typer.Option("0.0.0.0", "--host", "-h", help="Host to bind to"),
-    port: int = typer.Option(8080, "--port", "-p", help="Port to bind to"),
-    reload: bool = typer.Option(False, "--reload", help="Enable auto-reload")
-):
-    """Start the Anvyl Infrastructure API service."""
-    try:
-        console.print("🏗️ [bold blue]Starting Anvyl Infrastructure API[/bold blue]")
-        console.print(f"🌐 API URL: http://{host}:{port}")
-        console.print(f"📋 API Docs: http://{host}:{port}/docs")
-
-        from anvyl.infrastructure_api import run_infrastructure_api
-        run_infrastructure_api(host=host, port=port)
-
-    except Exception as e:
-        console.print(f"[red]Error starting infrastructure API: {e}[/red]")
         raise typer.Exit(1)
 
 @app.command("version")
@@ -670,7 +876,7 @@ def start_agent(
 
 @agent_group.command("stop")
 def stop_agent(
-    infrastructure_api_url: str = typer.Option("http://localhost:8080", "--infra-api-url", help="Infrastructure API URL")
+    infrastructure_api_url: str = typer.Option("http://localhost:4200", "--infra-api-url", help="Infrastructure API URL")
 ):
     """Stop the AI agent container using the infrastructure service."""
     try:
@@ -693,7 +899,7 @@ def stop_agent(
 def logs_agent(
     follow: bool = typer.Option(False, "--follow", "-f", help="Follow log output"),
     tail: int = typer.Option(100, "--tail", "-n", help="Number of lines to show"),
-    infrastructure_api_url: str = typer.Option("http://localhost:8080", "--infra-api-url", help="Infrastructure API URL")
+    infrastructure_api_url: str = typer.Option("http://localhost:4200", "--infra-api-url", help="Infrastructure API URL")
 ):
     """Show logs from the AI agent container using the infrastructure service."""
     try:
@@ -716,8 +922,8 @@ def logs_agent(
 
 @agent_group.command("info")
 def get_agent_info(
-    port: int = typer.Option(4200, "--port", "-p", help="Agent API port"),
-    infrastructure_api_url: str = typer.Option("http://localhost:8080", "--infra-api-url", help="Infrastructure API URL")
+    port: int = typer.Option(4201, "--port", "-p", help="Agent API port"),
+    infrastructure_api_url: str = typer.Option("http://localhost:4200", "--infra-api-url", help="Infrastructure API URL")
 ):
     """Get comprehensive information about the agent including container status and agent capabilities."""
     try:
@@ -836,7 +1042,7 @@ def get_agent_info(
 def query_agent(
     query: str = typer.Argument(..., help="Query to send to the agent"),
     host_id: Optional[str] = typer.Option(None, "--host-id", help="Target host ID (default: local)"),
-    port: int = typer.Option(4200, "--port", "-p", help="Agent API port")
+    port: int = typer.Option(4201, "--port", "-p", help="Agent API port")
 ):
     """Send a query to an AI agent."""
     try:
@@ -869,7 +1075,7 @@ def query_agent(
 
 @agent_group.command("hosts")
 def list_agent_hosts(
-    port: int = typer.Option(4200, "--port", "-p", help="Agent API port")
+    port: int = typer.Option(4201, "--port", "-p", help="Agent API port")
 ):
     """List hosts known to the agent."""
     try:
@@ -904,7 +1110,7 @@ def list_agent_hosts(
 def add_agent_host(
     host_id: str = typer.Argument(..., help="Host ID"),
     host_ip: str = typer.Argument(..., help="Host IP address"),
-    port: int = typer.Option(4200, "--port", "-p", help="Agent API port")
+    port: int = typer.Option(4201, "--port", "-p", help="Agent API port")
 ):
     """Add a host to the agent's known hosts list."""
     try:

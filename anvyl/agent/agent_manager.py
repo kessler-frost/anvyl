@@ -19,7 +19,7 @@ from datetime import datetime
 from anvyl.agent.host_agent import HostAgent
 from anvyl.agent.communication import AgentCommunication, AgentMessage
 from anvyl.agent.tools import InfrastructureTools
-from anvyl.infrastructure_client import get_infrastructure_client
+from anvyl.infra.infrastructure_client import get_infrastructure_client
 
 logger = logging.getLogger(__name__)
 
@@ -28,12 +28,12 @@ class AgentManager:
     """Manages the AI agent system and provides web API for communication."""
 
     def __init__(self,
-                 infrastructure_api_url: str = "http://localhost:8080",
+                 infrastructure_api_url: str = "http://localhost:4200",
                  host_id: str = None,
                  host_ip: str = None,
                  lmstudio_url: Optional[str] = None,
                  lmstudio_model: str = "default",
-                 port: int = 4200):
+                 port: int = 4201):
         """Initialize the agent manager."""
         self.infrastructure_client = get_infrastructure_client(infrastructure_api_url)
 
@@ -225,7 +225,7 @@ class AgentManager:
 
 
 def create_agent_manager(lmstudio_url: Optional[str] = None, lmstudio_model: str = "default",
-                        port: int = 4200, infrastructure_api_url: str = "http://localhost:8080") -> AgentManager:
+                        port: int = 4201, infrastructure_api_url: str = "http://localhost:4200") -> AgentManager:
     """Create an agent manager with default settings."""
     return AgentManager(
         infrastructure_api_url=infrastructure_api_url,

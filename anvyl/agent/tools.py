@@ -2,13 +2,15 @@
 Infrastructure Tools for AI Agents
 
 This module provides tools that AI agents can use to manage
-infrastructure on their local host and query other hosts.
+infrastructure on their local host, query other hosts, and search
+the web for information using DuckDuckGo.
 """
 
 import logging
 from typing import Dict, List, Any, Optional
 from pydantic import BaseModel, Field
 from pydantic_ai.tools import Tool
+from pydantic_ai.common_tools.duckduckgo import duckduckgo_search_tool
 import psutil
 import socket
 import json
@@ -64,7 +66,7 @@ class InfrastructureTools:
 
     def get_tools(self):
         """Get all available tools as a list of tool functions."""
-        return [
+        tools = [
             Tool(self.list_containers),
             Tool(self.get_container_info),
             Tool(self.start_container),
@@ -75,6 +77,17 @@ class InfrastructureTools:
             Tool(self.list_hosts),
             Tool(self.execute_command),
         ]
+        
+        # Add DuckDuckGo search tool if available
+        try:
+            search_tool = duckduckgo_search_tool()
+            tools.append(search_tool)
+        except ImportError:
+            logger.warning("DuckDuckGo search tool not available. Install with: pip install 'pydantic-ai-slim[duckduckgo]'")
+        except Exception as e:
+            logger.warning(f"Could not initialize DuckDuckGo search tool: {e}")
+        
+        return tools
 
     async def list_containers(self, host_id: Optional[str] = None, all: bool = False) -> str:
         """List all containers on a host. Use host_id=None for local host. If all=True, include all containers regardless of label or status."""

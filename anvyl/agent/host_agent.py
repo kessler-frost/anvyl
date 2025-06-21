@@ -72,6 +72,7 @@ AVAILABLE TOOLS:
 - get_host_resources: Get current CPU, memory, and disk usage for the local host
 - list_hosts: List all hosts in the Anvyl network
 - execute_command: Run shell commands on the local host
+- duckduckgo_search: Search the web using DuckDuckGo (if available) - useful for finding current information, documentation, troubleshooting guides, and latest updates about technologies you're working with
 
 LIMITATIONS:
 - Container start functionality is not yet implemented via the API

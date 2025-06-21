@@ -379,8 +379,7 @@ def status_infra_api():
 
 @infra_group.command("logs")
 def logs_infra_api(
-    follow: bool = typer.Option(False, "--follow", "-f", help="Follow log output"),
-    tail: int = typer.Option(100, "--tail", "-n", help="Number of lines to show")
+    follow: bool = typer.Option(False, "--follow", "-f", help="Follow log output")
 ):
     """Show logs from the Anvyl Infra API service."""
     try:
@@ -388,17 +387,27 @@ def logs_infra_api(
 
         console.print("📋 [bold blue]Anvyl Infra API Logs[/bold blue]")
 
-        logs = service_manager.get_service_logs("infrastructure_api", lines=tail)
-
-        if logs:
-            console.print(logs)
-
-            if follow:
-                console.print("\n[yellow]Note: Following logs is not supported for background services[/yellow]")
-                console.print("Use 'anvyl infra logs --tail 100' to see recent logs")
+        if follow:
+            # Follow logs in real-time (shows last 100 lines first)
+            log_generator = service_manager.follow_service_logs("infrastructure_api", lines=100)
+            if log_generator:
+                try:
+                    for line in log_generator:
+                        console.print(line)
+                except KeyboardInterrupt:
+                    console.print("\n[yellow]Stopped following logs[/yellow]")
+            else:
+                console.print("[yellow]No logs available[/yellow]")
+                console.print("The service may not be running or no logs have been generated yet")
         else:
-            console.print("[yellow]No logs available[/yellow]")
-            console.print("The service may not be running or no logs have been generated yet")
+            # Show static logs (last 100 lines)
+            logs = service_manager.get_service_logs("infrastructure_api", lines=100)
+
+            if logs:
+                console.print(logs)
+            else:
+                console.print("[yellow]No logs available[/yellow]")
+                console.print("The service may not be running or no logs have been generated yet")
 
     except Exception as e:
         console.print(f"[red]Error viewing infra API logs: {e}[/red]")

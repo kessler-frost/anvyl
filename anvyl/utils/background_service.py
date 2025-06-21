@@ -286,6 +286,38 @@ class BackgroundServiceManager:
             logger.error(f"Error reading service logs: {e}")
             return None
 
+    def follow_service_logs(self, service_name: str, lines: int = 100):
+        """Follow logs from a service in real-time."""
+        log_file = self._get_log_file(service_name)
+
+        if not log_file.exists():
+            return None
+
+        try:
+            # First show the last N lines
+            with open(log_file, 'r') as f:
+                all_lines = f.readlines()
+                if lines > 0:
+                    recent_lines = all_lines[-lines:]
+                    for line in recent_lines:
+                        yield line.rstrip()
+
+            # Then follow new lines
+            with open(log_file, 'r') as f:
+                # Seek to end of file
+                f.seek(0, 2)
+
+                while True:
+                    line = f.readline()
+                    if line:
+                        yield line.rstrip()
+                    else:
+                        time.sleep(0.1)  # Small delay to avoid busy waiting
+
+        except Exception as e:
+            logger.error(f"Error following service logs: {e}")
+            return None
+
     def list_services(self) -> Dict[str, Dict[str, Any]]:
         """List all managed services."""
         try:

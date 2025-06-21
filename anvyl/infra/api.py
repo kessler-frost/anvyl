@@ -6,6 +6,7 @@ functionality via HTTP endpoints, allowing agents to interact with the
 infrastructure service remotely.
 """
 
+import warnings
 import logging
 import asyncio
 import argparse
@@ -14,6 +15,9 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 from pydantic import BaseModel
+
+# Suppress the RuntimeWarning about sys.modules
+warnings.filterwarnings("ignore", message=".*found in sys.modules.*", category=RuntimeWarning)
 
 from anvyl.infra.service import get_infrastructure_service
 

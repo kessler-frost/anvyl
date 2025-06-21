@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 from pydantic import BaseModel
 
-from anvyl.infra.infrastructure_service import get_infrastructure_service
+from anvyl.infra.service import get_infrastructure_service
 
 logger = logging.getLogger(__name__)
 

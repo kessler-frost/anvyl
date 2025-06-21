@@ -21,6 +21,12 @@ class InfrastructureClient:
         self.base_url = base_url.rstrip('/')
         self.session: Optional[aiohttp.ClientSession] = None
 
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        await self.close()
+
     async def _get_session(self) -> aiohttp.ClientSession:
         """Get or create an aiohttp session."""
         if self.session is None or self.session.closed:
@@ -184,5 +190,5 @@ class InfrastructureClient:
 
 
 async def get_infrastructure_client(base_url: str = "http://localhost:4200") -> InfrastructureClient:
-    """Get an infrastructure client instance."""
+    """Get an infrastructure client instance. Use as 'async with await get_infrastructure_client() as client:' for proper cleanup."""
     return InfrastructureClient(base_url)

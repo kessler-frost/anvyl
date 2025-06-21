@@ -9,11 +9,13 @@ including hosts, containers, and monitoring capabilities.
 import typer
 import json
 import os
+import shutil
 from typing import List, Optional, Dict, Any
 from rich.console import Console
 from rich.table import Table
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.panel import Panel
+from rich.prompt import Confirm
 import sys
 import logging
 import requests
@@ -21,11 +23,11 @@ import subprocess
 from pathlib import Path
 import asyncio
 
-from anvyl.infra.infrastructure_service import get_infrastructure_service
+from anvyl.infra.service import get_infrastructure_service
 from anvyl.database.models import DatabaseManager
 from anvyl.agent import AgentManager, create_agent_manager
 from anvyl.utils.background_service import get_service_manager
-from anvyl.infra.infrastructure_client import get_infrastructure_client
+from anvyl.infra.client import get_infrastructure_client
 
 # Initialize rich console
 console = Console()
@@ -276,27 +278,27 @@ def show_logs(
 
 # Infrastructure API Management Commands
 infra_group = typer.Typer(
-    help="Manage the Anvyl Infrastructure API service.",
+    help="Manage the Anvyl Infra API service.",
     no_args_is_help=True,
     add_completion=False
 )
 app.add_typer(infra_group, name="infra")
 
 @infra_group.command("up")
-def start_infrastructure_api(
+def start_infra_api(
     host: str = typer.Option("0.0.0.0", "--host", "-h", help="Host to bind to"),
     port: int = typer.Option(4200, "--port", "-p", help="Port to bind to"),
     background: bool = typer.Option(True, "--background/--foreground", help="Run in background")
 ):
-    """Start the Anvyl Infrastructure API service."""
+    """Start the Anvyl Infra API service."""
     try:
         service_manager = get_service_manager()
 
         if background:
-            console.print("🏗️ [bold blue]Starting Anvyl Infrastructure API in background[/bold blue]")
+            console.print("🏗️ [bold blue]Starting Anvyl Infra API in background[/bold blue]")
 
             if service_manager.start_infrastructure_api(host=host, port=port):
-                console.print(f"✅ [green]Infrastructure API started successfully in background[/green]")
+                console.print(f"✅ [green]Infra API started successfully in background[/green]")
                 console.print(f"🌐 API URL: http://{host}:{port}")
                 console.print(f"📋 API Docs: http://{host}:{port}/docs")
                 console.print(f"📁 Service logs: ~/.anvyl/services/infrastructure_api.log")
@@ -305,46 +307,46 @@ def start_infrastructure_api(
                 console.print("Use 'anvyl infra logs' to view service logs")
                 console.print("Use 'anvyl infra down' to stop the service")
             else:
-                console.print("[red]❌ Failed to start Infrastructure API[/red]")
+                console.print("[red]❌ Failed to start Infra API[/red]")
                 raise typer.Exit(1)
         else:
-            console.print("🏗️ [bold blue]Starting Anvyl Infrastructure API in foreground[/bold blue]")
+            console.print("🏗️ [bold blue]Starting Anvyl Infra API in foreground[/bold blue]")
             console.print(f"🌐 API URL: http://{host}:{port}")
             console.print(f"📋 API Docs: http://{host}:{port}/docs")
             console.print("Press Ctrl+C to stop")
 
-            from anvyl.infra.infrastructure_api import run_infrastructure_api
+            from anvyl.infra.api import run_infrastructure_api
             run_infrastructure_api(host=host, port=port)
 
     except Exception as e:
-        console.print(f"[red]Error starting infrastructure API: {e}[/red]")
+        console.print(f"[red]Error starting infra API: {e}[/red]")
         raise typer.Exit(1)
 
 @infra_group.command("down")
-def stop_infrastructure_api():
-    """Stop the Anvyl Infrastructure API service."""
+def stop_infra_api():
+    """Stop the Anvyl Infra API service."""
     try:
         service_manager = get_service_manager()
 
-        console.print("🛑 [bold red]Stopping Anvyl Infrastructure API[/bold red]")
+        console.print("🛑 [bold red]Stopping Anvyl Infra API[/bold red]")
 
         if service_manager.stop_infrastructure_api():
-            console.print("✅ [green]Infrastructure API stopped successfully[/green]")
+            console.print("✅ [green]Infra API stopped successfully[/green]")
         else:
-            console.print("[red]❌ Failed to stop Infrastructure API[/red]")
+            console.print("[red]❌ Failed to stop Infra API[/red]")
             raise typer.Exit(1)
 
     except Exception as e:
-        console.print(f"[red]Error stopping infrastructure API: {e}[/red]")
+        console.print(f"[red]Error stopping infra API: {e}[/red]")
         raise typer.Exit(1)
 
 @infra_group.command("status")
-def status_infrastructure_api():
-    """Show status of the Anvyl Infrastructure API service."""
+def status_infra_api():
+    """Show status of the Anvyl Infra API service."""
     try:
         service_manager = get_service_manager()
 
-        console.print("📊 [bold blue]Anvyl Infrastructure API Status[/bold blue]")
+        console.print("📊 [bold blue]Anvyl Infra API Status[/bold blue]")
 
         status = service_manager.get_service_status("infrastructure_api")
 
@@ -368,23 +370,23 @@ def status_infrastructure_api():
                 console.print(f"\n🌐 API URL: http://{status.get('host')}:{status.get('port')}")
                 console.print(f"📋 API Docs: http://{status.get('host')}:{status.get('port')}/docs")
         else:
-            console.print("[yellow]Infrastructure API service is not running[/yellow]")
+            console.print("[yellow]Infra API service is not running[/yellow]")
             console.print("Use 'anvyl infra up' to start the service")
 
     except Exception as e:
-        console.print(f"[red]Error getting infrastructure API status: {e}[/red]")
+        console.print(f"[red]Error getting infra API status: {e}[/red]")
         raise typer.Exit(1)
 
 @infra_group.command("logs")
-def logs_infrastructure_api(
+def logs_infra_api(
     follow: bool = typer.Option(False, "--follow", "-f", help="Follow log output"),
     tail: int = typer.Option(100, "--tail", "-n", help="Number of lines to show")
 ):
-    """Show logs from the Anvyl Infrastructure API service."""
+    """Show logs from the Anvyl Infra API service."""
     try:
         service_manager = get_service_manager()
 
-        console.print("📋 [bold blue]Anvyl Infrastructure API Logs[/bold blue]")
+        console.print("📋 [bold blue]Anvyl Infra API Logs[/bold blue]")
 
         logs = service_manager.get_service_logs("infrastructure_api", lines=tail)
 
@@ -399,19 +401,19 @@ def logs_infrastructure_api(
             console.print("The service may not be running or no logs have been generated yet")
 
     except Exception as e:
-        console.print(f"[red]Error viewing infrastructure API logs: {e}[/red]")
+        console.print(f"[red]Error viewing infra API logs: {e}[/red]")
         raise typer.Exit(1)
 
 @infra_group.command("restart")
-def restart_infrastructure_api(
+def restart_infra_api(
     host: str = typer.Option("0.0.0.0", "--host", "-h", help="Host to bind to"),
     port: int = typer.Option(4200, "--port", "-p", help="Port to bind to")
 ):
-    """Restart the Anvyl Infrastructure API service."""
+    """Restart the Anvyl Infra API service."""
     try:
         service_manager = get_service_manager()
 
-        console.print("🔄 [bold blue]Restarting Anvyl Infrastructure API[/bold blue]")
+        console.print("🔄 [bold blue]Restarting Anvyl Infra API[/bold blue]")
 
         # Stop the service
         if service_manager.stop_infrastructure_api():
@@ -421,15 +423,15 @@ def restart_infrastructure_api(
 
         # Start the service
         if service_manager.start_infrastructure_api(host=host, port=port):
-            console.print("✅ [green]Infrastructure API restarted successfully[/green]")
+            console.print("✅ [green]Infra API restarted successfully[/green]")
             console.print(f"🌐 API URL: http://{host}:{port}")
             console.print(f"📋 API Docs: http://{host}:{port}/docs")
         else:
-            console.print("[red]❌ Failed to restart Infrastructure API[/red]")
+            console.print("[red]❌ Failed to restart Infra API[/red]")
             raise typer.Exit(1)
 
     except Exception as e:
-        console.print(f"[red]Error restarting infrastructure API: {e}[/red]")
+        console.print(f"[red]Error restarting infra API: {e}[/red]")
         raise typer.Exit(1)
 
 # Host Management Commands
@@ -717,110 +719,81 @@ def exec_command(
 @app.command("status")
 def status():
     """Show overall system status."""
-    try:
-        import requests
-        infrastructure = get_infrastructure()
-
-        # Check infra API health
-        infra_url = "http://localhost:4200/health"
+    async def get_status():
         try:
-            resp = requests.get(infra_url, timeout=2)
-            if resp.status_code == 200 and resp.json().get("status") == "healthy":
-                infra_status = ("1", "1", "🟢 Healthy")
-            else:
-                infra_status = ("1", "0", "🔴 Unhealthy")
-        except Exception:
-            infra_status = ("1", "0", "🔴 Unreachable")
-
-        with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
-            task = progress.add_task("Getting system status...", total=None)
-            hosts = infrastructure.list_hosts()
-            containers = infrastructure.list_containers()
-
-        # Calculate status
-        total_hosts = len(hosts)
-        online_hosts = len([h for h in hosts if h.get("status") == "online"])
-        total_containers = len(containers)
-        running_containers = len([c for c in containers if c.get("status") == "running"])
-
-        # Display status
-        status_table = Table(title="Anvyl System Status")
-        status_table.add_column("Component", style="cyan")
-        status_table.add_column("Total", style="bold")
-        status_table.add_column("Active", style="green")
-        status_table.add_column("Status", style="bold")
-
-        # Infra API status
-        status_table.add_row("Infra API", *infra_status)
-
-        # Hosts status
-        host_status = "🟢 Healthy" if online_hosts == total_hosts else "🟡 Partial" if online_hosts > 0 else "🔴 Offline"
-        status_table.add_row("Hosts", str(total_hosts), str(online_hosts), host_status)
-
-        # Containers status
-        container_status = "🟢 Running" if running_containers > 0 else "🔴 Stopped"
-        status_table.add_row("Containers", str(total_containers), str(running_containers), container_status)
-
-        # Agent status (container and API)
-        try:
-            from anvyl.infra.infrastructure_client import get_infrastructure_client
-            import asyncio
-
-            async def get_agent_status():
-                agent_port = 4201
-                infrastructure_client = await get_infrastructure_client("http://localhost:4200")
-                agent_container = await infrastructure_client.get_agent_container_status()
-
-                # Check agent API health
+            async with await get_infrastructure_client() as client:
+                # Check infra API health
+                infra_url = "http://localhost:4200/health"
                 try:
-                    resp = requests.get(f"http://localhost:{agent_port}/health", timeout=2)
+                    resp = requests.get(infra_url, timeout=2)
                     if resp.status_code == 200 and resp.json().get("status") == "healthy":
-                        agent_api_status = "🟢 API Healthy"
+                        infra_status = ("1", "1", "🟢 Healthy")
                     else:
-                        agent_api_status = f"🔴 API Unhealthy (HTTP {resp.status_code})"
+                        infra_status = ("1", "0", "🔴 Unhealthy")
                 except Exception:
-                    agent_api_status = "🔴 API Unreachable"
+                    infra_status = ("1", "0", "🔴 Unreachable")
 
-                if agent_container:
-                    agent_container_status = "🟢 Running" if agent_container.get("status") == "running" else "🟡 Not Running"
-                    agent_details = f"ID: {agent_container.get('id', 'N/A')[:12]}, Image: {agent_container.get('image', 'N/A')} | {agent_api_status}"
-                else:
-                    agent_container_status = "🔴 Not Found"
-                    agent_details = f"No agent container running | {agent_api_status}"
+                with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
+                    task = progress.add_task("Getting system status...", total=None)
+                    hosts = await client.list_hosts()
+                    containers = await client.list_containers()
 
-                await infrastructure_client.close()
-                return agent_container_status, agent_api_status, agent_details
+                # Calculate status
+                total_hosts = len(hosts)
+                online_hosts = len([h for h in hosts if h.get("status") == "online"])
+                total_containers = len(containers)
+                running_containers = len([c for c in containers if c.get("status") == "running"])
 
-            agent_container_status, agent_api_status, agent_details = asyncio.run(get_agent_status())
-            status_table.add_row("Agent", "1", "1" if agent_container_status == "🟢 Running" else "0", agent_container_status + " | " + agent_api_status)
-        except Exception:
-            status_table.add_row("Agent", "1", "0", "🔴 Error getting status")
+                # Display status
+                status_table = Table(title="Anvyl System Status")
+                status_table.add_column("Component", style="cyan")
+                status_table.add_column("Total", style="bold")
+                status_table.add_column("Active", style="green")
+                status_table.add_column("Status", style="bold")
 
-        console.print(status_table)
+                # Infra API status
+                status_table.add_row("Infra API", *infra_status)
 
-        # Show recent activity
-        if hosts or containers:
-            console.print("\n[bold]Recent Activity:[/bold]")
+                # Hosts status
+                host_status = "🟢 Healthy" if online_hosts == total_hosts else "🟡 Partial" if online_hosts > 0 else "🔴 Offline"
+                status_table.add_row("Hosts", str(total_hosts), str(online_hosts), host_status)
 
-            # Show recent hosts
-            recent_hosts = sorted(hosts, key=lambda h: h.get("last_seen", ""), reverse=True)[:3]
-            if recent_hosts:
-                console.print("  📋 Recent hosts:")
-                for host in recent_hosts:
-                    status_emoji = "🟢" if host.get("status") == "online" else "🔴"
-                    console.print(f"    {status_emoji} {host.get('name', 'Unknown')} ({host.get('ip', 'Unknown')})")
+                # Containers status
+                container_status = "🟢 Running" if running_containers > 0 else "🔴 Stopped"
+                status_table.add_row("Containers", str(total_containers), str(running_containers), container_status)
 
-            # Show recent containers
-            recent_containers = sorted(containers, key=lambda c: c.get("created_at", ""), reverse=True)[:3]
-            if recent_containers:
-                console.print("  📦 Recent containers:")
-                for container in recent_containers:
-                    status_emoji = "🟢" if container.get("status") == "running" else "🔴"
-                    console.print(f"    {status_emoji} {container.get('name', 'Unknown')} ({container.get('image', 'Unknown')})")
+                # Agent status (container and API)
+                try:
+                    agent_container_status, agent_api_status, agent_details = await client.get_agent_status()
+                    status_table.add_row("Agent", "1", "1" if agent_container_status == "🟢 Running" else "0", agent_container_status + " | " + agent_api_status)
+                except Exception:
+                    status_table.add_row("Agent", "1", "0", "🔴 Error getting status")
 
-    except Exception as e:
-        console.print(f"[red]Error getting status: {e}[/red]")
-        raise typer.Exit(1)
+                console.print(status_table)
+
+                # Show recent activity
+                if hosts or containers:
+                    console.print("\n[bold]Recent Activity:[/bold]")
+
+                    # Show recent hosts
+                    recent_hosts = sorted(hosts, key=lambda h: h.get("last_seen", ""), reverse=True)[:3]
+                    if recent_hosts:
+                        console.print("  📋 Recent hosts:")
+                        for host in recent_hosts:
+                            status_emoji = "🟢" if host.get("status") == "online" else "🔴"
+                            console.print(f"    {status_emoji} {host.get('name', 'Unknown')} ({host.get('ip', 'Unknown')})")
+
+                    # Show recent containers
+                    recent_containers = sorted(containers, key=lambda c: c.get("created_at", ""), reverse=True)[:3]
+                    if recent_containers:
+                        console.print("  📦 Recent containers:")
+                        for container in recent_containers:
+                            status_emoji = "🟢" if container.get("status") == "running" else "🔴"
+                            console.print(f"    {status_emoji} {container.get('name', 'Unknown')} ({container.get('image', 'Unknown')})")
+        except Exception as e:
+            console.print(f"[red]Error getting system status: {e}[/red]")
+            raise typer.Exit(1)
+    asyncio.run(get_status())
 
 @app.command("version")
 def version():
@@ -860,30 +833,27 @@ def start_agent(
         console.print("🤖 [bold blue]Starting Anvyl AI Agent[/bold blue]")
 
         async def start_agent_async():
-            infrastructure_client = await get_infrastructure_client(infrastructure_api_url)
+            async with await get_infrastructure_client(infrastructure_api_url) as client:
+                # Start the agent container
+                result = await client.start_agent_container(
+                    lmstudio_model=lmstudio_model,
+                    lmstudio_url=lmstudio_url,
+                    port=port
+                )
 
-            # Start the agent container
-            result = await infrastructure_client.start_agent_container(
-                lmstudio_model=lmstudio_model,
-                lmstudio_url=lmstudio_url,
-                port=port
-            )
+                if result is None:
+                    console.print("[red]❌ Failed to start agent container[/red]")
+                    raise typer.Exit(1)
 
-            if result is None:
-                console.print("[red]❌ Failed to start agent container[/red]")
-                raise typer.Exit(1)
-
-            console.print(f"✅ Agent container started successfully")
-            console.print(f"🌐 Agent API: http://localhost:{port}")
-            console.print(f"📋 API Docs: http://localhost:{port}/docs")
-            console.print(f"🧠 LLM: LMStudio at {lmstudio_url}")
-            console.print(f"🤖 Model: {lmstudio_model}")
-            console.print(f"🐳 Container ID: {result.get('id', 'unknown')}")
-            console.print()
-            console.print("Use 'anvyl agent logs' to view logs")
-            console.print("Use 'anvyl agent stop' to stop the container")
-
-            await infrastructure_client.close()
+                console.print(f"✅ Agent container started successfully")
+                console.print(f"🌐 Agent API: http://localhost:{port}")
+                console.print(f"📋 API Docs: http://localhost:{port}/docs")
+                console.print(f"🧠 LLM: LMStudio at {lmstudio_url}")
+                console.print(f"🤖 Model: {lmstudio_model}")
+                console.print(f"🐳 Container ID: {result.get('id', 'unknown')}")
+                console.print()
+                console.print("Use 'anvyl agent logs' to view logs")
+                console.print("Use 'anvyl agent stop' to stop the container")
 
         asyncio.run(start_agent_async())
 
@@ -900,14 +870,12 @@ def stop_agent(
         console.print("🛑 [bold blue]Stopping Anvyl AI Agent[/bold blue]")
 
         async def stop_agent_async():
-            infrastructure_client = await get_infrastructure_client(infrastructure_api_url)
+            async with await get_infrastructure_client(infrastructure_api_url) as client:
+                if not await client.stop_agent_container():
+                    console.print("[red]❌ Failed to stop agent container[/red]")
+                    raise typer.Exit(1)
 
-            if not await infrastructure_client.stop_agent_container():
-                console.print("[red]❌ Failed to stop agent container[/red]")
-                raise typer.Exit(1)
-
-            console.print("[green]✅ Agent container stopped[/green]")
-            await infrastructure_client.close()
+                console.print("[green]✅ Agent container stopped[/green]")
 
         asyncio.run(stop_agent_async())
 
@@ -926,16 +894,14 @@ def logs_agent(
         console.print("📋 [bold blue]Anvyl AI Agent Logs[/bold blue]")
 
         async def logs_agent_async():
-            infrastructure_client = await get_infrastructure_client(infrastructure_api_url)
+            async with await get_infrastructure_client(infrastructure_api_url) as client:
+                logs = await client.get_agent_logs(follow=follow, tail=tail)
 
-            logs = await infrastructure_client.get_agent_logs(follow=follow, tail=tail)
+                if logs is None:
+                    console.print("[red]❌ Failed to get agent logs[/red]")
+                    raise typer.Exit(1)
 
-            if logs is None:
-                console.print("[red]❌ Failed to get agent logs[/red]")
-                raise typer.Exit(1)
-
-            console.print(logs)
-            await infrastructure_client.close()
+                console.print(logs)
 
         asyncio.run(logs_agent_async())
 
@@ -952,111 +918,107 @@ def get_agent_info(
     try:
         async def get_agent_info_async():
             # First check if the agent container is running
-            infrastructure_client = await get_infrastructure_client(infrastructure_api_url)
+            async with await get_infrastructure_client(infrastructure_api_url) as client:
+                container_status = await client.get_agent_container_status()
+                if not container_status:
+                    console.print("[yellow]Agent container is not running[/yellow]")
+                    console.print("[yellow]Use 'anvyl agent start' to start the agent[/yellow]")
+                    return
 
-            container_status = await infrastructure_client.get_agent_container_status()
-            if not container_status:
-                console.print("[yellow]Agent container is not running[/yellow]")
-                console.print("[yellow]Use 'anvyl agent start' to start the agent[/yellow]")
-                await infrastructure_client.close()
-                return
+                # Display comprehensive information
+                console.print("📊 [bold blue]Anvyl AI Agent Information[/bold blue]")
 
-            # Display comprehensive information
-            console.print("📊 [bold blue]Anvyl AI Agent Information[/bold blue]")
+                # Container Information Section
+                console.print("\n[bold cyan]Container Information:[/bold cyan]")
+                from rich.table import Table
 
-            # Container Information Section
-            console.print("\n[bold cyan]Container Information:[/bold cyan]")
-            from rich.table import Table
+                container_table = Table(show_header=False, box=None)
+                container_table.add_column("Property", style="cyan", width=15)
+                container_table.add_column("Value", style="green")
 
-            container_table = Table(show_header=False, box=None)
-            container_table.add_column("Property", style="cyan", width=15)
-            container_table.add_column("Value", style="green")
+                container_table.add_row("Container ID", container_status.get("id", "N/A")[:12])
+                container_table.add_row("Name", container_status.get("name", "N/A"))
+                container_table.add_row("Status", container_status.get("status", "N/A"))
+                container_table.add_row("Image", container_status.get("image", "N/A"))
+                container_table.add_row("Created", container_status.get("created", "N/A"))
 
-            container_table.add_row("Container ID", container_status.get("id", "N/A")[:12])
-            container_table.add_row("Name", container_status.get("name", "N/A"))
-            container_table.add_row("Status", container_status.get("status", "N/A"))
-            container_table.add_row("Image", container_status.get("image", "N/A"))
-            container_table.add_row("Created", container_status.get("created", "N/A"))
+                # Add ports
+                ports = container_status.get("ports", {})
+                if ports:
+                    port_str = ", ".join([f"{k} -> {v[0]['HostPort']}" for k, v in ports.items() if v])
+                    container_table.add_row("Ports", port_str)
 
-            # Add ports
-            ports = container_status.get("ports", {})
-            if ports:
-                port_str = ", ".join([f"{k} -> {v[0]['HostPort']}" for k, v in ports.items() if v])
-                container_table.add_row("Ports", port_str)
+                console.print(container_table)
 
-            console.print(container_table)
+                # Configuration Information Section
+                console.print("\n[bold cyan]Configuration:[/bold cyan]")
+                config_table = Table(show_header=False, box=None)
+                config_table.add_column("Property", style="cyan", width=15)
+                config_table.add_column("Value", style="green")
 
-            # Configuration Information Section
-            console.print("\n[bold cyan]Configuration:[/bold cyan]")
-            config_table = Table(show_header=False, box=None)
-            config_table.add_column("Property", style="cyan", width=15)
-            config_table.add_column("Value", style="green")
+                # Get model from labels
+                labels = container_status.get("labels", {})
+                model = labels.get("anvyl.model", "N/A")
+                lmstudio_url = labels.get("anvyl.lmstudio_url", "N/A")
 
-            # Get model from labels
-            labels = container_status.get("labels", {})
-            model = labels.get("anvyl.model", "N/A")
-            lmstudio_url = labels.get("anvyl.lmstudio_url", "N/A")
+                config_table.add_row("Model", model)
+                config_table.add_row("LMStudio URL", lmstudio_url)
+                config_table.add_row("API Port", str(port))
 
-            config_table.add_row("Model", model)
-            config_table.add_row("LMStudio URL", lmstudio_url)
-            config_table.add_row("API Port", str(port))
+                console.print(config_table)
 
-            console.print(config_table)
+                # Try to get agent API information
+                try:
+                    url = f"http://localhost:{port}/agent/info"
+                    response = requests.get(url, timeout=5)
 
-            # Try to get agent API information
-            try:
-                url = f"http://localhost:{port}/agent/info"
-                response = requests.get(url, timeout=5)
+                    if response.status_code == 200:
+                        info = response.json()
 
-                if response.status_code == 200:
-                    info = response.json()
+                        # Agent Information Section
+                        console.print("\n[bold cyan]Agent Information:[/bold cyan]")
+                        agent_table = Table(show_header=False, box=None)
+                        agent_table.add_column("Property", style="cyan", width=15)
+                        agent_table.add_column("Value", style="green")
 
-                    # Agent Information Section
-                    console.print("\n[bold cyan]Agent Information:[/bold cyan]")
-                    agent_table = Table(show_header=False, box=None)
-                    agent_table.add_column("Property", style="cyan", width=15)
-                    agent_table.add_column("Value", style="green")
+                        agent_table.add_row("Host ID", info.get('host_id', 'N/A'))
+                        agent_table.add_row("Host IP", info.get('host_ip', 'N/A'))
+                        agent_table.add_row("LLM Model", info.get('llm_model', 'N/A'))
+                        agent_table.add_row("Actual Model", info.get('actual_model_name', 'N/A'))
 
-                    agent_table.add_row("Host ID", info.get('host_id', 'N/A'))
-                    agent_table.add_row("Host IP", info.get('host_ip', 'N/A'))
-                    agent_table.add_row("LLM Model", info.get('llm_model', 'N/A'))
-                    agent_table.add_row("Actual Model", info.get('actual_model_name', 'N/A'))
+                        # Tools information
+                        tools = info.get('tools_available', [])
+                        if tools:
+                            tools_str = ", ".join(tools)
+                            agent_table.add_row("Tools Available", tools_str)
+                        else:
+                            agent_table.add_row("Tools Available", "None")
 
-                    # Tools information
-                    tools = info.get('tools_available', [])
-                    if tools:
-                        tools_str = ", ".join(tools)
-                        agent_table.add_row("Tools Available", tools_str)
+                        console.print(agent_table)
+
+                        # Known hosts section
+                        known_hosts = info.get("known_hosts", {})
+                        if known_hosts:
+                            console.print("\n[bold cyan]Known Hosts:[/bold cyan]")
+                            hosts_table = Table()
+                            hosts_table.add_column("Host ID", style="cyan")
+                            hosts_table.add_column("IP Address", style="green")
+
+                            for host_id, host_ip in known_hosts.items():
+                                hosts_table.add_row(host_id, host_ip)
+
+                            console.print(hosts_table)
+                        else:
+                            console.print("\n[bold cyan]Known Hosts:[/bold cyan] [dim]None[/dim]")
+
                     else:
-                        agent_table.add_row("Tools Available", "None")
+                        console.print(f"\n[bold cyan]Agent API:[/bold cyan] [yellow]Not ready (HTTP {response.status_code})[/yellow]")
+                        console.print("[dim]Agent may still be starting up...[/dim]")
 
-                    console.print(agent_table)
-
-                    # Known hosts section
-                    known_hosts = info.get("known_hosts", {})
-                    if known_hosts:
-                        console.print("\n[bold cyan]Known Hosts:[/bold cyan]")
-                        hosts_table = Table()
-                        hosts_table.add_column("Host ID", style="cyan")
-                        hosts_table.add_column("IP Address", style="green")
-
-                        for host_id, host_ip in known_hosts.items():
-                            hosts_table.add_row(host_id, host_ip)
-
-                        console.print(hosts_table)
-                    else:
-                        console.print("\n[bold cyan]Known Hosts:[/bold cyan] [dim]None[/dim]")
-
-                else:
-                    console.print(f"\n[bold cyan]Agent API:[/bold cyan] [yellow]Not ready (HTTP {response.status_code})[/yellow]")
+                except requests.exceptions.RequestException as e:
+                    console.print(f"\n[bold cyan]Agent API:[/bold cyan] [yellow]Not accessible[/yellow]")
+                    console.print(f"[dim]Error: {e}[/dim]")
                     console.print("[dim]Agent may still be starting up...[/dim]")
-
-            except requests.exceptions.RequestException as e:
-                console.print(f"\n[bold cyan]Agent API:[/bold cyan] [yellow]Not accessible[/yellow]")
-                console.print(f"[dim]Error: {e}[/dim]")
-                console.print("[dim]Agent may still be starting up...[/dim]")
-
-            await infrastructure_client.close()
 
         asyncio.run(get_agent_info_async())
 
@@ -1156,6 +1118,61 @@ def add_agent_host(
 
     except Exception as e:
         console.print(f"[red]Error adding host: {e}[/red]")
+        raise typer.Exit(1)
+
+@app.command("purge")
+def purge_data(
+    force: bool = typer.Option(False, "--force", "-f", help="Force purge without confirmation")
+):
+    """Purge all Anvyl data including database and ~/.anvyl directory."""
+
+    # Get paths to clean up
+    anvyl_home = Path.home() / ".anvyl"
+    db_file = anvyl_home / "anvyl.db"
+
+    # Check what exists
+    items_to_remove = []
+
+    if anvyl_home.exists():
+        items_to_remove.append(f"~/.anvyl directory ({anvyl_home})")
+
+    if db_file.exists():
+        items_to_remove.append(f"Database file ({db_file})")
+
+    if not items_to_remove:
+        console.print("✅ [green]No Anvyl data found to purge[/green]")
+        return
+
+    # Show what will be removed
+    console.print("🗑️ [bold red]The following items will be permanently deleted:[/bold red]")
+    for item in items_to_remove:
+        console.print(f"  • {item}")
+
+    # Ask for confirmation unless force flag is used
+    if not force:
+        if not Confirm.ask("Are you sure you want to proceed?", default=False):
+            console.print("❌ [yellow]Purge cancelled[/yellow]")
+            raise typer.Exit(0)
+
+    try:
+        with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
+            task = progress.add_task("Purging Anvyl data...", total=None)
+
+            # Remove ~/.anvyl directory
+            if anvyl_home.exists():
+                shutil.rmtree(anvyl_home)
+                console.print(f"✅ [green]Removed ~/.anvyl directory[/green]")
+
+            # Remove database file
+            if db_file.exists():
+                db_file.unlink()
+                console.print(f"✅ [green]Removed database file[/green]")
+
+        console.print("\n🎉 [bold green]Anvyl data purged successfully![/bold green]")
+        console.print("\n💡 [dim]You can now start fresh with 'anvyl up'[/dim]")
+
+    except Exception as e:
+        console.print(f"[red]Error during purge: {e}[/red]")
         raise typer.Exit(1)
 
 if __name__ == "__main__":

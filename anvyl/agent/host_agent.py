@@ -15,7 +15,7 @@ from pydantic_ai.models.openai import OpenAIModel
 import json
 
 from anvyl.agent.communication import AgentCommunication, AgentMessage
-from anvyl.infra.infrastructure_client import get_infrastructure_client
+from anvyl.infra.client import get_infrastructure_client
 
 logger = logging.getLogger(__name__)
 

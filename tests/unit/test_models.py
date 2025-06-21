@@ -1,13 +1,16 @@
 """
-Unit tests for Database Models
+Tests for Anvyl database models
 """
 
-import unittest
-from unittest.mock import Mock, patch, MagicMock
-from datetime import datetime
+import pytest
 import json
-import tempfile
 import os
+import sys
+import unittest
+import tempfile
+
+# Add the project root to the path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
 from anvyl.database.models import Host, Container, DatabaseManager
 

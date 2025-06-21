@@ -13,7 +13,7 @@ import psutil
 import socket
 import json
 
-from anvyl.infra.infrastructure_client import InfrastructureClient
+from anvyl.infra.client import InfrastructureClient
 
 logger = logging.getLogger(__name__)
 

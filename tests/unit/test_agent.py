@@ -9,10 +9,10 @@ import os
 import sys
 
 # Add the project root to the path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
 from anvyl.agent import HostAgent, AgentManager, InfrastructureTools
-from anvyl.infra.infrastructure_client import InfrastructureClient
+from anvyl.infra.client import InfrastructureClient
 from anvyl.agent.communication import AgentCommunication
 
 pytest_asyncio = pytest.importorskip('pytest_asyncio', reason='pytest-asyncio is required for async tests')
@@ -116,7 +116,7 @@ class TestHostAgent:
 
         assert agent.host_id == self.host_id
         assert agent.host_ip == self.host_ip
-        from anvyl.infra.infrastructure_client import InfrastructureClient
+        from anvyl.infra.client import InfrastructureClient
         assert isinstance(agent.infrastructure_client, InfrastructureClient)
 
     def test_host_agent_mock_model(self):

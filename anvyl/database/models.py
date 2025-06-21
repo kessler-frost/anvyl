@@ -7,6 +7,7 @@ from typing import Optional, Dict, List, Any
 from sqlmodel import SQLModel, Field, create_engine, Session, select
 import json
 import logging
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -155,8 +156,13 @@ class Container(SQLModel, table=True):
 class DatabaseManager:
     """Database manager for Anvyl."""
 
-    def __init__(self, database_url: str = "sqlite:///anvyl.db"):
+    def __init__(self, database_url: str = None):
         """Initialize database manager."""
+        if database_url is None:
+            anvyl_home = Path.home() / ".anvyl"
+            anvyl_home.mkdir(parents=True, exist_ok=True)
+            db_path = anvyl_home / "anvyl.db"
+            database_url = f"sqlite:///{db_path}"
         self.engine = create_engine(database_url, echo=False)
         self.create_tables()
 

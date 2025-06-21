@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 """
-Test script to verify async agent functionality
+Manual test script to verify async agent functionality
+
+This is a manual test script that can be run to verify the async agent works correctly.
+It requires actual services to be running (LMStudio, infrastructure API, etc.).
+
+Usage:
+    python tests/manual/test_async_agent.py
 """
 
 import asyncio
@@ -8,7 +14,7 @@ import sys
 import os
 
 # Add the project root to the path
-sys.path.insert(0, os.path.dirname(__file__))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
 async def test_async_agent():
     """Test the async agent functionality."""
@@ -18,7 +24,7 @@ async def test_async_agent():
     try:
         # Test infrastructure client
         print("1. Testing infrastructure client...")
-        from anvyl.infra.infrastructure_client import get_infrastructure_client
+        from anvyl.infra.client import get_infrastructure_client
         client = await get_infrastructure_client()
         print("   ✅ Infrastructure client created successfully")
 

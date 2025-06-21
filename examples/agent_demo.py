@@ -16,7 +16,7 @@ from typing import Dict, Any
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from anvyl.agent import create_agent_manager
-from anvyl.infra.infrastructure_client import get_infrastructure_client
+from anvyl.infra.client import get_infrastructure_client
 
 
 async def demo_local_agent():

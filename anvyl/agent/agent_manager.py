@@ -19,7 +19,7 @@ from datetime import datetime
 from anvyl.agent.host_agent import HostAgent
 from anvyl.agent.communication import AgentCommunication, AgentMessage
 from anvyl.agent.tools import InfrastructureTools
-from anvyl.infra.infrastructure_client import get_infrastructure_client
+from anvyl.infra.client import get_infrastructure_client
 
 logger = logging.getLogger(__name__)
 

@@ -49,12 +49,6 @@ class ListHostsInput(BaseModel):
     pass
 
 
-class ExecuteCommandInput(BaseModel):
-    """Input for executing commands."""
-    command: str = Field(description="Command to execute")
-    host_id: Optional[str] = Field(default=None, description="Host ID (None for local host)")
-
-
 class InfrastructureTools:
     """Tools for managing infrastructure that AI agents can use."""
 
@@ -73,7 +67,6 @@ class InfrastructureTools:
             Tool(self.get_host_info),
             Tool(self.get_host_resources),
             Tool(self.list_hosts),
-            Tool(self.execute_command),
         ]
 
     async def list_containers(self, host_id: Optional[str] = None, all: bool = False) -> str:
@@ -207,29 +200,6 @@ class InfrastructureTools:
             return "Hosts in the network:\n" + "\n".join(result)
         except Exception as e:
             return f"Error listing hosts: {str(e)}"
-
-    async def execute_command(self, command: str, host_id: Optional[str] = None) -> str:
-        """Execute a command on a host."""
-        try:
-            if host_id is None:
-                # Execute locally
-                import subprocess
-                result = subprocess.run(command, shell=True, capture_output=True, text=True)
-                if result.returncode == 0:
-                    return f"Command executed successfully:\n{result.stdout}"
-                else:
-                    return f"Command failed (exit code {result.returncode}):\n{result.stderr}"
-            else:
-                # Execute on remote host
-                result = await self._infrastructure_client.exec_command_on_host(
-                    host_id, [command]
-                )
-                if result:
-                    return json.dumps(result, indent=2)
-                else:
-                    return f"Failed to execute command on host {host_id}"
-        except Exception as e:
-            return f"Error executing command: {str(e)}"
 
 
 def get_agent_tools(infrastructure_api_url: str = "http://localhost:4200"):

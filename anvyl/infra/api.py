@@ -44,12 +44,6 @@ class ContainerCreate(BaseModel):
     volumes: Optional[List[str]] = None
     environment: Optional[List[str]] = None
 
-class AgentStartRequest(BaseModel):
-    lmstudio_url: str = "http://localhost:1234/v1"
-    lmstudio_model: str = "llama-3.2-3b-instruct"
-    port: int = 4200
-    image_tag: str = "anvyl-agent:latest"
-
 class QueryRequest(BaseModel):
     query: str
     host_id: Optional[str] = None
@@ -241,64 +235,6 @@ async def exec_command(container_id: str, command: List[str], tty: bool = False)
             raise HTTPException(status_code=400, detail="Failed to execute command")
     except Exception as e:
         logger.error(f"Error executing command: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-# Agent management endpoints
-@app.post("/agent/start")
-async def start_agent(request: AgentStartRequest):
-    """Start the agent container."""
-    try:
-        result = infrastructure_service.start_agent_container(
-            lmstudio_url=request.lmstudio_url,
-            lmstudio_model=request.lmstudio_model,
-            port=request.port,
-            image_tag=request.image_tag
-        )
-        if result:
-            return {"message": "Agent started successfully", "result": result}
-        else:
-            raise HTTPException(status_code=400, detail="Failed to start agent")
-    except Exception as e:
-        logger.error(f"Error starting agent: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/agent/stop")
-async def stop_agent():
-    """Stop the agent container."""
-    try:
-        success = infrastructure_service.stop_agent_container()
-        if success:
-            return {"message": "Agent stopped successfully"}
-        else:
-            raise HTTPException(status_code=400, detail="Failed to stop agent")
-    except Exception as e:
-        logger.error(f"Error stopping agent: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/agent/status")
-async def get_agent_status():
-    """Get the status of the agent container."""
-    try:
-        status = infrastructure_service.get_agent_container_status()
-        if status:
-            return {"status": status}
-        else:
-            return {"status": None, "message": "Agent container not found"}
-    except Exception as e:
-        logger.error(f"Error getting agent status: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/agent/logs")
-async def get_agent_logs(follow: bool = False, tail: int = 100):
-    """Get logs from the agent container."""
-    try:
-        logs = infrastructure_service.get_agent_logs(follow=follow, tail=tail)
-        if logs is not None:
-            return {"logs": logs}
-        else:
-            raise HTTPException(status_code=404, detail="Agent container not found")
-    except Exception as e:
-        logger.error(f"Error getting agent logs: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # Host command execution endpoint

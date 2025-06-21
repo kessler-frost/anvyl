@@ -43,7 +43,7 @@ anvyl up
 
 ```bash
 # Start an AI agent (requires LMStudio running locally)
-anvyl agent start
+anvyl agent up
 
 # Query the agent
 anvyl agent query "List all containers on this host"
@@ -68,7 +68,7 @@ Anvyl's AI agents can understand natural language commands and execute infrastru
 
 ```bash
 # Start an agent
-anvyl agent start --lmstudio-url http://localhost:1234/v1 --model llama-3.2-3b-instruct
+anvyl agent up --lmstudio-url http://localhost:1234/v1 --model llama-3.2-3b-instruct
 
 # Query the agent
 anvyl agent query "Show me all running containers"
@@ -137,10 +137,10 @@ anvyl container exec <container-id> ls -la
 
 ```bash
 # Start an AI agent
-anvyl agent start
+anvyl agent up
 
 # Stop the agent
-anvyl agent stop
+anvyl agent down
 
 # Query the agent
 anvyl agent query "Your question here"

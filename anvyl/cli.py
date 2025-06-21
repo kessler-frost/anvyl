@@ -286,7 +286,7 @@ app.add_typer(infra_group, name="infra")
 
 @infra_group.command("up")
 def start_infra_api(
-    host: str = typer.Option("0.0.0.0", "--host", "-h", help="Host to bind to"),
+    host: str = typer.Option("127.0.0.1", "--host", "-h", help="Host to bind to"),
     port: int = typer.Option(4200, "--port", "-p", help="Port to bind to"),
     background: bool = typer.Option(True, "--background/--foreground", help="Run in background")
 ):
@@ -720,79 +720,104 @@ def exec_command(
 def status():
     """Show overall system status."""
     async def get_status():
+        # Check infra API health first
+        infra_url = "http://localhost:4200/health"
+        infra_running = False
         try:
-            async with await get_infrastructure_client() as client:
-                # Check infra API health
-                infra_url = "http://localhost:4200/health"
-                try:
-                    resp = requests.get(infra_url, timeout=2)
-                    if resp.status_code == 200 and resp.json().get("status") == "healthy":
-                        infra_status = ("1", "1", "🟢 Healthy")
-                    else:
-                        infra_status = ("1", "0", "🔴 Unhealthy")
-                except Exception:
-                    infra_status = ("1", "0", "🔴 Unreachable")
+            resp = requests.get(infra_url, timeout=2)
+            if resp.status_code == 200 and resp.json().get("status") == "healthy":
+                infra_status = ("1", "1", "🟢 Healthy")
+                infra_running = True
+            else:
+                infra_status = ("1", "0", "🔴 Stopped")
+        except Exception:
+            infra_status = ("1", "0", "🔴 Stopped")
 
-                with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
-                    task = progress.add_task("Getting system status...", total=None)
-                    hosts = await client.list_hosts()
-                    containers = await client.list_containers()
+        # Get system status from database
+        from anvyl.database.models import DatabaseManager
+        db = DatabaseManager()
+        system_status = db.get_system_status()
 
-                # Calculate status
-                total_hosts = len(hosts)
-                online_hosts = len([h for h in hosts if h.get("status") == "online"])
-                total_containers = len(containers)
-                running_containers = len([c for c in containers if c.get("status") == "running"])
+        # Display status table
+        status_table = Table(title="Anvyl System Status")
+        status_table.add_column("Component", style="cyan")
+        status_table.add_column("Total", style="bold")
+        status_table.add_column("Active", style="green")
+        status_table.add_column("Status", style="bold")
 
-                # Display status
-                status_table = Table(title="Anvyl System Status")
-                status_table.add_column("Component", style="cyan")
-                status_table.add_column("Total", style="bold")
-                status_table.add_column("Active", style="green")
-                status_table.add_column("Status", style="bold")
+        # Infra API status
+        status_table.add_row("Infra API", *infra_status)
 
-                # Infra API status
-                status_table.add_row("Infra API", *infra_status)
+        if infra_running:
+            try:
+                async with await get_infrastructure_client() as client:
+                    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
+                        task = progress.add_task("Getting system status...", total=None)
+                        hosts = await client.list_hosts()
+                        containers = await client.list_containers()
 
-                # Hosts status
-                host_status = "🟢 Healthy" if online_hosts == total_hosts else "🟡 Partial" if online_hosts > 0 else "🔴 Offline"
-                status_table.add_row("Hosts", str(total_hosts), str(online_hosts), host_status)
+                    # Use real database counts
+                    total_hosts = system_status.total_hosts
+                    online_hosts = system_status.online_hosts
+                    total_containers = system_status.total_containers
+                    running_containers = system_status.running_containers
 
-                # Containers status
-                container_status = "🟢 Running" if running_containers > 0 else "🔴 Stopped"
-                status_table.add_row("Containers", str(total_containers), str(running_containers), container_status)
+                    # Hosts status
+                    host_status = "🟢 Healthy" if online_hosts == total_hosts and total_hosts > 0 else "🟡 Partial" if online_hosts > 0 else "🔴 Offline"
+                    status_table.add_row("Hosts", str(total_hosts), str(online_hosts), host_status)
 
-                # Agent status (container and API)
-                try:
-                    agent_container_status, agent_api_status, agent_details = await client.get_agent_status()
-                    status_table.add_row("Agent", "1", "1" if agent_container_status == "🟢 Running" else "0", agent_container_status + " | " + agent_api_status)
-                except Exception:
-                    status_table.add_row("Agent", "1", "0", "🔴 Error getting status")
+                    # Containers status
+                    container_status = "🟢 Running" if running_containers > 0 else "🔴 Stopped"
+                    status_table.add_row("Containers", str(total_containers), str(running_containers), container_status)
+
+                    # Agent status (container and API)
+                    try:
+                        agent_container_status, agent_api_status, agent_details = await client.get_agent_status()
+                        status_table.add_row("Agent", "1", "1" if agent_container_status == "🟢 Running" else "0", agent_container_status + " | " + agent_api_status)
+                    except Exception:
+                        status_table.add_row("Agent", "1", "0", "🔴 Error getting status")
+
+                    console.print(status_table)
+
+                    # Show recent activity
+                    if hosts or containers:
+                        console.print("\n[bold]Recent Activity:[/bold]")
+
+                        # Show recent hosts
+                        recent_hosts = sorted(hosts, key=lambda h: h.get("last_seen", ""), reverse=True)[:3]
+                        if recent_hosts:
+                            console.print("  📋 Recent hosts:")
+                            for host in recent_hosts:
+                                status_emoji = "🟢" if host.get("status") == "online" else "🔴"
+                                console.print(f"    {status_emoji} {host.get('name', 'Unknown')} ({host.get('ip', 'Unknown')})")
+
+                        # Show recent containers
+                        recent_containers = sorted(containers, key=lambda c: c.get("created_at", ""), reverse=True)[:3]
+                        if recent_containers:
+                            console.print("  📦 Recent containers:")
+                            for container in recent_containers:
+                                status_emoji = "🟢" if container.get("status") == "running" else "🔴"
+                                console.print(f"    {status_emoji} {container.get('name', 'Unknown')} ({container.get('image', 'Unknown')})")
+
+            except Exception as e:
+                # If we can't connect to the API, show offline status for all components
+                status_table.add_row("Hosts", str(system_status.total_hosts), str(system_status.online_hosts), "🔴 Offline")
+                status_table.add_row("Containers", str(system_status.total_containers), str(system_status.running_containers), "🔴 Offline")
+                status_table.add_row("Agent", "0", "0", "🔴 Offline")
 
                 console.print(status_table)
+                console.print(f"\n[yellow]⚠️  Infrastructure API is unreachable: {e}[/yellow]")
+                console.print("[yellow]💡 Use 'anvyl infra up' to start the infrastructure API[/yellow]")
+        else:
+            # Infrastructure API is not running, show offline status with real counts
+            status_table.add_row("Hosts", str(system_status.total_hosts), str(system_status.online_hosts), "🔴 Offline")
+            status_table.add_row("Containers", str(system_status.total_containers), str(system_status.running_containers), "🔴 Offline")
+            status_table.add_row("Agent", "0", "0", "🔴 Offline")
 
-                # Show recent activity
-                if hosts or containers:
-                    console.print("\n[bold]Recent Activity:[/bold]")
+            console.print(status_table)
+            console.print("\n[yellow]⚠️  Infrastructure API is not running[/yellow]")
+            console.print("[yellow]💡 Use 'anvyl infra up' to start the infrastructure API[/yellow]")
 
-                    # Show recent hosts
-                    recent_hosts = sorted(hosts, key=lambda h: h.get("last_seen", ""), reverse=True)[:3]
-                    if recent_hosts:
-                        console.print("  📋 Recent hosts:")
-                        for host in recent_hosts:
-                            status_emoji = "🟢" if host.get("status") == "online" else "🔴"
-                            console.print(f"    {status_emoji} {host.get('name', 'Unknown')} ({host.get('ip', 'Unknown')})")
-
-                    # Show recent containers
-                    recent_containers = sorted(containers, key=lambda c: c.get("created_at", ""), reverse=True)[:3]
-                    if recent_containers:
-                        console.print("  📦 Recent containers:")
-                        for container in recent_containers:
-                            status_emoji = "🟢" if container.get("status") == "running" else "🔴"
-                            console.print(f"    {status_emoji} {container.get('name', 'Unknown')} ({container.get('image', 'Unknown')})")
-        except Exception as e:
-            console.print(f"[red]Error getting system status: {e}[/red]")
-            raise typer.Exit(1)
     asyncio.run(get_status())
 
 @app.command("version")

@@ -153,6 +153,41 @@ class Container(SQLModel, table=True):
         self.labels = json.dumps(labels)
         self.updated_at = datetime.now(UTC)
 
+class SystemStatus(SQLModel, table=True):
+    """System status model for tracking overall Anvyl system state."""
+
+    id: str = Field(primary_key=True, default="system")
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    # Component counts
+    total_hosts: int = Field(default=0)
+    online_hosts: int = Field(default=0)
+    total_containers: int = Field(default=0)
+    running_containers: int = Field(default=0)
+
+    # Service status
+    infra_api_status: str = Field(default="stopped")  # running, stopped, unhealthy
+    agent_status: str = Field(default="stopped")  # running, stopped, unhealthy
+
+    # System metadata
+    last_sync: Optional[datetime] = Field(default=None)
+    system_info: str = Field(default="{}")  # JSON string for system information
+
+    def get_system_info(self) -> Dict[str, Any]:
+        """Get system info as dictionary."""
+        if not self.system_info:
+            return {}
+        try:
+            return json.loads(self.system_info)
+        except json.JSONDecodeError:
+            logger.warning("Invalid JSON in system info")
+            return {}
+
+    def set_system_info(self, info: Dict[str, Any]) -> None:
+        """Set system info from dictionary."""
+        self.system_info = json.dumps(info)
+        self.updated_at = datetime.now(UTC)
+
 class DatabaseManager:
     """Database manager for Anvyl."""
 
@@ -296,3 +331,63 @@ class DatabaseManager:
                 session.commit()
                 return True
             return False
+
+    # System status management methods
+    def get_system_status(self) -> SystemStatus:
+        """Get or create system status record."""
+        with self.get_session() as session:
+            status = session.get(SystemStatus, "system")
+            if not status:
+                status = SystemStatus()
+                session.add(status)
+                session.commit()
+                session.refresh(status)
+            return status
+
+    def update_system_status(self, **kwargs) -> SystemStatus:
+        """Update system status with provided fields."""
+        with self.get_session() as session:
+            status = session.get(SystemStatus, "system")
+            if not status:
+                status = SystemStatus()
+                session.add(status)
+
+            # Update provided fields
+            for key, value in kwargs.items():
+                if hasattr(status, key):
+                    setattr(status, key, value)
+
+            status.updated_at = datetime.now(UTC)
+            session.add(status)
+            session.commit()
+            session.refresh(status)
+            return status
+
+    def refresh_system_status(self) -> SystemStatus:
+        """Refresh system status by counting actual components."""
+        with self.get_session() as session:
+            # Count hosts
+            total_hosts = session.exec(select(Host)).all()
+            online_hosts = [h for h in total_hosts if h.status == "online"]
+
+            # Count containers
+            total_containers = session.exec(select(Container)).all()
+            running_containers = [c for c in total_containers if c.status == "running"]
+
+            # Update system status
+            status = session.get(SystemStatus, "system")
+            if not status:
+                status = SystemStatus()
+                session.add(status)
+
+            status.total_hosts = len(total_hosts)
+            status.online_hosts = len(online_hosts)
+            status.total_containers = len(total_containers)
+            status.running_containers = len(running_containers)
+            status.last_sync = datetime.now(UTC)
+            status.updated_at = datetime.now(UTC)
+
+            session.add(status)
+            session.commit()
+            session.refresh(status)
+            return status

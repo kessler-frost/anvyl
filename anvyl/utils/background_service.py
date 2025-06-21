@@ -127,7 +127,6 @@ class BackgroundServiceManager:
                     cmd,
                     stdout=log_f,
                     stderr=subprocess.STDOUT,
-                    preexec_fn=os.setsid if hasattr(os, 'setsid') else None,
                     start_new_session=True
                 )
 
@@ -310,11 +309,11 @@ class BackgroundServiceManager:
             return {}
 
     # Convenience methods for specific services
-    def start_infrastructure_api(self, host: str = "0.0.0.0", port: int = 4200) -> bool:
+    def start_infrastructure_api(self, host: str = "127.0.0.1", port: int = 4200) -> bool:
         """Start the infrastructure API service in the background."""
         return self.start_service(
             service_name="infrastructure_api",
-            command=[sys.executable, "-m", "anvyl.infra.infrastructure_api"],
+            command=[sys.executable, "-m", "anvyl.infra.api"],
             host=host,
             port=port
         )

@@ -323,14 +323,14 @@ async def exec_command_on_host(
         logger.error(f"Error executing command on host: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-def run_infrastructure_api(host: str = "0.0.0.0", port: int = 4200):
+def run_infrastructure_api(host: str = "127.0.0.1", port: int = 4200):
     """Run the infrastructure API server."""
-    uvicorn.run("anvyl.infra.infrastructure_api:app", host=host, port=port, reload=True)
+    uvicorn.run("anvyl.infra.api:app", host=host, port=port, reload=True)
 
 def main():
     """Main entry point for the infrastructure API service."""
     parser = argparse.ArgumentParser(description="Run Anvyl Infrastructure API")
-    parser.add_argument("--host", type=str, default="0.0.0.0", help="Host to bind to")
+    parser.add_argument("--host", type=str, default="127.0.0.1", help="Host to bind to")
     parser.add_argument("--port", type=int, default=4200, help="Port to bind to")
     args = parser.parse_args()
     run_infrastructure_api(host=args.host, port=args.port)

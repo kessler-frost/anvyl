@@ -170,6 +170,9 @@ class InfrastructureService:
         except Exception as e:
             logger.error(f"Error syncing containers: {e}")
 
+        # Refresh system status after container sync
+        self.db.refresh_system_status()
+
     # Host management methods
     def list_hosts(self) -> List[Dict[str, Any]]:
         """List all registered hosts."""
@@ -205,6 +208,8 @@ class InfrastructureService:
             )
 
             self.db.add_host(host)
+            # Refresh system status after adding host
+            self.db.refresh_system_status()
 
             return {
                 "id": host.id,
@@ -235,6 +240,8 @@ class InfrastructureService:
                 host.set_resources(resources)
 
             self.db.update_host(host)
+            # Refresh system status after updating host
+            self.db.refresh_system_status()
 
             return {
                 "id": host.id,
@@ -273,18 +280,22 @@ class InfrastructureService:
 
     # Container management methods
     def list_containers(self, host_id: Optional[str] = None) -> List[Dict[str, Any]]:
-        """List containers, optionally filtered by host."""
+        """List containers, optionally filtered by host. Only include Anvyl-managed containers."""
         containers = self.db.list_containers(host_id)
         result = []
 
         for container in containers:
+            labels = container.get_labels()
+            # Only include containers with the 'anvyl.type' label
+            if not labels or not any(k.startswith("anvyl.") for k in labels):
+                continue
             container_dict = {
                 "id": container.id,
                 "name": container.name,
                 "image": container.image,
                 "status": container.status,
                 "host_id": container.host_id,
-                "labels": container.get_labels(),
+                "labels": labels,
                 "ports": container.get_ports(),
                 "volumes": container.get_volumes(),
                 "environment": container.get_environment()
@@ -351,6 +362,8 @@ class InfrastructureService:
                 container.set_environment(environment)
 
             self.db.add_container(container)
+            # Refresh system status after adding container
+            self.db.refresh_system_status()
 
             return {
                 "id": container.id,
@@ -378,6 +391,8 @@ class InfrastructureService:
             if db_container:
                 db_container.status = "stopped"
                 self.db.update_container(db_container)
+                # Refresh system status after stopping container
+                self.db.refresh_system_status()
 
             return True
         except Exception as e:
@@ -594,6 +609,8 @@ class InfrastructureService:
             db_container.set_environment(environment)
 
             self.db.add_container(db_container)
+            # Refresh system status after adding agent container
+            self.db.refresh_system_status()
 
             logger.info(f"Started agent container: {container.id}")
             return {
@@ -628,6 +645,8 @@ class InfrastructureService:
             db_container = self.db.get_container(container.id)
             if db_container:
                 self.db.delete_container(container.id)
+                # Refresh system status after removing agent container
+                self.db.refresh_system_status()
 
             logger.info("Stopped and removed agent container")
             return True

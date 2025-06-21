@@ -168,6 +168,66 @@ class InfrastructureClient:
         response = await self._make_request('GET', '/agent/status')
         return response.get('status')
 
+    async def get_agent_status(self) -> tuple[str, str, str]:
+        """Get comprehensive agent status including container and API status.
+
+        Returns:
+            tuple: (container_status, api_status, details)
+        """
+        try:
+            # Get container status
+            container_status = await self.get_agent_container_status()
+
+            if not container_status:
+                return "🔴 Stopped", "🔴 Unreachable", "Agent container not found"
+
+            # Determine container status emoji
+            if container_status.get("status") == "running":
+                container_status_emoji = "🟢 Running"
+            else:
+                container_status_emoji = "🔴 Stopped"
+
+            # Try to check agent API health
+            try:
+                # Get port from container status
+                ports = container_status.get("ports", {})
+                agent_port = None
+                for port_mapping in ports.values():
+                    if port_mapping and len(port_mapping) > 0:
+                        agent_port = port_mapping[0].get("HostPort")
+                        break
+
+                if not agent_port:
+                    # Try to get port from environment variables
+                    env_vars = container_status.get("environment", [])
+                    for env_var in env_vars:
+                        if env_var.startswith("ANVYL_AGENT_PORT="):
+                            agent_port = env_var.split("=", 1)[1]
+                            break
+
+                if agent_port:
+                    # Check agent API health
+                    agent_url = f"http://localhost:{agent_port}/health"
+                    import requests
+                    resp = requests.get(agent_url, timeout=2)
+                    if resp.status_code == 200:
+                        api_status = "🟢 Healthy"
+                    else:
+                        api_status = "🟡 Unhealthy"
+                else:
+                    api_status = "🔴 Unknown"
+
+            except Exception:
+                api_status = "🔴 Unreachable"
+
+            # Create details string
+            details = f"Container: {container_status.get('name', 'unknown')} | Port: {agent_port or 'unknown'}"
+
+            return container_status_emoji, api_status, details
+
+        except Exception as e:
+            return "🔴 Error", "🔴 Error", f"Error getting status: {str(e)}"
+
     async def get_agent_logs(self, follow: bool = False, tail: int = 100) -> Optional[str]:
         """Get logs from the agent container."""
         params = {'follow': follow, 'tail': tail}

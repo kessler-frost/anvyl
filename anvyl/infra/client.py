@@ -230,7 +230,7 @@ class InfrastructureClient:
 
     async def get_agent_logs(self, follow: bool = False, tail: int = 100) -> Optional[str]:
         """Get logs from the agent container."""
-        params = {'follow': follow, 'tail': tail}
+        params = {'follow': str(follow).lower(), 'tail': tail}
         response = await self._make_request('GET', '/agent/logs', params=params)
         return response.get('logs')
 

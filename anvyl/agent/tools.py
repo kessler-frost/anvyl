@@ -230,3 +230,17 @@ class InfrastructureTools:
                     return f"Failed to execute command on host {host_id}"
         except Exception as e:
             return f"Error executing command: {str(e)}"
+
+
+def get_agent_tools(infrastructure_api_url: str = "http://localhost:4200"):
+    """Get tools for the agent with the given infrastructure API URL."""
+    from anvyl.infra.client import InfrastructureClient
+
+    # Create infrastructure client
+    infrastructure_client = InfrastructureClient(infrastructure_api_url)
+
+    # Create tools instance
+    tools_instance = InfrastructureTools(infrastructure_client)
+
+    # Return the tools
+    return tools_instance.get_tools()

@@ -854,64 +854,88 @@ agent_group = typer.Typer(
 )
 app.add_typer(agent_group, name="agent")
 
-@agent_group.command("start")
-def start_agent(
+@agent_group.command("up")
+def up_agent(
     lmstudio_url: str = typer.Option("http://localhost:1234/v1", "--lmstudio-url", help="LMStudio API URL"),
     lmstudio_model: str = typer.Option("llama-3.2-3b-instruct", "--model", help="LMStudio model name"),
-    port: int = typer.Option(4200, "--port", help="Agent API port"),
-    build: bool = typer.Option(True, "--build/--no-build", help="Build container image before starting"),
-    infrastructure_api_url: str = typer.Option("http://localhost:4200", "--infra-api-url", help="Infrastructure API URL")
+    port: int = typer.Option(4201, "--port", help="Agent API port"),
+    infrastructure_api_url: str = typer.Option("http://localhost:4200", "--infra-api-url", help="Infrastructure API URL"),
+    background: bool = typer.Option(True, "--background/--foreground", help="Run in background")
 ):
-    """Start the AI agent in a container using the infrastructure service."""
+    """Start the AI agent directly on the host."""
     try:
         console.print("🤖 [bold blue]Starting Anvyl AI Agent[/bold blue]")
 
-        async def start_agent_async():
-            async with await get_infrastructure_client(infrastructure_api_url) as client:
-                # Start the agent container
-                result = await client.start_agent_container(
-                    lmstudio_model=lmstudio_model,
-                    lmstudio_url=lmstudio_url,
-                    port=port
-                )
+        if background:
+            # Use background service manager
+            service_manager = get_service_manager()
 
-                if result is None:
-                    console.print("[red]❌ Failed to start agent container[/red]")
-                    raise typer.Exit(1)
+            # Check if agent is already running
+            if service_manager.is_service_running("anvyl_agent"):
+                console.print("[yellow]Agent is already running[/yellow]")
+                return
 
-                console.print(f"✅ Agent container started successfully")
+            # Start the agent service
+            success = service_manager.start_service(
+                service_name="anvyl_agent",
+                command=[
+                    sys.executable, "-m", "anvyl.agent.server",
+                    "--host", "127.0.0.1",
+                    "--port", str(port),
+                    "--infra-api-url", infrastructure_api_url,
+                    "--lmstudio-url", lmstudio_url,
+                    "--model", lmstudio_model
+                ],
+                port=port
+            )
+
+            if success:
+                console.print(f"✅ Agent started successfully in background")
                 console.print(f"🌐 Agent API: http://localhost:{port}")
                 console.print(f"📋 API Docs: http://localhost:{port}/docs")
                 console.print(f"🧠 LLM: LMStudio at {lmstudio_url}")
                 console.print(f"🤖 Model: {lmstudio_model}")
-                console.print(f"🐳 Container ID: {result.get('id', 'unknown')}")
                 console.print()
                 console.print("Use 'anvyl agent logs' to view logs")
-                console.print("Use 'anvyl agent stop' to stop the container")
+                console.print("Use 'anvyl agent down' to stop the agent")
+            else:
+                console.print("[red]❌ Failed to start agent[/red]")
+                raise typer.Exit(1)
+        else:
+            # Run in foreground
+            console.print(f"🌐 Agent API: http://localhost:{port}")
+            console.print(f"📋 API Docs: http://localhost:{port}/docs")
+            console.print(f"🧠 LLM: LMStudio at {lmstudio_url}")
+            console.print(f"🤖 Model: {lmstudio_model}")
+            console.print()
+            console.print("Starting agent server... (Press Ctrl+C to stop)")
 
-        asyncio.run(start_agent_async())
+            # Import and run the agent server directly
+            from anvyl.agent.server import run_agent_server
+            run_agent_server(
+                host="127.0.0.1",
+                port=port,
+                infrastructure_api_url=infrastructure_api_url,
+                lmstudio_url=lmstudio_url,
+                lmstudio_model=lmstudio_model
+            )
 
     except Exception as e:
         console.print(f"[red]Error starting agent: {e}[/red]")
         raise typer.Exit(1)
 
-@agent_group.command("stop")
-def stop_agent(
-    infrastructure_api_url: str = typer.Option("http://localhost:4200", "--infra-api-url", help="Infrastructure API URL")
-):
-    """Stop the AI agent container using the infrastructure service."""
+@agent_group.command("down")
+def down_agent():
+    """Stop the AI agent running on the host."""
     try:
         console.print("🛑 [bold blue]Stopping Anvyl AI Agent[/bold blue]")
 
-        async def stop_agent_async():
-            async with await get_infrastructure_client(infrastructure_api_url) as client:
-                if not await client.stop_agent_container():
-                    console.print("[red]❌ Failed to stop agent container[/red]")
-                    raise typer.Exit(1)
+        service_manager = get_service_manager()
 
-                console.print("[green]✅ Agent container stopped[/green]")
-
-        asyncio.run(stop_agent_async())
+        if service_manager.stop_service("anvyl_agent"):
+            console.print("[green]✅ Agent stopped successfully[/green]")
+        else:
+            console.print("[yellow]Agent was not running[/yellow]")
 
     except Exception as e:
         console.print(f"[red]Error stopping agent: {e}[/red]")
@@ -919,25 +943,35 @@ def stop_agent(
 
 @agent_group.command("logs")
 def logs_agent(
-    follow: bool = typer.Option(False, "--follow", "-f", help="Follow log output"),
-    tail: int = typer.Option(100, "--tail", "-n", help="Number of lines to show"),
-    infrastructure_api_url: str = typer.Option("http://localhost:4200", "--infra-api-url", help="Infrastructure API URL")
+    follow: bool = typer.Option(False, "--follow", "-f", help="Follow log output")
 ):
-    """Show logs from the AI agent container using the infrastructure service."""
+    """Show logs from the AI agent running on the host."""
     try:
         console.print("📋 [bold blue]Anvyl AI Agent Logs[/bold blue]")
 
-        async def logs_agent_async():
-            async with await get_infrastructure_client(infrastructure_api_url) as client:
-                logs = await client.get_agent_logs(follow=follow, tail=tail)
+        service_manager = get_service_manager()
 
-                if logs is None:
-                    console.print("[red]❌ Failed to get agent logs[/red]")
-                    raise typer.Exit(1)
+        if follow:
+            # Follow logs in real-time
+            log_generator = service_manager.follow_service_logs("anvyl_agent", lines=100)
+            if log_generator:
+                try:
+                    for line in log_generator:
+                        console.print(line)
+                except KeyboardInterrupt:
+                    console.print("\n[yellow]Stopped following logs[/yellow]")
+            else:
+                console.print("[yellow]No logs available[/yellow]")
+                console.print("The agent may not be running or no logs have been generated yet")
+        else:
+            # Show static logs
+            logs = service_manager.get_service_logs("anvyl_agent", lines=100)
 
+            if logs:
                 console.print(logs)
-
-        asyncio.run(logs_agent_async())
+            else:
+                console.print("[yellow]No logs available[/yellow]")
+                console.print("The agent may not be running or no logs have been generated yet")
 
     except Exception as e:
         console.print(f"[red]Error viewing agent logs: {e}[/red]")
@@ -945,116 +979,90 @@ def logs_agent(
 
 @agent_group.command("info")
 def get_agent_info(
-    port: int = typer.Option(4201, "--port", "-p", help="Agent API port"),
-    infrastructure_api_url: str = typer.Option("http://localhost:4200", "--infra-api-url", help="Infrastructure API URL")
+    port: int = typer.Option(4201, "--port", "-p", help="Agent API port")
 ):
-    """Get comprehensive information about the agent including container status and agent capabilities."""
+    """Get comprehensive information about the agent including service status and agent capabilities."""
     try:
-        async def get_agent_info_async():
-            # First check if the agent container is running
-            async with await get_infrastructure_client(infrastructure_api_url) as client:
-                container_status = await client.get_agent_container_status()
-                if not container_status:
-                    console.print("[yellow]Agent container is not running[/yellow]")
-                    console.print("[yellow]Use 'anvyl agent start' to start the agent[/yellow]")
-                    return
+        service_manager = get_service_manager()
 
-                # Display comprehensive information
-                console.print("📊 [bold blue]Anvyl AI Agent Information[/bold blue]")
+        # Check if the agent service is running
+        service_status = service_manager.get_service_status("anvyl_agent")
+        if not service_status or not service_status.get("running", False):
+            console.print("[yellow]Agent is not running[/yellow]")
+            console.print("[yellow]Use 'anvyl agent up' to start the agent[/yellow]")
+            return
 
-                # Container Information Section
-                console.print("\n[bold cyan]Container Information:[/bold cyan]")
-                from rich.table import Table
+        # Display comprehensive information
+        console.print("📊 [bold blue]Anvyl AI Agent Information[/bold blue]")
 
-                container_table = Table(show_header=False, box=None)
-                container_table.add_column("Property", style="cyan", width=15)
-                container_table.add_column("Value", style="green")
+        # Service Information Section
+        console.print("\n[bold cyan]Service Information:[/bold cyan]")
+        from rich.table import Table
 
-                container_table.add_row("Container ID", container_status.get("id", "N/A")[:12])
-                container_table.add_row("Name", container_status.get("name", "N/A"))
-                container_table.add_row("Status", container_status.get("status", "N/A"))
-                container_table.add_row("Image", container_status.get("image", "N/A"))
-                container_table.add_row("Created", container_status.get("created", "N/A"))
+        service_table = Table(show_header=False, box=None)
+        service_table.add_column("Property", style="cyan", width=15)
+        service_table.add_column("Value", style="green")
 
-                # Add ports
-                ports = container_status.get("ports", {})
-                if ports:
-                    port_str = ", ".join([f"{k} -> {v[0]['HostPort']}" for k, v in ports.items() if v])
-                    container_table.add_row("Ports", port_str)
+        service_table.add_row("Service Name", "anvyl_agent")
+        service_table.add_row("Status", "Running" if service_status.get("running") else "Stopped")
+        service_table.add_row("PID", str(service_status.get("pid", "N/A")))
+        service_table.add_row("Started", service_status.get("started_at", "N/A"))
+        service_table.add_row("Port", str(port))
 
-                console.print(container_table)
+        console.print(service_table)
 
-                # Configuration Information Section
-                console.print("\n[bold cyan]Configuration:[/bold cyan]")
-                config_table = Table(show_header=False, box=None)
-                config_table.add_column("Property", style="cyan", width=15)
-                config_table.add_column("Value", style="green")
+        # Try to get agent API information
+        try:
+            url = f"http://localhost:{port}/agent/info"
+            response = requests.get(url, timeout=5)
 
-                # Get model from labels
-                labels = container_status.get("labels", {})
-                model = labels.get("anvyl.model", "N/A")
-                lmstudio_url = labels.get("anvyl.lmstudio_url", "N/A")
+            if response.status_code == 200:
+                info = response.json()
 
-                config_table.add_row("Model", model)
-                config_table.add_row("LMStudio URL", lmstudio_url)
-                config_table.add_row("API Port", str(port))
+                # Agent Information Section
+                console.print("\n[bold cyan]Agent Information:[/bold cyan]")
+                agent_table = Table(show_header=False, box=None)
+                agent_table.add_column("Property", style="cyan", width=15)
+                agent_table.add_column("Value", style="green")
 
-                console.print(config_table)
+                agent_table.add_row("Host ID", info.get('host_id', 'N/A'))
+                agent_table.add_row("Host IP", info.get('host_ip', 'N/A'))
+                agent_table.add_row("LLM Model", info.get('llm_model', 'N/A'))
+                agent_table.add_row("Actual Model", info.get('actual_model_name', 'N/A'))
 
-                # Try to get agent API information
-                try:
-                    url = f"http://localhost:{port}/agent/info"
-                    response = requests.get(url, timeout=5)
+                # Tools information
+                tools = info.get('tools_available', [])
+                if tools:
+                    tools_str = ", ".join(tools)
+                    agent_table.add_row("Tools Available", tools_str)
+                else:
+                    agent_table.add_row("Tools Available", "None")
 
-                    if response.status_code == 200:
-                        info = response.json()
+                console.print(agent_table)
 
-                        # Agent Information Section
-                        console.print("\n[bold cyan]Agent Information:[/bold cyan]")
-                        agent_table = Table(show_header=False, box=None)
-                        agent_table.add_column("Property", style="cyan", width=15)
-                        agent_table.add_column("Value", style="green")
+                # Known hosts section
+                known_hosts = info.get("known_hosts", {})
+                if known_hosts:
+                    console.print("\n[bold cyan]Known Hosts:[/bold cyan]")
+                    hosts_table = Table()
+                    hosts_table.add_column("Host ID", style="cyan")
+                    hosts_table.add_column("IP Address", style="green")
 
-                        agent_table.add_row("Host ID", info.get('host_id', 'N/A'))
-                        agent_table.add_row("Host IP", info.get('host_ip', 'N/A'))
-                        agent_table.add_row("LLM Model", info.get('llm_model', 'N/A'))
-                        agent_table.add_row("Actual Model", info.get('actual_model_name', 'N/A'))
+                    for host_id, host_ip in known_hosts.items():
+                        hosts_table.add_row(host_id, host_ip)
 
-                        # Tools information
-                        tools = info.get('tools_available', [])
-                        if tools:
-                            tools_str = ", ".join(tools)
-                            agent_table.add_row("Tools Available", tools_str)
-                        else:
-                            agent_table.add_row("Tools Available", "None")
+                    console.print(hosts_table)
+                else:
+                    console.print("\n[bold cyan]Known Hosts:[/bold cyan] [dim]None[/dim]")
 
-                        console.print(agent_table)
+            else:
+                console.print(f"\n[bold cyan]Agent API:[/bold cyan] [yellow]Not ready (HTTP {response.status_code})[/yellow]")
+                console.print("[dim]Agent may still be starting up...[/dim]")
 
-                        # Known hosts section
-                        known_hosts = info.get("known_hosts", {})
-                        if known_hosts:
-                            console.print("\n[bold cyan]Known Hosts:[/bold cyan]")
-                            hosts_table = Table()
-                            hosts_table.add_column("Host ID", style="cyan")
-                            hosts_table.add_column("IP Address", style="green")
-
-                            for host_id, host_ip in known_hosts.items():
-                                hosts_table.add_row(host_id, host_ip)
-
-                            console.print(hosts_table)
-                        else:
-                            console.print("\n[bold cyan]Known Hosts:[/bold cyan] [dim]None[/dim]")
-
-                    else:
-                        console.print(f"\n[bold cyan]Agent API:[/bold cyan] [yellow]Not ready (HTTP {response.status_code})[/yellow]")
-                        console.print("[dim]Agent may still be starting up...[/dim]")
-
-                except requests.exceptions.RequestException as e:
-                    console.print(f"\n[bold cyan]Agent API:[/bold cyan] [yellow]Not accessible[/yellow]")
-                    console.print(f"[dim]Error: {e}[/dim]")
-                    console.print("[dim]Agent may still be starting up...[/dim]")
-
-        asyncio.run(get_agent_info_async())
+        except requests.exceptions.RequestException as e:
+            console.print(f"\n[bold cyan]Agent API:[/bold cyan] [yellow]Not accessible[/yellow]")
+            console.print(f"[dim]Error: {e}[/dim]")
+            console.print("[dim]Agent may still be starting up...[/dim]")
 
     except Exception as e:
         console.print(f"[red]Error getting agent info: {e}[/red]")

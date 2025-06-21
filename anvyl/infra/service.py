@@ -685,16 +685,21 @@ class InfrastructureService:
     def get_agent_logs(self, follow: bool = False, tail: int = 100) -> Optional[str]:
         """Get logs from the agent container."""
         if not self.docker_client:
-            return None
+            return "Error: Docker client not available"
 
         try:
             container_name = "anvyl-agent"
             container = self.docker_client.containers.get(container_name)
+
+            # Check if container is running
+            if container.status not in ["running", "restarting"]:
+                return f"Container is not running (status: {container.status}). Use 'anvyl agent start' to start the agent."
+
             return container.logs(tail=tail, follow=follow).decode('utf-8')
 
         except Exception as e:
             logger.error(f"Error getting agent logs: {e}")
-            return None
+            return f"Error getting agent logs: {str(e)}"
 
 
 # Global service instance

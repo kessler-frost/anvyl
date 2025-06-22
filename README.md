@@ -30,7 +30,9 @@ Anvyl consists of several key components:
 ### 1. Install Anvyl
 
 ```bash
-pip install anvyl
+git clone https://github.com/kessler-frost/anvyl.git
+cd anvyl
+pip install .
 ```
 
 ### 2. Start All Services

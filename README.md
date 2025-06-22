@@ -38,47 +38,65 @@ pip install .
 ### 2. Start All Services
 
 ```bash
-# Start all services (Infrastructure API, Agent, MCP Server)
-anvyl start
+# Start all services (Agent, Infrastructure API, MCP Server)
+anvyl up
 
 # Or start individual services
-anvyl infra up --background
-anvyl agent up --background
-anvyl mcp up --background
+anvyl agent up
+anvyl infra up
+anvyl mcp up
 
-# Infrastructure API at http://localhost:4200
 # Agent API at http://localhost:4202
+# Infrastructure API at http://localhost:4200
 # MCP Server at http://localhost:4201
 ```
 
-### 3. Check Service Status
+### 3. Use the AI Agent
+
+```bash
+# Query the agent
+anvyl agent query "Show me all running containers"
+anvyl agent query "Create a new nginx container on port 8080"
+anvyl agent query "What's the CPU usage on this host?"
+
+# Manage remote hosts
+anvyl agent add-host host-b 192.168.1.101
+anvyl agent query "List containers on host-b"
+```
+
+### 4. Check Service Status
 
 ```bash
 # View all service status
 anvyl status
 
 # View service logs
-anvyl infra logs
 anvyl agent logs
+anvyl infra logs
 anvyl mcp logs
 
 # Follow logs in real-time
-anvyl infra logs --follow
 anvyl agent logs --follow
+anvyl infra logs --follow
 anvyl mcp logs --follow
 ```
 
-### 4. Use the CLI
+## 🤖 AI Agent System
+
+Anvyl's AI agents can understand natural language commands and execute infrastructure tasks:
 
 ```bash
-# Show system status
-anvyl status
+# Start an agent
+anvyl agent up --model-provider-url http://localhost:11434/v1 --model llama-3.2-3b-instruct --mcp-server-url http://localhost:4201/mcp
 
-# List hosts
-anvyl host list
+# Query the agent
+anvyl agent query "Show me all running containers"
+anvyl agent query "Create a new nginx container on port 8080"
+anvyl agent query "What's the CPU usage on this host?"
 
-# List containers
-anvyl container list
+# Manage remote hosts
+anvyl agent add-host host-b 192.168.1.101
+anvyl agent query "List containers on host-b"
 ```
 
 ## 🔧 Service Management
@@ -88,7 +106,7 @@ Anvyl uses a simple, reliable service manager for unified process management:
 ### Start/Stop All Services
 ```bash
 # Start all services
-anvyl start
+anvyl up
 
 # Stop all services
 anvyl down
@@ -100,19 +118,19 @@ anvyl restart
 ### Individual Service Management
 ```bash
 # Infrastructure API
-anvyl infra up --background --port 4200
+anvyl infra up --port 4200
 anvyl infra down
 anvyl infra status
 anvyl infra logs --follow
 
 # AI Agent
-anvyl agent up --background --port 4202 --model-provider-url http://localhost:11434/v1
+anvyl agent up --port 4202 --model-provider-url http://localhost:11434/v1
 anvyl agent down
 anvyl agent status
 anvyl agent logs --follow
 
 # MCP Server
-anvyl mcp up --background --port 4201
+anvyl mcp up --port 4201
 anvyl mcp down
 anvyl mcp status
 anvyl mcp logs --follow
@@ -135,24 +153,6 @@ anvyl mcp logs --follow
 ```
 
 For detailed service management documentation, see the service manager implementation in the codebase.
-
-## 🤖 AI Agent System
-
-Anvyl's AI agents can understand natural language commands and execute infrastructure tasks:
-
-```bash
-# Start an agent
-anvyl agent up --model-provider-url http://localhost:11434/v1 --model llama-3.2-3b-instruct --mcp-server-url http://localhost:4201/mcp
-
-# Query the agent
-anvyl agent query "Show me all running containers"
-anvyl agent query "Create a new nginx container on port 8080"
-anvyl agent query "What's the CPU usage on this host?"
-
-# Manage remote hosts
-anvyl agent add-host host-b 192.168.1.101
-anvyl agent query "List containers on host-b"
-```
 
 ## 🔌 MCP Server Integration
 
@@ -210,11 +210,49 @@ For detailed MCP server information, see the MCP server implementation in the co
 
 ## 📋 CLI Commands
 
+### Agent Operations
+
+```bash
+# Start an AI agent
+anvyl agent up
+
+# Stop the agent
+anvyl agent down
+
+# Query the agent
+anvyl agent query "Your question here"
+
+# List agent hosts
+anvyl agent hosts
+
+# Add a remote host to the agent
+anvyl agent add-host <host-id> <host-ip>
+```
+
+### MCP Server Operations
+
+```bash
+# Start the MCP server
+anvyl mcp up
+
+# Check MCP server status
+anvyl mcp status
+
+# View MCP server logs
+anvyl mcp logs
+
+# Stop the MCP server
+anvyl mcp down
+
+# Run MCP server in foreground
+anvyl mcp up --foreground
+```
+
 ### Infrastructure Management
 
 ```bash
 # Start the infrastructure stack
-anvyl start
+anvyl up
 
 # Stop the infrastructure stack
 anvyl down
@@ -264,44 +302,6 @@ anvyl container exec <container-id> ls -la
 ```
 
 **Note**: Container management is not implemented yet. Containers are managed through the infrastructure API. This feature is planned for future releases.
-
-### Agent Operations
-
-```bash
-# Start an AI agent
-anvyl agent up
-
-# Stop the agent
-anvyl agent down
-
-# Query the agent
-anvyl agent query "Your question here"
-
-# List agent hosts
-anvyl agent hosts
-
-# Add a remote host to the agent
-anvyl agent add-host <host-id> <host-ip>
-```
-
-### MCP Server Operations
-
-```bash
-# Start the MCP server
-anvyl mcp up
-
-# Check MCP server status
-anvyl mcp status
-
-# View MCP server logs
-anvyl mcp logs
-
-# Stop the MCP server
-anvyl mcp down
-
-# Run MCP server in foreground
-anvyl mcp up --foreground
-```
 
 ## 🏗️ Project Structure
 
@@ -355,7 +355,7 @@ anvyl/
 
 4. **Start development environment**:
    ```bash
-   anvyl start
+   anvyl up
    ```
 
 ### AI Agent Development

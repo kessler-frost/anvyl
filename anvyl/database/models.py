@@ -2,7 +2,7 @@
 Database models for Anvyl infrastructure orchestrator
 """
 
-from datetime import datetime, UTC, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, List, Any
 from sqlmodel import SQLModel, Field, create_engine, Session, select
 import json
@@ -17,8 +17,8 @@ class Host(SQLModel, table=True):
     id: str = Field(primary_key=True)
     name: str = Field(index=True)
     ip: str = Field(index=True)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     # Enhanced host tracking fields
     os: Optional[str] = Field(default=None)
@@ -47,7 +47,7 @@ class Host(SQLModel, table=True):
     def set_metadata(self, metadata: Dict[str, Any]) -> None:
         """Set metadata from a dictionary."""
         self.host_metadata = json.dumps(metadata)
-        self.updated_at = datetime.now(UTC)
+        self.updated_at = datetime.now(timezone.utc)
 
     def get_resources(self) -> Dict[str, Any]:
         """Get resources as a dictionary."""
@@ -62,7 +62,7 @@ class Host(SQLModel, table=True):
     def set_resources(self, resources: Dict[str, Any]) -> None:
         """Set resources from a dictionary."""
         self.resources = json.dumps(resources)
-        self.updated_at = datetime.now(UTC)
+        self.updated_at = datetime.now(timezone.utc)
 
     def get_tags(self) -> List[str]:
         """Get tags as list."""
@@ -77,7 +77,7 @@ class Host(SQLModel, table=True):
     def set_tags(self, tags: List[str]) -> None:
         """Set tags from list."""
         self.tags = json.dumps(tags)
-        self.updated_at = datetime.now(UTC)
+        self.updated_at = datetime.now(timezone.utc)
 
 class Container(SQLModel, table=True):
     """Container model representing containers managed by Anvyl."""
@@ -87,8 +87,8 @@ class Container(SQLModel, table=True):
     image: str = Field(index=True)
     host_id: str = Field(foreign_key="host.id", index=True)
     status: str = Field(index=True)  # running, stopped, exited, etc.
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     # Container configuration
     ports: str = Field(default="[]")  # JSON string of port mappings
@@ -112,7 +112,7 @@ class Container(SQLModel, table=True):
     def set_ports(self, ports: List[str]):
         """Set ports from list."""
         self.ports = json.dumps(ports)
-        self.updated_at = datetime.now(UTC)
+        self.updated_at = datetime.now(timezone.utc)
 
     def get_volumes(self) -> List[str]:
         """Get volumes as list."""
@@ -125,7 +125,7 @@ class Container(SQLModel, table=True):
     def set_volumes(self, volumes: List[str]):
         """Set volumes from list."""
         self.volumes = json.dumps(volumes)
-        self.updated_at = datetime.now(UTC)
+        self.updated_at = datetime.now(timezone.utc)
 
     def get_environment(self) -> List[str]:
         """Get environment variables as list."""
@@ -138,7 +138,7 @@ class Container(SQLModel, table=True):
     def set_environment(self, environment: List[str]):
         """Set environment variables from list."""
         self.environment = json.dumps(environment)
-        self.updated_at = datetime.now(UTC)
+        self.updated_at = datetime.now(timezone.utc)
 
     def get_labels(self) -> Dict[str, str]:
         """Get labels as dictionary."""
@@ -151,13 +151,13 @@ class Container(SQLModel, table=True):
     def set_labels(self, labels: Dict[str, str]):
         """Set labels from dictionary."""
         self.labels = json.dumps(labels)
-        self.updated_at = datetime.now(UTC)
+        self.updated_at = datetime.now(timezone.utc)
 
 class SystemStatus(SQLModel, table=True):
     """System status model for tracking overall Anvyl system state."""
 
     id: str = Field(primary_key=True, default="system")
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     # Component counts
     total_hosts: int = Field(default=0)
@@ -186,7 +186,7 @@ class SystemStatus(SQLModel, table=True):
     def set_system_info(self, info: Dict[str, Any]) -> None:
         """Set system info from dictionary."""
         self.system_info = json.dumps(info)
-        self.updated_at = datetime.now(UTC)
+        self.updated_at = datetime.now(timezone.utc)
 
 class ServiceStatus(SQLModel, table=True):
     """Service status model for tracking individual service instances."""
@@ -200,8 +200,8 @@ class ServiceStatus(SQLModel, table=True):
     started_at: Optional[datetime] = Field(default=None)
     stopped_at: Optional[datetime] = Field(default=None)
     last_heartbeat: Optional[datetime] = Field(default=None)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     # Service configuration
     config: str = Field(default="{}")  # JSON string for service configuration
@@ -224,36 +224,36 @@ class ServiceStatus(SQLModel, table=True):
     def set_config(self, config: Dict[str, Any]) -> None:
         """Set service configuration from dictionary."""
         self.config = json.dumps(config)
-        self.updated_at = datetime.now(UTC)
+        self.updated_at = datetime.now(timezone.utc)
 
     def update_heartbeat(self) -> None:
         """Update the last heartbeat timestamp."""
-        self.last_heartbeat = datetime.now(UTC)
-        self.updated_at = datetime.now(UTC)
+        self.last_heartbeat = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(timezone.utc)
 
     def mark_running(self, pid: int, port: Optional[int] = None) -> None:
         """Mark service as running."""
         self.status = "running"
         self.pid = pid
         self.port = port
-        self.started_at = datetime.now(UTC)
-        self.updated_at = datetime.now(UTC)
+        self.started_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(timezone.utc)
         self.update_heartbeat()
 
     def mark_stopped(self) -> None:
         """Mark service as stopped."""
         self.status = "stopped"
         self.pid = None
-        self.stopped_at = datetime.now(UTC)
-        self.updated_at = datetime.now(UTC)
+        self.stopped_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(timezone.utc)
 
     def mark_error(self, error: str) -> None:
         """Mark service as having an error."""
         self.status = "error"
         self.last_error = error
-        self.last_error_at = datetime.now(UTC)
+        self.last_error_at = datetime.now(timezone.utc)
         self.error_count += 1
-        self.updated_at = datetime.now(UTC)
+        self.updated_at = datetime.now(timezone.utc)
 
 class DatabaseManager:
     """Database manager for Anvyl."""
@@ -303,7 +303,7 @@ class DatabaseManager:
     def update_host(self, host: Host) -> Host:
         """Update a host."""
         with self.get_session() as session:
-            host.updated_at = datetime.now(UTC)
+            host.updated_at = datetime.now(timezone.utc)
             session.add(host)
             session.commit()
             session.refresh(host)
@@ -314,7 +314,7 @@ class DatabaseManager:
         with self.get_session() as session:
             host = session.get(Host, host_id)
             if host:
-                host.last_seen = datetime.now(UTC)
+                host.last_seen = datetime.now(timezone.utc)
                 host.status = "online"
                 session.add(host)
                 session.commit()
@@ -383,7 +383,7 @@ class DatabaseManager:
     def update_container(self, container: Container) -> Container:
         """Update a container."""
         with self.get_session() as session:
-            container.updated_at = datetime.now(UTC)
+            container.updated_at = datetime.now(timezone.utc)
             session.add(container)
             session.commit()
             session.refresh(container)
@@ -424,7 +424,7 @@ class DatabaseManager:
                 if hasattr(status, key):
                     setattr(status, key, value)
 
-            status.updated_at = datetime.now(UTC)
+            status.updated_at = datetime.now(timezone.utc)
             session.add(status)
             session.commit()
             session.refresh(status)
@@ -451,8 +451,8 @@ class DatabaseManager:
             status.online_hosts = len(online_hosts)
             status.total_containers = len(total_containers)
             status.running_containers = len(running_containers)
-            status.last_sync = datetime.now(UTC)
-            status.updated_at = datetime.now(UTC)
+            status.last_sync = datetime.now(timezone.utc)
+            status.updated_at = datetime.now(timezone.utc)
 
             session.add(status)
             session.commit()
@@ -497,7 +497,7 @@ class DatabaseManager:
                 if hasattr(service_status, key):
                     setattr(service_status, key, value)
 
-            service_status.updated_at = datetime.now(UTC)
+            service_status.updated_at = datetime.now(timezone.utc)
             session.add(service_status)
             session.commit()
             session.refresh(service_status)
@@ -558,7 +558,7 @@ class DatabaseManager:
 
     def cleanup_stale_services(self, max_age_hours: int = 24) -> int:
         """Clean up stale service records (older than max_age_hours)."""
-        cutoff_time = datetime.now(UTC) - timedelta(hours=max_age_hours)
+        cutoff_time = datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
         with self.get_session() as session:
             stale_services = session.exec(select(ServiceStatus).where(
                 ServiceStatus.updated_at < cutoff_time,

@@ -1,0 +1,30 @@
+# Include important project files
+include README.md
+include LICENSE
+include requirements.txt
+include pytest.ini
+
+# Include the main anvyl package
+recursive-include anvyl *.py
+recursive-include anvyl *.proto
+
+# Include tests (but they won't be installed)
+recursive-include tests *.py
+
+# Include documentation
+recursive-include docs *.md *.rst
+
+# Exclude development and build artifacts
+global-exclude *.pyc
+global-exclude *.pyo
+global-exclude *.pyd
+global-exclude __pycache__
+global-exclude .DS_Store
+global-exclude *.egg-info
+global-exclude .pytest_cache
+global-exclude .coverage
+global-exclude htmlcov
+global-exclude .mypy_cache
+
+# Exclude tests from installation
+recursive-exclude tests *

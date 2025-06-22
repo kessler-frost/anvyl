@@ -1,0 +1,130 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "anvyl"
+version = "0.1.0"
+description = "Anvyl Infrastructure Orchestrator - Self-hosted infrastructure management platform"
+readme = "README.md"
+authors = [{name = "Anvyl Team", email = "team@anvyl.dev"}]
+license = {text = "MIT"}
+requires-python = ">=3.10"
+keywords = ["infrastructure", "orchestration", "containers", "docker", "cli", "devops", "automation"]
+
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: System :: Systems Administration",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: System :: Distributed Computing",
+    "Topic :: Software Development :: Build Tools",
+]
+
+dependencies = [
+    # Container management
+    "docker>=6.0.0",
+
+    # Database and API
+    "sqlmodel>=0.0.8",
+    "fastapi>=0.115.0",
+    "uvicorn>=0.22.0",
+
+    # CLI framework
+    "typer>=0.9.0",
+    "rich>=13.0.0",
+
+    # Core utilities
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    "psutil>=5.9.0",
+
+    # AI Agent dependencies - Full Pydantic AI
+    "pydantic-ai>=0.1.0",
+    "aiohttp>=3.9.0",
+    "requests>=2.31.0",
+
+    # FastMCP Server
+    "fastmcp>=0.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    # Code formatting and linting
+    "black>=23.11.0",
+    "isort>=5.12.0",
+    "mypy>=1.7.1",
+
+    # Testing framework
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.12.0",
+    "pytest-grpc>=0.8.0",
+    "pytest-docker>=2.0.1",
+]
+
+[project.scripts]
+anvyl = "anvyl.cli:app"
+
+[project.urls]
+Homepage = "https://github.com/kessler-frost/anvyl"
+Documentation = "https://github.com/kessler-frost/anvyl#readme"
+Repository = "https://github.com/kessler-frost/anvyl"
+"Bug Tracker" = "https://github.com/kessler-frost/anvyl/issues"
+Changelog = "https://github.com/kessler-frost/anvyl/releases"
+
+[tool.black]
+line-length = 88
+target-version = ['py312']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  anvyl/generated/.*\.py$
+)/
+'''
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+include_trailing_comma = true
+force_grid_wrap = 0
+use_parentheses = true
+ensure_newline_before_comments = true
+line_length = 88
+skip_glob = ["anvyl/generated/*.py"]
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+exclude = ['anvyl/generated/.*\.py$']
+
+[[tool.mypy.overrides]]
+module = [
+    "docker.*",
+    "grpc.*",
+    "anvyl.generated.*",
+]
+ignore_missing_imports = true
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["anvyl*"]
+exclude = ["tests*"]
+
+[tool.setuptools.package-data]
+"anvyl" = ["protos/*.proto"]
+"anvyl.generated" = ["*.py"]
+
+# Note: Protobuf files are auto-generated when the package is first imported

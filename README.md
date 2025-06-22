@@ -54,14 +54,17 @@ anvyl mcp up
 ### 3. Use the AI Agent
 
 ```bash
-# Query the agent
+# Query the agent directly
+anvyl agent "Show me all running containers"
+anvyl agent "Create a new nginx container on port 8080"
+anvyl agent "What's the CPU usage on this host?"
+
+# Or use explicit query command
 anvyl agent query "Show me all running containers"
-anvyl agent query "Create a new nginx container on port 8080"
-anvyl agent query "What's the CPU usage on this host?"
 
 # Manage remote hosts
 anvyl agent add-host host-b 192.168.1.101
-anvyl agent query "List containers on host-b"
+anvyl agent "List containers on host-b" --host-id host-b
 ```
 
 ### 4. Check Service Status
@@ -87,16 +90,19 @@ Anvyl's AI agents can understand natural language commands and execute infrastru
 
 ```bash
 # Start an agent
-anvyl agent up --model-provider-url http://localhost:11434/v1 --model llama-3.2-3b-instruct --mcp-server-url http://localhost:4201/mcp
+anvyl agent up --model-provider-url http://localhost:1234/v1 --model qwen/qwen3-4b --mcp-server-url http://localhost:4201/mcp
 
-# Query the agent
+# Query the agent directly
+anvyl agent "Show me all running containers"
+anvyl agent "Create a new nginx container on port 8080"
+anvyl agent "What's the CPU usage on this host?"
+
+# Or use explicit query command
 anvyl agent query "Show me all running containers"
-anvyl agent query "Create a new nginx container on port 8080"
-anvyl agent query "What's the CPU usage on this host?"
 
 # Manage remote hosts
 anvyl agent add-host host-b 192.168.1.101
-anvyl agent query "List containers on host-b"
+anvyl agent "List containers on host-b" --host-id host-b
 ```
 
 ## 🔧 Service Management
@@ -124,7 +130,7 @@ anvyl infra status
 anvyl infra logs --follow
 
 # AI Agent
-anvyl agent up --port 4202 --model-provider-url http://localhost:11434/v1
+anvyl agent up --port 4202 --model-provider-url http://localhost:1234/v1
 anvyl agent down
 anvyl agent status
 anvyl agent logs --follow
@@ -219,8 +225,23 @@ anvyl agent up
 # Stop the agent
 anvyl agent down
 
-# Query the agent
+# Query the agent (direct method)
+anvyl agent "Your question here"
+
+# Query the agent (explicit command)
 anvyl agent query "Your question here"
+
+# Get agent information
+anvyl agent info
+
+# Show agent logs
+anvyl agent logs
+
+# Follow agent logs in real-time
+anvyl agent logs --follow
+
+# Restart the agent
+anvyl agent restart
 
 # List agent hosts
 anvyl agent hosts
@@ -244,27 +265,41 @@ anvyl mcp logs
 # Stop the MCP server
 anvyl mcp down
 
-# Run MCP server in foreground
-anvyl mcp up --foreground
+# Restart the MCP server
+anvyl mcp restart
 ```
 
 ### Infrastructure Management
 
 ```bash
-# Start the infrastructure stack
+# Start all services
 anvyl up
 
-# Stop the infrastructure stack
+# Stop all services
 anvyl down
 
-# Show infrastructure status
+# Show all services status
 anvyl status
 
-# Show system logs
+# Restart all services
+anvyl restart
+
+# Purge all data (with confirmation)
+anvyl purge
+
+# Force purge all data (no confirmation)
+anvyl purge --force
+
+# Update service heartbeats
+anvyl heartbeat
+
+# Individual infrastructure API management
+anvyl infra up
+anvyl infra down
+anvyl infra status
 anvyl infra logs
-
-# Show overall system status
-anvyl status
+anvyl infra logs --follow
+anvyl infra restart
 ```
 
 ### Host Operations
@@ -362,10 +397,10 @@ anvyl/
 
 To use the AI agent features, you'll need a model provider running locally:
 
-1. **Install a model provider**: Options include LMStudio, Ollama, or other OpenAI-compatible providers
-2. **Load a model**: Download and load a model like `llama-3.2-3b-instruct`
+1. **Install a model provider**: LM Studio (recommended), Ollama, or other OpenAI-compatible providers
+2. **Load a model**: Download and load a model like `qwen/qwen3-4b`
 3. **Start the API server**: Enable the local server in your model provider
-4. **Start Anvyl agent**: `anvyl agent up --model-provider-url http://localhost:11434/v1 --model llama-3.2-3b-instruct --mcp-server-url http://localhost:4201/mcp`
+4. **Start Anvyl agent**: `anvyl agent up --model-provider-url http://localhost:1234/v1 --model qwen/qwen3-4b --mcp-server-url http://localhost:4201/mcp`
 
 ## 📚 Examples
 

@@ -79,29 +79,3 @@ def update_settings(**kwargs) -> None:
     for key, value in kwargs.items():
         if hasattr(settings, key):
             setattr(settings, key, value)
-
-
-# Convenience functions for common configuration values
-def get_model_provider_url() -> str:
-    """Get the model provider URL."""
-    return settings.model_provider_url
-
-
-def get_mcp_server_url() -> str:
-    """Get the MCP server URL."""
-    return settings.mcp_server_url
-
-
-def get_agent_port() -> int:
-    """Get the agent port."""
-    return settings.agent_port
-
-
-def get_infra_port() -> int:
-    """Get the infrastructure API port."""
-    return settings.infra_port
-
-
-def get_mcp_port() -> int:
-    """Get the MCP server port."""
-    return settings.mcp_port

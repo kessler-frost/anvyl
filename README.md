@@ -2,7 +2,7 @@
 
 A modern, self-hosted infrastructure management platform that uses AI agents to manage infrastructure across multiple hosts.
 
-Note: Alpha Stage
+Just small weekend project, so treat nicely thanks :)
 
 ## 🚀 Features
 

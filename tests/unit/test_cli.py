@@ -363,7 +363,7 @@ class TestCLIAgentManagement:
         mock_response.json.return_value = {
             "host_id": "host123",
             "host_ip": "127.0.0.1",
-            "llm_model": "llama3.2:latest",
+                            "llm_model": "qwen/qwen3-4b",
             "tools_available": ["list_containers", "get_host_info"],
             "known_hosts": {"host456": "192.168.1.100"}
         }
@@ -374,7 +374,7 @@ class TestCLIAgentManagement:
         assert result.exit_code == 0
         assert "Agent Information" in result.stdout
         assert "host123" in result.stdout
-        assert "llama3.2:latest" in result.stdout
+        assert "qwen/qwen3-4b" in result.stdout
 
 
 class TestCLIUtilityCommands:

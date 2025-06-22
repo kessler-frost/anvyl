@@ -22,7 +22,7 @@ class AnvylSettings(BaseSettings):
 
     # Model Provider Configuration
     model_provider_url: str = "http://localhost:1234/v1"
-    model_name: str = "llama3.2:latest"
+    model_name: str = "qwen/qwen3-4b"
 
     # Infrastructure API Configuration
     infra_host: str = "127.0.0.1"

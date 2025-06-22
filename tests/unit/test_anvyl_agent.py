@@ -8,7 +8,7 @@ import json
 from unittest.mock import Mock, patch, AsyncMock, MagicMock
 from datetime import datetime
 
-from anvyl.agent.core import AnvylAgent, HostAgent
+from anvyl.agent.core import AnvylAgent
 from anvyl.agent.communication import AgentMessage, AgentCommunication
 from anvyl.config import get_settings
 
@@ -106,7 +106,7 @@ class TestHostAgentModelInitialization:
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
-            "data": [{"id": "llama-3.2-3b-instruct"}]
+                            "data": [{"id": "qwen/qwen3-4b"}]
         }
         mock_requests.return_value = mock_response
 
@@ -118,7 +118,7 @@ class TestHostAgentModelInitialization:
             model_provider_url="http://localhost:11434/v1"
         )
 
-        assert agent.actual_model_name == "llama-3.2-3b-instruct"
+        assert agent.actual_model_name == "qwen/qwen3-4b"
         assert agent.model is not None
 
     @patch('anvyl.agent.core.get_infrastructure_client')
@@ -397,7 +397,7 @@ class TestHostAgentInfo:
         mock_tool2.__name__ = "get_host_info"
         mock_tools = [mock_tool1, mock_tool2]
 
-        with patch.object(AnvylAgent, '_initialize_model', return_value=(Mock(), "llama-3.2")):
+        with patch.object(AnvylAgent, '_initialize_model', return_value=(Mock(), "qwen/qwen3-4b")):
             host_agent = AnvylAgent(
                 communication=mock_communication,
                 tools=mock_tools,
@@ -410,7 +410,7 @@ class TestHostAgentInfo:
 
             assert info["host_id"] == "test-host"
             assert info["host_ip"] == "127.0.0.1"
-            assert info["llm_model"] == "llama-3.2"
+            assert info["llm_model"] == "qwen/qwen3-4b"
             assert "list_containers" in info["tools_available"]
             assert "get_host_info" in info["tools_available"]
             assert info["known_hosts"] == {"host1": "192.168.1.100"}

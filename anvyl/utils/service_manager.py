@@ -14,6 +14,8 @@ from pathlib import Path
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 
+import psutil
+
 from anvyl.database.models import DatabaseManager
 from anvyl.config import get_settings
 
@@ -298,7 +300,6 @@ class SimpleServiceManager:
 
             # Check for any processes with the same name (additional safety)
             try:
-                import psutil
                 for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
                     try:
                         cmdline = ' '.join(proc.info['cmdline']) if proc.info['cmdline'] else ''
@@ -500,7 +501,6 @@ class SimpleServiceManager:
 
             # Additional cleanup: check for any processes with the same name
             try:
-                import psutil
                 for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
                     try:
                         cmdline = ' '.join(proc.info['cmdline']) if proc.info['cmdline'] else ''
@@ -624,7 +624,6 @@ class SimpleServiceManager:
 
             # Get process info
             try:
-                import psutil
                 process = psutil.Process(pid)
                 start_time = datetime.fromtimestamp(process.create_time())
                 runtime = datetime.now() - start_time
@@ -706,7 +705,6 @@ class SimpleServiceManager:
                     print(logs, end='')
 
             # Follow the log file
-            import time
             with open(log_file, 'r') as f:
                 # Seek to end of file
                 f.seek(0, 2)

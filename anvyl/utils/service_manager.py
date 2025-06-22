@@ -882,7 +882,7 @@ class SimpleServiceManager:
             services_started = []
 
             # 1. Start infrastructure API
-            if self.start_infrastructure_api(infra_host, infra_port):
+            if self.start_infrastructure_api(host=infra_host, port=infra_port):
                 services_started.append("infrastructure-api")
                 logger.info("Infrastructure API started")
             else:

@@ -33,10 +33,10 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.prompt import Confirm
 from rich.table import Table
 
-# Local imports
-from anvyl.agent.server import start_agent_server
+# Local imports - Remove problematic imports that cause pydantic conflicts
+# from anvyl.agent.server import start_agent_server  # This causes import issues
 from anvyl.database.models import DatabaseManager
-from anvyl.infra.api import main
+# from anvyl.infra.api import main  # This causes import issues
 from anvyl.infra.client import get_infrastructure_client
 from anvyl.infra.service import get_infrastructure_service
 from anvyl.utils import get_service_manager
@@ -73,8 +73,26 @@ def get_project_root() -> str:
     # If not found, assume current directory
     return os.getcwd()
 
+def start_agent_server(host_id: str, host_ip: str, port: int, mcp_server_url: str, model_provider_url: str):
+    """Start the agent server using subprocess to avoid import issues."""
+    try:
+        cmd = [
+            sys.executable, "-m", "anvyl.agent.server",
+            "--host-id", host_id,
+            "--host-ip", host_ip,
+            "--port", str(port),
+            "--mcp-server-url", mcp_server_url,
+            "--model-provider-url", model_provider_url
+        ]
+
+        console.print(f"🚀 Starting agent server with command: {' '.join(cmd)}")
+        subprocess.run(cmd)
+    except Exception as e:
+        console.print(f"[red]Error starting agent server: {e}[/red]")
+        raise typer.Exit(1)
+
 # UI and Infrastructure Management Commands
-@app.command("start")
+@app.command("up")
 def start_all(
     infra_port: int = typer.Option(settings.infra_port, "--infra-port", help="Infrastructure API port"),
     agent_port: int = typer.Option(settings.agent_port, "--agent-port", help="Agent port"),
@@ -373,7 +391,7 @@ def purge_data(
                 console.print(f"✅ [green]Removed database file[/green]")
 
         console.print("\n🎉 [bold green]Anvyl data purged successfully![/bold green]")
-        console.print("\n💡 [dim]You can now start fresh with 'anvyl start'[/dim]")
+        console.print("\n💡 [dim]You can now start fresh with 'anvyl up'[/dim]")
 
     except Exception as e:
         console.print(f"[red]Error during purge: {e}[/red]")

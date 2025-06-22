@@ -126,7 +126,7 @@ def start_all(
                 skipped_services.append("anvyl-infrastructure-api")
             else:
                 progress.update(task, description="Starting infrastructure API...")
-                if service_manager.start_infrastructure_api(infra_port):
+                if service_manager.start_infrastructure_api(host=settings.infra_host, port=infra_port):
                     started_services.append("anvyl-infrastructure-api")
                     console.print("✅ [green]Infrastructure API started[/green]")
                 else:
@@ -196,9 +196,9 @@ def start_all(
 
 @app.command("down")
 def stop_infrastructure():
-    """Stop the Anvyl infrastructure stack."""
+    """Stop all Anvyl services."""
     try:
-        console.print("🛑 [bold red]Stopping Anvyl Infrastructure Stack[/bold red]")
+        console.print("🛑 [bold red]Stopping Anvyl Services[/bold red]")
 
         # Get service manager
         service_manager = get_service_manager()
@@ -213,54 +213,70 @@ def stop_infrastructure():
 
         console.print(f"📋 Found {len(running_services)} running service(s): {', '.join(running_services)}")
 
+        console.print("🏗️ Stopping services in reverse dependency order...")
+
         with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
             # Stop services individually with better feedback
             stopped_services = []
             failed_services = []
+            skipped_services = []
+            task = progress.add_task("Stopping services...", total=None)
 
-            # Stop agent first
+            # Stop agent first (reverse order from start)
             if "anvyl-agent" in running_services:
-                progress.update(progress.add_task("Stopping agent service...", total=None))
+                progress.update(task, description="Stopping agent service...")
                 if service_manager.stop_agent_service():
                     stopped_services.append("anvyl-agent")
                     console.print("✅ [green]Agent service stopped[/green]")
                 else:
                     failed_services.append("anvyl-agent")
                     console.print("❌ [red]Failed to stop agent service[/red]")
+            else:
+                skipped_services.append("anvyl-agent")
 
             # Stop MCP server
             if "anvyl-mcp-server" in running_services:
-                progress.update(progress.add_task("Stopping MCP server...", total=None))
+                progress.update(task, description="Stopping MCP server...")
                 if service_manager.stop_mcp_server():
                     stopped_services.append("anvyl-mcp-server")
                     console.print("✅ [green]MCP server stopped[/green]")
                 else:
                     failed_services.append("anvyl-mcp-server")
                     console.print("❌ [red]Failed to stop MCP server[/red]")
+            else:
+                skipped_services.append("anvyl-mcp-server")
 
-            # Stop infrastructure API
+            # Stop infrastructure API last
             if "anvyl-infrastructure-api" in running_services:
-                progress.update(progress.add_task("Stopping infrastructure API...", total=None))
+                progress.update(task, description="Stopping infrastructure API...")
                 if service_manager.stop_infrastructure_api():
                     stopped_services.append("anvyl-infrastructure-api")
                     console.print("✅ [green]Infrastructure API stopped[/green]")
                 else:
                     failed_services.append("anvyl-infrastructure-api")
                     console.print("❌ [red]Failed to stop infrastructure API[/red]")
+            else:
+                skipped_services.append("anvyl-infrastructure-api")
+
+            progress.update(task, description="Services stopped", visible=False)
 
         # Summary
         if stopped_services and not failed_services:
-            console.print(f"\n✅ [bold green]All services stopped successfully! ({len(stopped_services)} services)[/bold green]")
+            console.print(f"\n✅ [bold green]All services stopped successfully! ({len(stopped_services)} stopped)[/bold green]")
         elif stopped_services and failed_services:
             console.print(f"\n⚠️ [yellow]Partial success: {len(stopped_services)} stopped, {len(failed_services)} failed[/yellow]")
             console.print(f"[red]Failed services: {', '.join(failed_services)}[/red]")
             raise typer.Exit(1)
         elif failed_services:
-            console.print(f"\n❌ [red]Failed to stop any services: {', '.join(failed_services)}[/red]")
+            console.print(f"\n❌ [red]Failed to stop services: {', '.join(failed_services)}[/red]")
             raise typer.Exit(1)
+        else:
+            console.print(f"\n✅ [bold green]No services were running[/bold green]")
+
+        console.print("💡 Use 'anvyl up' to start the services again")
 
     except Exception as e:
-        console.print(f"[red]Error stopping infrastructure: {e}[/red]")
+        console.print(f"[red]Error stopping services: {e}[/red]")
         raise typer.Exit(1)
 
 @app.command("status")

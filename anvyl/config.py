@@ -5,7 +5,6 @@ This module provides centralized configuration management using pydantic-setting
 All default values for the Anvyl system are defined here.
 """
 
-import os
 from typing import Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 

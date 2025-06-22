@@ -65,12 +65,7 @@ class InfrastructureTools:
                 self._mcp_server = None
         return self._mcp_server
 
-    def get_tools(self):
-        """Get all available tools as a list of tool functions."""
-        # This method is kept for backward compatibility but should not be used
-        # The agent should use mcp_servers instead
-        logger.warning("get_tools() is deprecated. Use get_mcp_server() instead.")
-        return []
+    # Removed deprecated get_tools() method - functionality replaced by MCP server integration
 
 
 class AnvylAgent:
@@ -370,7 +365,4 @@ MCP Server: {self.mcp_server_url}
         }
 
 
-def get_agent_tools(mcp_server_url: str = None):
-    """Get agent tools with MCP server integration."""
-    mcp_server_url = mcp_server_url or settings.mcp_server_url
-    return InfrastructureTools(mcp_server_url)
+# Removed unused get_agent_tools function - functionality is now integrated into AnvylAgent class

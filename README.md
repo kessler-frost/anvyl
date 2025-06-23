@@ -1,75 +1,66 @@
-# Anvyl - AI-Powered Infrastructure Management
+# Anvyl - Simple AI Infrastructure Management
 
-A modern, self-hosted infrastructure management platform that uses AI agents to manage infrastructure across multiple hosts.
+> **Simplicity is key.** Manage your infrastructure with plain English, not complex commands.
 
-## 🚀 Features
+Anvyl makes infrastructure management effortless. Just tell it what you want in natural language, and it handles the complexity for you.
 
-- **AI Agent System**: Natural language infrastructure management
-- **Container Orchestration**: Docker container management via API
-- **CLI Interface**: Comprehensive command-line automation
-- **MCP Server**: Integration with AI applications like Claude Desktop
-- **Service Management**: Unified process management with PID files
+## Why Simple?
 
-## 🚀 Quick Start
+Infrastructure shouldn't be complicated. Anvyl strips away the complexity:
 
-### 1. Install Anvyl
+- **One command to start everything**: `anvyl up`
+- **Plain English queries**: "Show me running containers"
+- **Zero configuration**: Works out of the box
+- **Single installation**: `pip install .`
 
+## Quick Start (3 steps)
+
+### 1. Install
 ```bash
 git clone https://github.com/kessler-frost/anvyl.git
 cd anvyl
 pip install .
 ```
 
-### 2. Start All Services
-
+### 2. Start
 ```bash
-# Start all services (Agent, Infrastructure API, MCP Server)
 anvyl up
-
-# Or start individual services
-anvyl agent up
-anvyl infra up
-anvyl mcp up
-
-# Agent API at http://localhost:4202
-# Infrastructure API at http://localhost:4200
-# MCP Server at http://localhost:4201
 ```
 
-### 3. Use the AI Agent
-
+### 3. Ask
 ```bash
-# Query the agent directly
 anvyl agent "Show me all running containers"
-anvyl agent "Create a new nginx container on port 8080"
-anvyl agent "What's the CPU usage on this host?"
-
-# Or use explicit query command
-anvyl agent query "Show me all running containers"
-
-# Manage remote hosts
-anvyl agent add-host host-b 192.168.1.101
-anvyl agent "List containers on host-b" --host-id host-b
+anvyl agent "Create an nginx container on port 8080"
+anvyl agent "What's the CPU usage?"
 ```
 
-### 4. Check Service Status and Use AI Agent
+That's it. No complex configuration files, no learning curve.
 
+## What You Can Do
+
+**Container Management**
 ```bash
-# Check status
-anvyl status
-
-# Query the AI agent
-anvyl agent "Show me all running containers"
-anvyl agent "Create a new nginx container on port 8080"
-
-# View logs
-anvyl agent logs
-anvyl infra logs
+anvyl agent "List all containers"
+anvyl agent "Start a Redis container"
+anvyl agent "Stop the nginx container"
 ```
 
-## 🔌 MCP Server Integration
+**System Monitoring**
+```bash
+anvyl agent "Show CPU usage"
+anvyl agent "Check disk space"
+anvyl agent "What services are running?"
+```
 
-Integrate with Claude Desktop by adding this to your configuration:
+**Remote Management**
+```bash
+anvyl agent add-host server1 192.168.1.100
+anvyl agent "List containers on server1" --host-id server1
+```
+
+## Connect to Claude Desktop
+
+Add this simple configuration:
 
 ```json
 {
@@ -82,38 +73,36 @@ Integrate with Claude Desktop by adding this to your configuration:
 }
 ```
 
-Then ask Claude to manage your infrastructure: "Show me all running containers", "Create an nginx server", etc.
+Now ask Claude directly: "Show me my infrastructure", "Deploy nginx", etc.
 
-## 📋 CLI Commands
+## Simple Commands
 
 ```bash
-# Service management
-anvyl up                    # Start all services
-anvyl down                  # Stop all services
-anvyl status                # Show service status
-anvyl restart               # Restart all services
+anvyl up           # Start everything
+anvyl down         # Stop everything  
+anvyl status       # Check status
+anvyl restart      # Restart all
 
-# AI Agent
-anvyl agent "Your query"    # Query the agent
-anvyl agent up/down/logs    # Manage agent service
-anvyl agent add-host <id> <ip>  # Add remote host
-
-# Individual services
-anvyl infra up/down/status/logs
-anvyl mcp up/down/status/logs
+# That's all you need to remember
 ```
 
-## 🛠️ Development
+## For Developers
 
-**Prerequisites**: Python 3.10+, Docker Desktop, LM Studio (recommended)
+**Requirements**: Python 3.10+, Docker
 
 ```bash
 git clone https://github.com/kessler-frost/anvyl.git
 cd anvyl
-pip install . -e
+pip install -e .
 anvyl up
 ```
 
-## 📄 License
+Simple as that.
+
+---
+
+**Remember**: If it feels complicated, we've failed. Infrastructure management should be simple.
+
+## License
 
 MIT License - see [LICENSE](LICENSE) for details.

@@ -22,7 +22,12 @@ cd anvyl
 pip install .
 ```
 
-### 2. Start
+### 2. Start Your AI Model
+You need either:
+- **LM Studio** running on `http://localhost:1234` (recommended)
+- **Ollama** running on `http://localhost:11434` (update port in config if needed)
+
+### 3. Start Anvyl
 ```bash
 anvyl up
 ```
@@ -122,12 +127,15 @@ Still simple, just more control when you need it.
 
 ## For Developers
 
-**Requirements**: Python 3.10+, Docker
+**Requirements**: Python 3.10+, Docker, LM Studio or Ollama
 
 ```bash
 git clone https://github.com/kessler-frost/anvyl.git
 cd anvyl
 pip install -e .
+
+# Make sure LM Studio is running on localhost:1234
+# OR Ollama is running on localhost:11434
 anvyl up
 ```
 

@@ -1,12 +1,12 @@
-# Anvyl - Simple AI Infrastructure Management
+# Anvyl - Simple AI Container Management
 
-> **Simplicity is key.** Manage your infrastructure with plain English, not complex commands.
+> **Simplicity is key.** Manage your containers with plain English, not complex commands.
 
-Anvyl makes infrastructure management effortless. Just tell it what you want in natural language, and it handles the complexity for you.
+Anvyl makes container management effortless. Just tell it what you want in natural language, and it handles the complexity for you.
 
 ## Why Simple?
 
-Infrastructure shouldn't be complicated. Anvyl strips away the complexity:
+Container management shouldn't be complicated. Anvyl strips away the complexity:
 
 - **One command to start everything**: `anvyl up`
 - **Plain English queries**: "Show me running containers"
@@ -70,7 +70,7 @@ Add this simple configuration:
 ```json
 {
   "mcpServers": {
-    "anvyl-infrastructure": {
+    "anvyl-containers": {
       "command": "python",
       "args": ["-m", "anvyl.mcp.server"]
     }
@@ -78,7 +78,7 @@ Add this simple configuration:
 }
 ```
 
-Now ask Claude directly: "Show me my infrastructure", "Deploy nginx", etc.
+Now ask Claude directly: "Show me my containers", "Deploy nginx", etc.
 
 ## Simple Commands
 
@@ -119,7 +119,7 @@ curl -X POST http://localhost:4202/query \
   -H "Content-Type: application/json" \
   -d '{"query": "Show me all containers"}'
 
-# Direct infrastructure API calls
+# Direct container API calls
 curl http://localhost:4200/containers
 ```
 
@@ -143,7 +143,7 @@ Simple as that.
 
 ---
 
-**Remember**: If it feels complicated, we've failed. Infrastructure management should be simple.
+**Remember**: If it feels complicated, we've failed. Container management should be simple.
 
 ## License
 

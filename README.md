@@ -1,4 +1,4 @@
-# Anvyl - Simple AI Container Management
+# Anvyl - Simple Container Management with AI
 
 > **Simplicity is key.** Manage your containers with plain English, not complex commands.
 

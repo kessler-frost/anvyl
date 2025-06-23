@@ -86,6 +86,40 @@ anvyl restart      # Restart all
 # That's all you need to remember
 ```
 
+## Advanced Usage
+
+For power users who need direct API access or integration:
+
+**REST APIs Available**
+- **Agent API**: `http://localhost:4202` - Direct agent management and queries
+- **Infrastructure API**: `http://localhost:4200` - Low-level container and system operations
+- **MCP Server**: `http://localhost:4201` - Integration with AI applications
+
+**Individual Service Management**
+```bash
+# Start services individually
+anvyl agent up
+anvyl infra up  
+anvyl mcp up
+
+# Check individual service logs
+anvyl agent logs
+anvyl infra logs
+```
+
+**API Examples**
+```bash
+# Query agent via REST API
+curl -X POST http://localhost:4202/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "Show me all containers"}'
+
+# Direct infrastructure API calls
+curl http://localhost:4200/containers
+```
+
+Still simple, just more control when you need it.
+
 ## For Developers
 
 **Requirements**: Python 3.10+, Docker

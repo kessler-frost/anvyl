@@ -1,6 +1,6 @@
 # Anvyl - AI-Powered Infrastructure Management
 
-A modern, self-hosted infrastructure management platform that uses AI agents to manage infrastructure using natural language.
+A modern, self-hosted infrastructure management platform that uses AI agents to manage infrastructure across multiple hosts.
 
 ## 🚀 Features
 

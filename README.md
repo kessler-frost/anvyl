@@ -10,6 +10,7 @@ Container management shouldn't be complicated. Anvyl strips away the complexity:
 
 - **One command to start everything**: `anvyl up`
 - **Plain English queries**: "Show me running containers"
+- **Programmatic API access**: REST APIs for integration and automation
 - **Zero configuration**: Works out of the box
 - **Single installation**: `pip install .`
 
@@ -93,12 +94,14 @@ anvyl restart      # Restart all
 
 ## Advanced Usage
 
-For power users who need direct API access or integration:
+For developers who need programmatic access or integration:
 
-**REST APIs Available**
+**REST APIs for Automation**
 - **Agent API**: `http://localhost:4202` - Direct agent management and queries
 - **Infrastructure API**: `http://localhost:4200` - Low-level container and system operations
 - **MCP Server**: `http://localhost:4201` - Integration with AI applications
+
+Perfect for CI/CD pipelines, monitoring systems, or custom applications.
 
 **Individual Service Management**
 ```bash
@@ -112,7 +115,7 @@ anvyl agent logs
 anvyl infra logs
 ```
 
-**API Examples**
+**Programmatic API Examples**
 ```bash
 # Query agent via REST API
 curl -X POST http://localhost:4202/query \
@@ -121,6 +124,30 @@ curl -X POST http://localhost:4202/query \
 
 # Direct container API calls
 curl http://localhost:4200/containers
+
+# Automate deployments
+curl -X POST http://localhost:4202/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "Deploy nginx on port 8080"}'
+
+# Monitor container health
+curl http://localhost:4200/containers/nginx/status
+```
+
+**Integration Examples**
+```python
+import requests
+
+# Python integration
+def get_containers():
+    response = requests.get("http://localhost:4200/containers")
+    return response.json()
+
+def deploy_service(service_name, port):
+    query = f"Deploy {service_name} on port {port}"
+    response = requests.post("http://localhost:4202/query", 
+                           json={"query": query})
+    return response.json()
 ```
 
 Still simple, just more control when you need it.

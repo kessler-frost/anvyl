@@ -1,5 +1,7 @@
 # Anvyl - Simple Container Management with AI
 
+DISCLAIMER: This is my first attempt at "vibe coding" a simple tool over a weekend.
+
 > **Simplicity is key.** Manage your containers with plain English, not complex commands.
 
 Anvyl makes container management effortless. Just tell it what you want in natural language, and it handles the complexity for you.
